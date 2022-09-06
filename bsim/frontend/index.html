@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BSIM</title>
+</head>
+
+<body>
+    <div>
+        <button onclick="tick()">Tick</button>
+        <button onclick="getState()">Get State</button>
+        <button onclick="drawWorld()">Draw World</button>
+        <button onclick="resetWorld()">Reset World</button>
+    </div>
+    <div>
+        <canvas id="worldCanvas" width="500" height="500" style="border:1px solid #000000;" />
+    </div>
+</body>
+
+<script>
+    const worldSocket = new WebSocket('ws://localhost:8765/world');
+    const egoSocket = new WebSocket('ws://localhost:8765/ego');
+    const worldCanvas = document.getElementById('worldCanvas');
+    worldCanvas.getContext('2d').translate(worldCanvas.width/2, worldCanvas.height/2)
+
+    let worldState;
+
+    worldSocket.onmessage = function (event) {
+        console.log(`world response: ${event.data}`);
+        worldState = JSON.parse(event.data);
+    };
+
+    egoSocket.onmessage = function (event) {
+        console.log(`ego response: ${event.data}`);
+    };
+
+    function getState() {
+        worldSocket.send('state');
+    }
+
+    function tick() {
+        worldSocket.send('tick');
+    }
+
+    function drawWorld() {
+        if (!worldState) {
+            console.warn("No world state!");
+            return;
+        }
+
+        const ctx = worldCanvas.getContext('2d');
+
+        ctx.clearRect(-worldCanvas.width/2, -worldCanvas.height/2, worldCanvas.width, worldCanvas.height);
+
+        // Debugging
+        // ctx.beginPath();
+        // // Draw the coordinate
+        // ctx.arc(m_to_px(worldState.ego_state[0]), m_to_px(worldState.ego_state[1]), m_to_px(3), 0, 2 * Math.PI);
+        // ctx.stroke();
+
+        drawVehicle(ctx, decodeVehicleState(worldState.ego_state));
+    }
+
+    function decodeVehicleState(state) {
+        return {
+            x: state[0],
+            y: state[1],
+            theta: state[2],
+            v: state[3],
+            delta: state[4],
+        }
+    }
+
+    // https://stackoverflow.com/a/42906936
+    function addvector(a, b) {
+        return a.map((e, i) => e + b[i]);
+    }
+
+    function drawVehicle(ctx, vehicleState) {
+        const VEHICLE_LENGTH = worldState.ego_L; // m
+        const tireWidth = 0.2; // m
+        const tireLength = 0.5; // m
+
+        const rearAxleCenter = [vehicleState.x, vehicleState.y];
+        const frontAxleCenter = addvector(rearAxleCenter, [VEHICLE_LENGTH * Math.cos(vehicleState.theta), VEHICLE_LENGTH * Math.sin(vehicleState.theta)]);
+
+        ctx.beginPath();
+        // draw wheelbase
+        ctx.moveTo(...rearAxleCenter.map(m_to_px));
+        ctx.lineTo(...frontAxleCenter.map(m_to_px));
+
+        // draw wheels
+        ctx.save()
+        ctx.translate(m_to_px(rearAxleCenter[0]), m_to_px(rearAxleCenter[1]));
+        ctx.rotate(vehicleState.theta)
+        ctx.rect(m_to_px(-tireLength/2), m_to_px(-tireWidth/2), m_to_px(tireLength), m_to_px(tireWidth));
+        ctx.restore()
+
+        ctx.save()
+        ctx.translate(m_to_px(frontAxleCenter[0]), m_to_px(frontAxleCenter[1]));
+        ctx.rotate(vehicleState.theta + vehicleState.delta)
+        ctx.rect(m_to_px(-tireLength/2), m_to_px(-tireWidth/2), m_to_px(tireLength), m_to_px(tireWidth));
+        ctx.restore()
+
+        ctx.stroke();
+
+        // ctx.save();
+        // ctx.translate(m_to_px(x), m_to_px(y));
+        // ctx.rotate(theta);
+        // ctx.beginPath();
+        // ctx.rect(-length/2, -width/2, length, width);
+        // ctx.stroke();
+        // ctx.restore();
+    }
+
+    function resetWorld() {
+        worldSocket.send('reset');
+    }
+
+    function m_to_px(m) {
+        // Meters to pixels
+        return m * 20;
+    }
+
+    setInterval(drawWorld, 100);
+    setInterval(tick, 10);
+</script>
+
+
+</html>
