@@ -1,18 +1,32 @@
-#!/usr/bin/env python
-
-# WS server example
-
 import asyncio
-from discrete_kinematic_bicycle import get_initial_state, discrete_kinematic_bicycle_model, get_noop_action
-import numpy as np
-import websockets
+from copy import deepcopy
+import traceback
+import discrete_kinematic_bicycle as dkb
 import json
+import numpy as np
+import re
+import secrets
+import websockets
 
-class NumpyEncoder(json.JSONEncoder):
+INITIAL_WORLD_STATE = {
+    't': 0,
+    'DT': 0.01,
+    'entities': {}
+}
+
+world_state = deepcopy(INITIAL_WORLD_STATE)
+
+ENTITY_PATH_REGEX = re.compile(r'^/entities/(?P<entity_id>\w+)$')
+CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>\w+))?$')
+
+
+class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
-        return super().default(self, obj)
+        if isinstance(obj, Exception):
+            return repr(obj)
+        return json.JSONEncoder.default(self, obj)
 
 # Derived from: https://til.simonwillison.net/python/json-floating-point
 def round_floats(o, decimals=6):
@@ -26,54 +40,98 @@ def round_floats(o, decimals=6):
         return o.round(decimals)
     return o
 
-
+def strip_internal_vars(o):
+    if isinstance(o, dict):
+        return {k: strip_internal_vars(v) for k, v in o.items() if not k.startswith('_')}
+    if isinstance(o, (list, tuple)):
+        return type(o)(strip_internal_vars(x) for x in o)
+    return o
 
 def get_handler(path: str):
     if path == '/world':
-        return  world_handler
-    if path == '/ego':
-        return  ego_handler
+        return world_handler
+    if ENTITY_PATH_REGEX.match(path):
+        entity_id = ENTITY_PATH_REGEX.match(path).group('entity_id')
+        return get_entity_handler(entity_id)
     
-    return None
+    raise Exception(f"ERROR: Unknown path: '{path}'")
 
 
-world_state = {
-    't': 0,
-    'DT': 0.01,
-    'ego_state': get_initial_state(),
-    'ego_action': get_noop_action(),
-    'ego_L': 2.9,
-}
+def get_entity_handler(entity_id: str):
+    entity = world_state['entities'].get(entity_id)
+    if not entity:
+        raise Exception(f"ERROR: Unknown entity: '{entity_id}'")
+    
+    return entity['_handler']
 
 
 def world_handler(command: str):
     global world_state
 
     if command == 'reset':
-        ego_handler('reset')
+        world_state = deepcopy(INITIAL_WORLD_STATE)
+        # world_handler('create_entity: ego ego1') # create an initial ego vehicle
     elif command == 'state':
         pass # noop, just return the current state
     elif command == 'tick':
         world_state['t'] += world_state['DT']
-        world_state['ego_state'] = discrete_kinematic_bicycle_model(world_state['ego_state'], world_state['ego_action'], world_state['DT'], world_state['ego_L'])
+        for entity in world_state['entities'].values():
+            entity['_handler']('_tick')
+    elif CREATE_ENTITY_REGEX.match(command):
+        entity_type = CREATE_ENTITY_REGEX.match(command).group('entity_type')
+        entity_id = CREATE_ENTITY_REGEX.match(command).group('entity_id')
+        entity_options = CREATE_ENTITY_REGEX.match(command).group('entity_options')
+
+        if not entity_id:
+            entity_id = f"{entity_type}_{secrets.token_urlsafe(8)}"
+        
+        if entity_id in world_state['entities']:
+            raise Exception(f"ERROR: entity with ID '{entity_id}' already exists")
+
+        if entity_type == 'ego':
+            if entity_options:
+                raise Exception(f"ERROR: entity_options not supported yet: '{entity_options}'")
+
+            world_state['entities'][entity_id] = {
+                'type': 'ego',
+                'state': dkb.get_initial_state(),
+                'action': dkb.get_noop_action(),
+                'controller': 'manual',
+                'L': 2.9,
+                '_handler': make_ego_handler(entity_id),
+            }
+        else:
+            raise Exception(f"ERROR: Unknown entity type '{entity_type}'")
     else:
         raise Exception(f"ERROR: Unknown command: {command}")
     
     return world_state
 
+def make_ego_handler(entity_id: str):
+    def ego_handler(command: str):
+        entity = world_state['entities'][entity_id]
 
-def ego_handler(command: str):
-    global world_state
+        if command == 'reset':
+            entity['state'] = dkb.get_initial_state()
+            entity['action'] = dkb.get_noop_action()
+        elif command.startswith('action: '):
+            entity['action'] = np.fromstring(command[len('action: '):], dtype=float, sep=' ')
+        elif command == 'state':
+            pass # noop, just return the current state
+        elif command == '_tick':
+            # TODO: add sensor, estimation, and controller code here
+            # ego_state = world_state['ego_state']
+            # ego_measurement = ego_state
+            # ego_estimate = ego_measurement
+            # control_action = world_state['ego_controller'](ego_estimate)
+            # world_state['ego_state'] = discrete_kinematic_bicycle_model(world_state['ego_state'], control_action, world_state['DT'], world_state['ego_L'])
+            entity['state'] = dkb.discrete_kinematic_bicycle_model(entity['state'], entity['action'], world_state['DT'], entity['L'])
+        else:
+            raise Exception(f"ERROR: Unknown command: {command}")
+        
+        return entity
 
-    if command == 'reset':
-        world_state['ego_state'] = get_initial_state()
-        world_state['ego_action'] = get_noop_action()
-    elif command.startswith('action: '):
-        world_state['ego_action'] = np.fromstring(command[len('action: '):], dtype=float, sep=' ')
-    else:
-        return f"ERROR: Unknown command: {command}"
-    
-    return {'result': 'OK'}
+    return ego_handler
 
 
 async def new_connection(websocket, path: str):
@@ -86,21 +144,33 @@ async def new_connection(websocket, path: str):
 
     while True:
         try:
-            command = await websocket.recv()
+            raw_request = await websocket.recv()
         except websockets.exceptions.ConnectionClosedOK:
             print(f"Connection closed: {path}")
             break
-    
-        print(f"< {path}: {command}")
-        try:
-            response = handler(command)
-        except Exception as e:
-            response = {'error': e}
 
-        serialized_response = json.dumps(round_floats(response), cls=NumpyEncoder)      
+        try:
+            request = json.loads(raw_request)
+            request_id = request['id']
+            command = request['command']
+        except:
+            print(f"ERROR: Cannot parse request: {raw_request}")
+            await websocket.send(json.dumps({'error': 'Cannot parse request'}))
+            break
+
+        print(f"[{request_id}] < {path}: {request}")
+        try:
+            response = {'id': request_id, 'response': handler(command)}
+        except Exception:
+            print(f"[{request_id}] ERROR: exception thrown while handling command")
+            traceback.print_exc()
+            response = {'id': request_id, 'error': traceback.format_exc()}
+
+        serialized_response = json.dumps(
+            round_floats(strip_internal_vars(response)), cls=MyEncoder)
 
         await websocket.send(serialized_response)
-        print(f"> {path}: {serialized_response}")
+        print(f"[{request_id}] > {path}: {serialized_response}")
 
 start_server = websockets.serve(new_connection, "localhost", 8765)
 
