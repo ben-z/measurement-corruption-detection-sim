@@ -29,7 +29,7 @@ async function main() {
     console.log("World socket opened: ", worldSocket);
     ensureSucceeds(await worldSocket.sendRequest({command: 'reset'}));
     for (const ego in egos) {
-        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego}`}));
+        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=path_following_kmpc`}));
         egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entity/${ego}`, WEBSOCKET_OPTIONS);
     }
 

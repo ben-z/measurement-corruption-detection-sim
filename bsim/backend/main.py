@@ -1,10 +1,11 @@
 import asyncio
 from copy import deepcopy
 import traceback
-from urllib.parse import parse_qs
+from urllib.parse import parse_qsl
 import discrete_kinematic_bicycle as dkb
 import json
 import numpy as np
+import path_following_kmpc as pfkmpc
 import re
 import secrets
 import websockets
@@ -18,7 +19,7 @@ INITIAL_WORLD_STATE = {
 world_state = deepcopy(INITIAL_WORLD_STATE)
 
 ENTITY_PATH_REGEX = re.compile(r'^/entities/(?P<entity_id>\w+)$')
-CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>\w+))?$')
+CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>[\w=]+))?$')
 
 
 class MyEncoder(json.JSONEncoder):
@@ -82,6 +83,7 @@ def world_handler(command: str):
         entity_type = CREATE_ENTITY_REGEX.match(command).group('entity_type')
         entity_id = CREATE_ENTITY_REGEX.match(command).group('entity_id')
         entity_options = CREATE_ENTITY_REGEX.match(command).group('entity_options')
+        print(entity_options)
 
         if not entity_id:
             entity_id = f"{entity_type}_{secrets.token_urlsafe(8)}"
@@ -89,7 +91,7 @@ def world_handler(command: str):
         if entity_id in world_state['entities']:
             raise Exception(f"ERROR: entity with ID '{entity_id}' already exists")
 
-        user_options = parse_qs(entity_options, separator=",") if entity_options else {}
+        user_options = dict(parse_qsl(entity_options, separator=",", strict_parsing=True)) if entity_options else {}
 
         if entity_type == 'ego':
             default_options = {
@@ -108,6 +110,12 @@ def world_handler(command: str):
                     'controller': 'manual',
                     '_controller_fn': lambda cstate, _estimate: (cstate, cstate),
                     '_controller_state': dkb.get_noop_action(),
+                }
+            elif options['controller'] == 'path_following_kmpc':
+                controller_state = {
+                    'controller': 'path_following_kmpc',
+                    '_controller_fn': pfkmpc.path_following_kmpc,
+                    '_controller_state': pfkmpc.get_initial_state(),
                 }
             else:
                 raise Exception(f"ERROR: unknown controller: {options['controller']}")
