@@ -1,6 +1,7 @@
 import asyncio
 from copy import deepcopy
 import traceback
+from urllib.parse import parse_qs
 import discrete_kinematic_bicycle as dkb
 import json
 import numpy as np
@@ -88,17 +89,36 @@ def world_handler(command: str):
         if entity_id in world_state['entities']:
             raise Exception(f"ERROR: entity with ID '{entity_id}' already exists")
 
+        user_options = parse_qs(entity_options, separator=",") if entity_options else {}
+
         if entity_type == 'ego':
-            if entity_options:
-                raise Exception(f"ERROR: entity_options not supported yet: '{entity_options}'")
+            default_options = {
+                'controller': 'manual',
+                'L': 2.9,
+            }
+
+            unknown_option_keys = set(user_options.keys()) - set(default_options.keys())
+            if unknown_option_keys:
+                raise Exception(f"ERROR: unknown options: {unknown_option_keys}")
+
+            options = {**default_options, **user_options}
+
+            if options['controller'] == 'manual':
+                controller_state = {
+                    'controller': 'manual',
+                    '_controller_fn': lambda cstate, _estimate: (cstate, cstate),
+                    '_controller_state': dkb.get_noop_action(),
+                }
+            else:
+                raise Exception(f"ERROR: unknown controller: {options['controller']}")
 
             world_state['entities'][entity_id] = {
                 'type': 'ego',
                 'state': dkb.get_initial_state(),
                 'action': dkb.get_noop_action(),
-                'controller': 'manual',
-                'L': 2.9,
+                'L': options['L'],
                 '_handler': make_ego_handler(entity_id),
+                **controller_state,
             }
         else:
             raise Exception(f"ERROR: Unknown entity type '{entity_type}'")
@@ -115,16 +135,21 @@ def make_ego_handler(entity_id: str):
             entity['state'] = dkb.get_initial_state()
             entity['action'] = dkb.get_noop_action()
         elif command.startswith('action: '):
-            entity['action'] = np.fromstring(command[len('action: '):], dtype=float, sep=' ')
+            if entity['controller'] != 'manual':
+                raise Exception(f"ERROR: entity '{entity_id}' is not in manual mode")
+            entity['_controller_state'] = np.fromstring(command[len('action: '):], dtype=float, sep=' ')
         elif command == 'state':
             pass # noop, just return the current state
         elif command == '_tick':
             # TODO: add sensor, estimation, and controller code here
-            # ego_state = world_state['ego_state']
-            # ego_measurement = ego_state
-            # ego_estimate = ego_measurement
-            # control_action = world_state['ego_controller'](ego_estimate)
-            # world_state['ego_state'] = discrete_kinematic_bicycle_model(world_state['ego_state'], control_action, world_state['DT'], world_state['ego_L'])
+            state = entity['state']
+
+            measurement = entity['_measurement'] = state
+            estimate = entity['_estimate'] = measurement
+
+            # calculate control action
+            entity['action'], entity['_controller_state'] = entity['_controller_fn'](entity['_controller_state'], estimate)
+
             entity['state'] = dkb.discrete_kinematic_bicycle_model(entity['state'], entity['action'], world_state['DT'], entity['L'])
         else:
             raise Exception(f"ERROR: Unknown command: {command}")
