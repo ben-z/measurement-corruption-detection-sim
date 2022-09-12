@@ -1,6 +1,7 @@
 from os import curdir
 import numpy as np
 import discrete_kinematic_bicycle as dkb
+import continuous_kinematic_bicycle as ckb
 import scipy
 
 def get_initial_state(target_path, dt, L):
@@ -11,6 +12,8 @@ def get_initial_state(target_path, dt, L):
         'dt': dt,
         # wheelbase
         'L': L,
+        # model
+        'model': dkb.make_discrete_kinematic_bicycle_model(L, dt),
     }
 
 def closest_point_on_line_segment(p, a, b):
@@ -70,7 +73,12 @@ def path_following_kmpc(state, estimate):
     
     # find the closest point on the path (assuming linear interpolation)
     target_path = state['target_path']
+    model = state['model']
     x, y, theta, v, delta = estimate
+
+    # Control performance after linearization is very poor
+    # linsys = model.linearize(estimate, [0, 0])
+    linsys = model
 
     path_segments = np.stack([target_path, np.roll(target_path, -1, axis=0)], axis=1)
 
@@ -92,11 +100,11 @@ def path_following_kmpc(state, estimate):
     u_bounds[:, 0, :] = [0, 10]
     u_bounds[:, 1, :] = [-0.5, 0.5]
     
-    def predict_trajectory(x0, u):
+    def predict_trajectory(update_fn, x0, u):
         x = np.zeros((u.shape[0], x0.shape[0]))
         x[0] = x0
         for i in range(x.shape[0]-1):
-            x[i+1] = dkb.discrete_kinematic_bicycle_model(x[i], u[i], state['dt'], state['L'])
+            x[i+1] = update_fn(x[i], u[i])
         return x
     
     TARGET_SPEED = 1 # m/s
@@ -108,26 +116,26 @@ def path_following_kmpc(state, estimate):
         u_arr = u_arr.reshape((M, NUM_ACTION_VARS))
         u_arr = np.concatenate((u_arr, np.broadcast_to(u_arr[-1], (N - M, NUM_ACTION_VARS))))
 
-        x_arr = predict_trajectory(estimate, u_arr)
+        x_arr = predict_trajectory(lambda x, u: linsys.dynamics(0, x, u), estimate, u_arr)
+        # x_arr = predict_trajectory(lambda x, u: dkb.discrete_kinematic_bicycle_model(x, u, state['dt'], state['L']), estimate, u_arr)
 
         distances = np.zeros(N)
         for i in range(N):
+            # TODO: We spend a lot of time in this loop, find a way to make it faster
             distances[i] = distance_to_line(
                 x_arr[i, :2], current_path_segment[0], current_path_segment[1])
         
         final_heading_diff = wrap_to_pi(current_path_heading - x_arr[-1, 2])
         
-        return np.sum(distances) + np.linalg.norm(x_arr[:, 3] - TARGET_SPEED)*10 + abs(final_heading_diff)*5
+        return np.sum(distances) + np.linalg.norm(x_arr[:, 3] - TARGET_SPEED)*10 + abs(final_heading_diff)*10
     
     result = scipy.optimize.minimize(objective, u_initial_guess.reshape((M*NUM_ACTION_VARS,)), bounds=u_bounds.reshape((M*NUM_ACTION_VARS,2)))
     u_opt_arr = result.x.reshape((M, NUM_ACTION_VARS))
     
-    predicted_x = predict_trajectory(estimate, np.concatenate((u_opt_arr, np.broadcast_to(u_opt_arr[-1], (N - M, NUM_ACTION_VARS)))))
+    predicted_x = predict_trajectory(lambda x, u: linsys.dynamics(0, x, u), estimate, np.concatenate((u_opt_arr, np.broadcast_to(u_opt_arr[-1], (N - M, NUM_ACTION_VARS)))))
+    # predicted_x = predict_trajectory(lambda x, u: dkb.discrete_kinematic_bicycle_model(x, u, state['dt'], state['L']), estimate, np.concatenate((u_opt_arr, np.broadcast_to(u_opt_arr[-1], (N - M, NUM_ACTION_VARS)))))
     debug_output['predicted_x'] = predicted_x
     final_heading = predicted_x[-1, 2]
     final_heading_diff = wrap_to_pi(current_path_heading - final_heading)
     
-    a = u_opt_arr[0, 0]
-    delta_dot = u_opt_arr[0, 1]
-    
-    return np.array([a, delta_dot]), state, debug_output
+    return u_opt_arr[0], state, debug_output

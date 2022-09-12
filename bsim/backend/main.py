@@ -1,13 +1,16 @@
 import asyncio
+import control
 from copy import deepcopy
 import traceback
 from urllib.parse import parse_qsl
 import discrete_kinematic_bicycle as dkb
+import continuous_kinematic_bicycle as ckb
 import json
 import numpy as np
 import path_following_kmpc as pfkmpc
 import re
 import secrets
+import sys
 import websockets
 
 INITIAL_WORLD_STATE = {
@@ -70,6 +73,8 @@ def get_entity_handler(entity_id: str):
 def world_handler(command: str):
     global world_state
 
+    if command == 'terminate':
+        sys.exit(0)
     if command == 'reset':
         world_state = deepcopy(INITIAL_WORLD_STATE)
         # world_handler('create_entity: ego ego1') # create an initial ego vehicle
@@ -98,7 +103,7 @@ def world_handler(command: str):
                 'controller': 'manual',
                 'L': 2.9,
                 # coordinates of the waypoints in meters. This will form a closed path
-                'target_path': np.array([ [-10,3], [15,0], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
+                'target_path': np.array([ [-10,3], [20,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
             }
 
             unknown_option_keys = set(user_options.keys()) - set(default_options.keys())
@@ -110,7 +115,7 @@ def world_handler(command: str):
             if options['controller'] == 'manual':
                 controller_state = {
                     'controller': 'manual',
-                    '_controller_fn': lambda cstate, _estimate: (cstate, cstate),
+                    '_controller_fn': lambda cstate, _estimate: (cstate, cstate, {}),
                     '_controller_state': dkb.get_noop_action(),
                     'controller_debug_output': {},
                 }
@@ -131,6 +136,8 @@ def world_handler(command: str):
                 'L': options['L'],
                 'target_path': options['target_path'],
                 '_handler': make_ego_handler(entity_id),
+                # '_model': ckb.make_continuous_kinematic_bicycle_model(options['L']),
+                '_model': dkb.make_discrete_kinematic_bicycle_model(options['L'], world_state['DT']),
                 **controller_state,
             }
         else:
@@ -159,12 +166,14 @@ def make_ego_handler(entity_id: str):
 
             measurement = entity['_measurement'] = state
             estimate = entity['_estimate'] = measurement
+            # model = control.sample_system(entity['_model'].linearize(estimate, entity['action']), world_state['DT'])
+            model = entity['_model']
 
             # calculate control action
             entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
                 entity['_controller_fn'](entity['_controller_state'], estimate)
 
-            entity['state'] = dkb.discrete_kinematic_bicycle_model(entity['state'], entity['action'], world_state['DT'], entity['L'])
+            entity['state'] = model.dynamics(0, entity['state'], entity['action'])
         else:
             raise Exception(f"ERROR: Unknown command: {command}")
         
