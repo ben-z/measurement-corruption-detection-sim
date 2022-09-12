@@ -150,6 +150,21 @@ function drawVehicle(ctx, vehicle) {
         ctx.stroke();
         ctx.restore();
     }
+
+    // draw target vehicle trajectory
+    if (vehicle.controller_debug_output.target_x) {
+        const target_vehicle_states = vehicle.controller_debug_output.target_x.map(decodeVehicleState);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = 'darkgreen';
+        ctx.fillStyle = 'darkgreen';
+        for (const s of target_vehicle_states) {
+            ctx.arc(m_to_px(s.x), m_to_px(s.y), m_to_px(0.1), 0, 2 * Math.PI);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 main();
@@ -171,5 +186,5 @@ function addvector(a, b) {
 
 function m_to_px(m) {
     // Meters to pixels
-    return m * 10;
+    return m * 20;
 }

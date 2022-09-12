@@ -19,6 +19,7 @@ def get_initial_state(target_path, dt, L):
 def closest_point_on_line_segment(p, a, b):
     """
     Find the closest point on the line segment defined by a and b to the point p.
+    Also returns the parameter t, which is the progress (0-1) along the line segment ab.
     """
     # https://stackoverflow.com/a/1501725
     ap = p - a
@@ -27,21 +28,23 @@ def closest_point_on_line_segment(p, a, b):
     ap_ab = np.dot(ap, ab)
     t = ap_ab / ab2
     if t < 0:
-        return a
+        return a, 0
     elif t > 1:
-        return b
+        return b, 1
     else:
-        return a + ab * t
+        return a + ab * t, t
 
 def distance_to_line_segment(p, a, b):
     """
     Find the distance from the point p to the line segment defined by a and b.
     """
-    return np.linalg.norm(p - closest_point_on_line_segment(p, a, b))
+    return np.linalg.norm(p - closest_point_on_line_segment(p, a, b)[0])
 
-def distance_to_line(p, a, b):
+
+def closest_point_on_line(p, a, b):
     """
-    Find the distance from the point p to the line defined by a and b.
+    Find the closest point on the line defined by a and b to the point p.
+    Also returns the parameter t, which is the progress (0-1) along the line ab.
     """
     # https://stackoverflow.com/a/1501725
     ap = p - a
@@ -49,7 +52,13 @@ def distance_to_line(p, a, b):
     ab2 = np.dot(ab, ab)
     ap_ab = np.dot(ap, ab)
     t = ap_ab / ab2
-    return np.linalg.norm(p - a - ab * t)
+    return a + ab * t, t
+
+def distance_to_line(p, a, b):
+    """
+    Find the distance from the point p to the line defined by a and b.
+    """
+    return np.linalg.norm(p - closest_point_on_line(p, a, b)[0])
 
 def wrap_to_pi(x):
     return (x + np.pi) % (2 * np.pi) - np.pi
@@ -88,12 +97,27 @@ def path_following_kmpc(state, estimate):
 
     current_path_segment = path_segments[current_path_segment_index]
     current_path_heading = np.arctan2(current_path_segment[1, 1] - current_path_segment[0, 1], current_path_segment[1, 0] - current_path_segment[0, 0])
+    current_path_segment_length = np.linalg.norm(current_path_segment[1] - current_path_segment[0])
 
     debug_output['current_path_segment'] = current_path_segment
     
     M = 5
-    N = 20
+    N = 40
     NUM_ACTION_VARS = 2
+    TARGET_SPEED = 1 # m/s
+    TARGET_STEERING = 0 # rad
+
+    # compute the desired states along the path
+    _p_closest, progress = closest_point_on_line(np.array([x, y]), current_path_segment[0], current_path_segment[1])
+    target_x = np.zeros([N, estimate.shape[0]])
+    # current_path_segment_length 
+    target_progress = progress + (np.linspace(0, TARGET_SPEED * state['dt'] * N, N) / current_path_segment_length)
+    target_x[:, :2] = current_path_segment[0] + (current_path_segment[1] - current_path_segment[0]) * target_progress[:, None]
+    target_x[:, 2] = current_path_heading
+    target_x[:, 3] = TARGET_SPEED
+    target_x[:, 4] = TARGET_STEERING
+
+    debug_output['target_x'] = target_x
 
     u_initial_guess = np.zeros((M, NUM_ACTION_VARS))
     u_bounds = np.zeros((M, NUM_ACTION_VARS, 2))
@@ -107,8 +131,6 @@ def path_following_kmpc(state, estimate):
             x[i+1] = update_fn(x[i], u[i])
         return x
     
-    TARGET_SPEED = 1 # m/s
-    
     def objective(u_arr):
         """
         Objective function for the MPC.
@@ -119,11 +141,7 @@ def path_following_kmpc(state, estimate):
         x_arr = predict_trajectory(lambda x, u: linsys.dynamics(0, x, u), estimate, u_arr)
         # x_arr = predict_trajectory(lambda x, u: dkb.discrete_kinematic_bicycle_model(x, u, state['dt'], state['L']), estimate, u_arr)
 
-        distances = np.zeros(N)
-        for i in range(N):
-            # TODO: We spend a lot of time in this loop, find a way to make it faster
-            distances[i] = distance_to_line(
-                x_arr[i, :2], current_path_segment[0], current_path_segment[1])
+        distances = target_x[:, :2] - x_arr[:, :2]
         
         final_heading_diff = wrap_to_pi(current_path_heading - x_arr[-1, 2])
         
