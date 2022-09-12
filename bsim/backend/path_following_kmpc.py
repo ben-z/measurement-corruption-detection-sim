@@ -77,8 +77,8 @@ def path_following_kmpc(state, estimate):
     x, y, theta, v, delta = estimate
 
     # Control performance after linearization is very poor
-    # linsys = model.linearize(estimate, [0, 0])
-    linsys = model
+    linsys = model.linearize(estimate, [0, 0])
+    # linsys = model
 
     path_segments = np.stack([target_path, np.roll(target_path, -1, axis=0)], axis=1)
 

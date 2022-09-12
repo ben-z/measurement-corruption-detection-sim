@@ -15,7 +15,7 @@ import websockets
 
 INITIAL_WORLD_STATE = {
     't': 0,
-    'DT': 0.1,
+    'DT': 0.01,
     'entities': {}
 }
 
