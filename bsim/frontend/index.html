@@ -5,6 +5,30 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BSIM</title>
+    <style>
+        .flex-container {
+            display: flex;
+        }
+
+        .flex-child {
+            flex: 1;
+            /* For debugging: */
+            /* border: 2px solid yellow; */
+        }  
+
+        .flex-child:first-child {
+            margin-right: 1rem;
+        } 
+        .alert {
+            padding: 20px;
+            /* background-color: #f44336; */
+            border: 2px solid #f44336;
+            color: #f44336;
+        }
+        #worldCanvas {
+            margin: 1em 0px;
+        }
+    </style>
 </head>
 
 <body>
@@ -13,8 +37,14 @@
         <button onclick="bsim_js.getState()">Get State</button>
         <button onclick="bsim_js.resetWorld()">Reset World</button>
     </div>
-    <div>
-        <canvas id="worldCanvas" width="500" height="500" style="border:1px solid #000000;" />
+    <div class="flex-container">
+        <div class="flex-child">
+            <canvas id="worldCanvas" width="500" height="500" style="border:1px solid #000000;" />
+        </div>
+        <div id="debugContainer" class="flex-child">
+            <pre>Initializing simulation...</pre>
+        </div>
+
     </div>
 </body>
 

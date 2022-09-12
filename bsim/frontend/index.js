@@ -36,11 +36,19 @@ async function main() {
 
     const worldCanvas = document.getElementById('worldCanvas');
     worldCanvas.getContext('2d').translate(worldCanvas.width/2, worldCanvas.height/2)
+    const debugContainer = document.getElementById('debugContainer');
 
     mySetInterval(async () => {
-        const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
+        try {
+            const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
         
-        drawWorld(worldCanvas, worldState);
+            drawWorld(worldCanvas, worldState);
+            drawDebugDashboard(debugContainer, worldState);
+
+        } catch (e) {
+            console.error(e);
+            displayError(debugContainer, e);
+        }
     }, 100);
 
     exported.tick = () => worldSocket.sendRequest({command: 'tick'}).then(console.log);
@@ -62,6 +70,14 @@ function drawWorld(canvas, worldState) {
                 console.error(`Unknown entity type "${entity.type}" for entity "${entityName}"`);
         }
     }
+}
+
+function drawDebugDashboard(container, worldState) {
+    container.innerHTML = `<pre>${JSON.stringify(worldState, null, 2)}</pre>`;
+}
+
+function displayError(container, e) {
+    container.innerHTML = `<pre class="alert">Error: ${e.message}\nPlease see the debug console for more info.</pre>`;
 }
 
 function drawVehicle(ctx, vehicle) {
