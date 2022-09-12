@@ -1,4 +1,5 @@
 const WebSocketAsPromised = require('websocket-as-promised');
+const { mySetInterval } = require('./utils');
 
 function ensureSucceeds(res) {
     // Ensures that `res` doesn't have an `error` field
@@ -36,7 +37,7 @@ async function main() {
     const worldCanvas = document.getElementById('worldCanvas');
     worldCanvas.getContext('2d').translate(worldCanvas.width/2, worldCanvas.height/2)
 
-    setInterval(async () => {
+    mySetInterval(async () => {
         const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
         
         drawWorld(worldCanvas, worldState);
@@ -92,6 +93,46 @@ function drawVehicle(ctx, vehicle) {
     ctx.restore()
 
     ctx.stroke();
+
+    // draw target path
+    ctx.save()
+    ctx.beginPath()
+    ctx.setLineDash([m_to_px(0.25), m_to_px(0.5)])
+    ctx.moveTo(m_to_px(vehicle.target_path[0][0]), m_to_px(vehicle.target_path[0][1]));
+    // rotate the array to the right and draw lines. This gives us a closed path.
+    for (const [x, y] of [...vehicle.target_path.slice(1), vehicle.target_path[0]]) {
+        ctx.lineTo(m_to_px(x), m_to_px(y));
+    }
+    ctx.stroke();
+    ctx.restore()
+
+    // draw closest path segment
+    if (vehicle.controller_debug_output.current_path_segment) {
+        const current_path_segment = vehicle.controller_debug_output.current_path_segment;
+        ctx.save()
+        ctx.beginPath();
+        ctx.strokeStyle = 'green';
+        ctx.lineWidth = m_to_px(0.2);
+        ctx.moveTo(m_to_px(current_path_segment[0][0]), m_to_px(current_path_segment[0][1]));
+        ctx.lineTo(m_to_px(current_path_segment[1][0]), m_to_px(current_path_segment[1][1]));
+        ctx.stroke();
+        ctx.restore()
+    }
+
+    // draw predicted vehicle trajectory
+    if (vehicle.controller_debug_output.predicted_x) {
+        const predicted_vehicle_states = vehicle.controller_debug_output.predicted_x.map(decodeVehicleState);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = 'blue';
+        ctx.fillStyle = 'blue';
+        for (const s of predicted_vehicle_states) {
+            ctx.arc(m_to_px(s.x), m_to_px(s.y), m_to_px(0.1), 0, 2 * Math.PI);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 main();
@@ -113,5 +154,5 @@ function addvector(a, b) {
 
 function m_to_px(m) {
     // Meters to pixels
-    return m * 20;
+    return m * 10;
 }

@@ -12,7 +12,7 @@ import websockets
 
 INITIAL_WORLD_STATE = {
     't': 0,
-    'DT': 0.01,
+    'DT': 0.1,
     'entities': {}
 }
 
@@ -97,6 +97,8 @@ def world_handler(command: str):
             default_options = {
                 'controller': 'manual',
                 'L': 2.9,
+                # coordinates of the waypoints in meters. This will form a closed path
+                'target_path': np.array([ [-10,3], [15,0], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
             }
 
             unknown_option_keys = set(user_options.keys()) - set(default_options.keys())
@@ -110,12 +112,14 @@ def world_handler(command: str):
                     'controller': 'manual',
                     '_controller_fn': lambda cstate, _estimate: (cstate, cstate),
                     '_controller_state': dkb.get_noop_action(),
+                    'controller_debug_output': {},
                 }
             elif options['controller'] == 'path_following_kmpc':
                 controller_state = {
                     'controller': 'path_following_kmpc',
                     '_controller_fn': pfkmpc.path_following_kmpc,
-                    '_controller_state': pfkmpc.get_initial_state(),
+                    '_controller_state': pfkmpc.get_initial_state(target_path=options['target_path'], dt=world_state['DT'], L=options['L']),
+                    'controller_debug_output': {},
                 }
             else:
                 raise Exception(f"ERROR: unknown controller: {options['controller']}")
@@ -125,6 +129,7 @@ def world_handler(command: str):
                 'state': dkb.get_initial_state(),
                 'action': dkb.get_noop_action(),
                 'L': options['L'],
+                'target_path': options['target_path'],
                 '_handler': make_ego_handler(entity_id),
                 **controller_state,
             }
@@ -156,7 +161,8 @@ def make_ego_handler(entity_id: str):
             estimate = entity['_estimate'] = measurement
 
             # calculate control action
-            entity['action'], entity['_controller_state'] = entity['_controller_fn'](entity['_controller_state'], estimate)
+            entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
+                entity['_controller_fn'](entity['_controller_state'], estimate)
 
             entity['state'] = dkb.discrete_kinematic_bicycle_model(entity['state'], entity['action'], world_state['DT'], entity['L'])
         else:

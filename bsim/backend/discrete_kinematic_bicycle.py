@@ -17,4 +17,11 @@ def discrete_kinematic_bicycle_model(x, u, dt, L=2.9):
     x_dot[3] = u[0]
     x_dot[4] = u[1]
     x = x + x_dot * dt
+    
+    # Actuator constraints
+    if x[4] > np.pi / 4:
+        x[4] = np.pi / 4
+    elif x[4] < -np.pi / 4:
+        x[4] = -np.pi / 4
+
     return x
