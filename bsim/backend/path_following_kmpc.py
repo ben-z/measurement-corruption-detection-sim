@@ -13,7 +13,8 @@ def get_initial_state(target_path, dt, L):
         # wheelbase
         'L': L,
         # model
-        'model': dkb.make_discrete_kinematic_bicycle_model(L, dt),
+        # 'model': dkb.make_discrete_kinematic_bicycle_model(L, dt),
+        'model': ckb.make_continuous_kinematic_bicycle_model(L),
     }
 
 def closest_point_on_line_segment(p, a, b):
@@ -88,6 +89,7 @@ def path_following_kmpc(state, estimate):
     # Control performance after linearization is very poor
     linsys = model.linearize(estimate, [0, 0])
     # linsys = model
+    linsysd = linsys.sample(state['dt'])
 
     path_segments = np.stack([target_path, np.roll(target_path, -1, axis=0)], axis=1)
 
@@ -138,7 +140,7 @@ def path_following_kmpc(state, estimate):
         u_arr = u_arr.reshape((M, NUM_ACTION_VARS))
         u_arr = np.concatenate((u_arr, np.broadcast_to(u_arr[-1], (N - M, NUM_ACTION_VARS))))
 
-        x_arr = predict_trajectory(lambda x, u: linsys.dynamics(0, x, u), estimate, u_arr)
+        x_arr = predict_trajectory(lambda x, u: linsysd.dynamics(0, x, u), estimate, u_arr)
         # x_arr = predict_trajectory(lambda x, u: dkb.discrete_kinematic_bicycle_model(x, u, state['dt'], state['L']), estimate, u_arr)
 
         distances = target_x[:, :2] - x_arr[:, :2]
@@ -150,7 +152,7 @@ def path_following_kmpc(state, estimate):
     result = scipy.optimize.minimize(objective, u_initial_guess.reshape((M*NUM_ACTION_VARS,)), bounds=u_bounds.reshape((M*NUM_ACTION_VARS,2)))
     u_opt_arr = result.x.reshape((M, NUM_ACTION_VARS))
     
-    predicted_x = predict_trajectory(lambda x, u: linsys.dynamics(0, x, u), estimate, np.concatenate((u_opt_arr, np.broadcast_to(u_opt_arr[-1], (N - M, NUM_ACTION_VARS)))))
+    predicted_x = predict_trajectory(lambda x, u: linsysd.dynamics(0, x, u), estimate, np.concatenate((u_opt_arr, np.broadcast_to(u_opt_arr[-1], (N - M, NUM_ACTION_VARS)))))
     # predicted_x = predict_trajectory(lambda x, u: dkb.discrete_kinematic_bicycle_model(x, u, state['dt'], state['L']), estimate, np.concatenate((u_opt_arr, np.broadcast_to(u_opt_arr[-1], (N - M, NUM_ACTION_VARS)))))
     debug_output['predicted_x'] = predicted_x
     final_heading = predicted_x[-1, 2]

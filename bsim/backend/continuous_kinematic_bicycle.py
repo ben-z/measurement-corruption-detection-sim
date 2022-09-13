@@ -1,4 +1,5 @@
 import control
+import math
 import numpy as np
 
 def continuous_kinematic_bicycle_model(t, x, u, params):
@@ -31,4 +32,49 @@ def make_continuous_kinematic_bicycle_model(L=2.9):
 if __name__ == '__main__':
     sys = make_continuous_kinematic_bicycle_model()
     print(sys)
+
+    # compare manually linearized model with auto-linearized model
+    # state = np.array([0, 0, 0, 0.001, 0.5])
+    state = np.random.random(5) * 10
+    u = np.random.random(2)
+    print("state")
+    print(state)
+    print("u")
+    print(u)
+    theta = state[2]
+    v = state[3]
+    delta = state[4]
+    L = 2.9
+    A = np.array([
+        [0, 0, -v*math.sin(theta), math.cos(theta), 0],
+        [0, 0, v*math.cos(theta), math.sin(theta), 0],
+        [0, 0, 0, math.tan(delta)/L, v/(L*math.cos(delta)**2)],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0]])
+    B = np.array([
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [1, 0],
+        [0, 1]])
+    
+    linsys = sys.linearize(state, u)
+    print("A_diff")
+    print((linsys.A - A).round(decimals=5))
+    print("B_diff")
+    print((linsys.B - B).round(decimals=5))
+
+    dt = 0.01
+    linsysd = linsys.sample(dt)
+
+    K_auto, S_auto, E_auto = control.dlqr(linsysd, np.eye(5), np.eye(2))
+    K, S, E = control.dlqr(linsysd, np.eye(5), np.eye(2))
+
+    print("K_diff")
+    print((K_auto - K).round(decimals=5))
+    print("S_diff")
+    print((S_auto - S).round(decimals=5))
+    print("E_diff")
+    print((E_auto - E).round(decimals=5))
+
     pass
