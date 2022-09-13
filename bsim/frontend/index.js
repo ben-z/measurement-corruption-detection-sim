@@ -33,12 +33,12 @@ async function main() {
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=manual`}));
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=path_following_kmpc`}));
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr`}));
-        target_path = [[-10,3], [10,5], [10,-5], [7, -8], [0,-10], [-10,-3]];
+        target_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
         target_speed = 5; // m/s
         controller_tuning_options = {
             Q: [
-                [25., 0., 0., 0., 0.],
-                [0., 25., 0., 0., 0.],
+                [1., 0., 0., 0., 0.],
+                [0., 1., 0., 0., 0.],
                 [0., 0., 1., 0., 0.],
                 [0., 0., 0., 10000., 0.],
                 [0., 0., 0., 0., 1.]
