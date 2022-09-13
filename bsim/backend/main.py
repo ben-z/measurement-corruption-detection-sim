@@ -6,6 +6,7 @@ from urllib.parse import parse_qsl
 import discrete_kinematic_bicycle as dkb
 import continuous_kinematic_bicycle as ckb
 import json
+import lookahead_lqr
 import numpy as np
 import path_following_kmpc as pfkmpc
 import re
@@ -22,7 +23,7 @@ INITIAL_WORLD_STATE = {
 world_state = deepcopy(INITIAL_WORLD_STATE)
 
 ENTITY_PATH_REGEX = re.compile(r'^/entities/(?P<entity_id>\w+)$')
-CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>[\w=]+))?$')
+CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>[\w=%,-]+))?$')
 
 
 class MyEncoder(json.JSONEncoder):
@@ -103,14 +104,18 @@ def world_handler(command: str):
                 'controller': 'manual',
                 'L': 2.9,
                 # coordinates of the waypoints in meters. This will form a closed path
-                'target_path': np.array([ [-10,3], [20,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
+                'target_path': np.array([ [-10,3], [12,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
+                'target_speed': 1, # m/s
             }
 
-            unknown_option_keys = set(user_options.keys()) - set(default_options.keys())
+            additional_allowed_options = set(['controller_tuning_options'])
+            unknown_option_keys = set(user_options.keys()) - set(default_options.keys()) - additional_allowed_options
             if unknown_option_keys:
                 raise Exception(f"ERROR: unknown options: {unknown_option_keys}")
 
             options = {**default_options, **user_options}
+            if isinstance(options['target_path'], str):
+                options['target_path'] = np.array(json.loads(options['target_path']))
 
             if options['controller'] == 'manual':
                 controller_state = {
@@ -124,6 +129,21 @@ def world_handler(command: str):
                     'controller': 'path_following_kmpc',
                     '_controller_fn': pfkmpc.path_following_kmpc,
                     '_controller_state': pfkmpc.get_initial_state(target_path=options['target_path'], dt=world_state['DT'], L=options['L']),
+                    'controller_debug_output': {},
+                }
+            elif options['controller'] == 'lookahead_lqr':
+                tuning_options = json.loads(options['controller_tuning_options']) if 'controller_tuning_options' in options else {}
+
+                controller_state = {
+                    'controller': 'lookahead_lqr',
+                    '_controller_fn': lookahead_lqr.lookahead_lqr,
+                    '_controller_state': lookahead_lqr.get_initial_state(
+                        target_path=options['target_path'],
+                        target_speed=options['target_speed'],
+                        dt=world_state['DT'],
+                        L=options['L'],
+                        **tuning_options,
+                    ),
                     'controller_debug_output': {},
                 }
             else:

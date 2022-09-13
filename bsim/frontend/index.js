@@ -30,8 +30,21 @@ async function main() {
     console.log("World socket opened: ", worldSocket);
     ensureSucceeds(await worldSocket.sendRequest({command: 'reset'}));
     for (const ego in egos) {
-        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=path_following_kmpc`}));
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=manual`}));
+        // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=path_following_kmpc`}));
+        // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr`}));
+        target_path = [[-10,3], [10,5], [10,-5], [7, -8], [0,-10], [-10,-3]];
+        target_speed = 5; // m/s
+        controller_tuning_options = {
+            Q: [
+                [25., 0., 0., 0., 0.],
+                [0., 25., 0., 0., 0.],
+                [0., 0., 1., 0., 0.],
+                [0., 0., 0., 10000., 0.],
+                [0., 0., 0., 0., 1.]
+            ]
+        };
+        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr,target_path=${encodeURIComponent(JSON.stringify(target_path))},controller_tuning_options=${encodeURIComponent(JSON.stringify(controller_tuning_options))},target_speed=${target_speed}`}));
         egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entity/${ego}`, WEBSOCKET_OPTIONS);
     }
 
@@ -39,7 +52,9 @@ async function main() {
     worldCanvas.getContext('2d').translate(worldCanvas.width/2, worldCanvas.height/2)
     const debugContainer = document.getElementById('debugContainer');
 
-    mySetInterval(async () => {
+    let errorCount = 0;
+    const MAX_ERROR_COUNT = 10;
+    const loop = mySetInterval(async () => {
         try {
             const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
         
@@ -49,8 +64,13 @@ async function main() {
         } catch (e) {
             console.error(e);
             displayError(debugContainer, e);
+            ++errorCount;
+            if (errorCount > MAX_ERROR_COUNT) {
+                console.error(`Too many errors, aborting`);
+                loop.cancel();
+            }
         }
-    }, 100);
+    }, 10);
 
     exported.tick = () => worldSocket.sendRequest({command: 'tick'}).then(console.log);
     exported.getState = () => worldSocket.sendRequest({command: 'state'}).then(console.log);
@@ -160,7 +180,7 @@ function drawVehicle(ctx, vehicle) {
         ctx.strokeStyle = 'darkgreen';
         ctx.fillStyle = 'darkgreen';
         for (const s of target_vehicle_states) {
-            ctx.arc(m_to_px(s.x), m_to_px(s.y), m_to_px(0.1), 0, 2 * Math.PI);
+            ctx.arc(m_to_px(s.x), m_to_px(s.y), m_to_px(0.3), 0, 2 * Math.PI);
         }
         ctx.stroke();
         ctx.restore();
@@ -186,5 +206,5 @@ function addvector(a, b) {
 
 function m_to_px(m) {
     // Meters to pixels
-    return m * 20;
+    return m * 10;
 }

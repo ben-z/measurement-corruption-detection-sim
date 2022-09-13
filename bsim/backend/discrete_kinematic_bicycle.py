@@ -2,7 +2,7 @@ import control
 import numpy as np
 
 def get_initial_state():
-    return np.zeros(5)
+    return np.array([0, 0, 0, 0.0001, 0])
 
 def get_noop_action():
     return np.zeros(2)
