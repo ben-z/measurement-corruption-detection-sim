@@ -47,7 +47,17 @@ async function main() {
             ]
         };
         ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr,target_path=${encodeURIComponent(JSON.stringify(target_path))},controller_options=${encodeURIComponent(JSON.stringify(controller_options))},target_speed=${target_speed}`}));
-        egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entity/${ego}`, WEBSOCKET_OPTIONS);
+        egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entities/${ego}`, WEBSOCKET_OPTIONS);
+        ensureSucceeds(await egos[ego]._socket.open());
+        // testing additive corruption
+        // setTimeout(async () => {
+        //     const new_state = {
+        //         _sensor_state: {
+        //             additive_corruption: [0,0,0,-6,0]
+        //         }
+        //     }
+        //     ensureSucceeds(await egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify(new_state)}`}));
+        // }, 3000)
     }
 
     const worldCanvas = document.getElementById('worldCanvas');
@@ -77,6 +87,7 @@ async function main() {
     exported.tick = () => worldSocket.sendRequest({command: 'tick'}).then(console.log);
     exported.getState = () => worldSocket.sendRequest({command: 'state'}).then(console.log);
     exported.resetWorld = () => worldSocket.sendRequest({command: 'reset'}).then(console.log);
+    exported.corruptSensorAdditive = (ego, corruption) => egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify({_sensor_state: {additive_corruption: corruption}})}`}).then(console.log);
 }
 
 function drawWorld(canvas, worldState) {

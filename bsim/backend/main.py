@@ -1,5 +1,4 @@
 import asyncio
-import control
 from copy import deepcopy
 import traceback
 from urllib.parse import parse_qsl
@@ -7,6 +6,7 @@ import discrete_kinematic_bicycle as dkb
 import continuous_kinematic_bicycle as ckb
 import json
 import lookahead_lqr
+import mergedeep
 import numpy as np
 import path_following_kmpc as pfkmpc
 import re
@@ -24,6 +24,7 @@ world_state = deepcopy(INITIAL_WORLD_STATE)
 
 ENTITY_PATH_REGEX = re.compile(r'^/entities/(?P<entity_id>\w+)$')
 CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>[\w=%,-]+))?$')
+ENTITY_UPDATE_STATE_REGEX = re.compile(r'^update_state: (?P<new_state>.+)$')
 
 
 class MyEncoder(json.JSONEncoder):
@@ -128,10 +129,10 @@ def world_handler(command: str):
             elif options['sensor'] == 'state_with_corruption':
                 sensor_state = {
                     'sensor': 'state',
-                    '_sensor_fn': lambda sstate, state: (state*sstate['multiplicative_corruption']+sstate['additive_corruption'], sstate, {}),
+                    '_sensor_fn': lambda sstate, state: (state*sstate['multiplicative_corruption']+sstate['additive_corruption'], sstate, {'sensor_state': sstate}),
                     '_sensor_state': {
                         'multiplicative_corruption': [1,1,1,1,1],
-                        'additive_corruption': [0,0,0,-5,0],
+                        'additive_corruption': [0,0,0,0,0],
                     },
                     'sensor_debug_output': {},
                 }
@@ -217,6 +218,9 @@ def make_ego_handler(entity_id: str):
                 entity['_controller_fn'](entity['_controller_state'], entity['estimate'])
 
             entity['state'] = model.dynamics(0, entity['state'], entity['action'])
+        elif ENTITY_UPDATE_STATE_REGEX.match(command):
+            new_state = json.loads(ENTITY_UPDATE_STATE_REGEX.match(command).group('new_state'))
+            mergedeep.merge(entity, new_state, strategy=mergedeep.Strategy.TYPESAFE_REPLACE)
         else:
             raise Exception(f"ERROR: Unknown command: {command}")
         
