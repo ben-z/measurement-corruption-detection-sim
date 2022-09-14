@@ -216,7 +216,6 @@ def make_ego_handler(entity_id: str):
         elif command == 'state':
             pass # noop, just return the current state
         elif command == '_tick':
-            # TODO: add sensor, estimation, and controller code here
             state = entity['state']
 
             entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
