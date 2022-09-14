@@ -106,6 +106,7 @@ def world_handler(command: str):
                 # coordinates of the waypoints in meters. This will form a closed path
                 'target_path': np.array([ [-10,3], [12,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
                 'target_speed': 1, # m/s
+                'sensor': 'state_with_corruption',
             }
 
             additional_allowed_options = set(['controller_options'])
@@ -116,6 +117,26 @@ def world_handler(command: str):
             options = {**default_options, **user_options}
             if isinstance(options['target_path'], str):
                 options['target_path'] = np.array(json.loads(options['target_path']))
+
+            if options['sensor'] == 'state':
+                sensor_state = {
+                    'sensor': 'state',
+                    '_sensor_fn': lambda sstate, state: (state, sstate, {}),
+                    '_sensor_state': None,
+                    'sensor_debug_output': {},
+                }
+            elif options['sensor'] == 'state_with_corruption':
+                sensor_state = {
+                    'sensor': 'state',
+                    '_sensor_fn': lambda sstate, state: (state*sstate['multiplicative_corruption']+sstate['additive_corruption'], sstate, {}),
+                    '_sensor_state': {
+                        'multiplicative_corruption': [1,1,1,1,1],
+                        'additive_corruption': [0,0,0,-5,0],
+                    },
+                    'sensor_debug_output': {},
+                }
+            else:
+                raise Exception(f"ERROR: unknown sensor: '{options['sensor']}'")
 
             if options['controller'] == 'manual':
                 controller_state = {
@@ -159,6 +180,7 @@ def world_handler(command: str):
                 # '_model': ckb.make_continuous_kinematic_bicycle_model(options['L']),
                 '_model': dkb.make_discrete_kinematic_bicycle_model(options['L'], world_state['DT']),
                 **controller_state,
+                **sensor_state,
             }
         else:
             raise Exception(f"ERROR: Unknown entity type '{entity_type}'")
@@ -184,14 +206,15 @@ def make_ego_handler(entity_id: str):
             # TODO: add sensor, estimation, and controller code here
             state = entity['state']
 
-            measurement = entity['_measurement'] = state
-            estimate = entity['_estimate'] = measurement
+            entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
+                entity['_sensor_fn'](entity['_sensor_state'], state)
+            entity['estimate'] = entity['measurement']
             # model = control.sample_system(entity['_model'].linearize(estimate, entity['action']), world_state['DT'])
             model = entity['_model']
 
             # calculate control action
             entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
-                entity['_controller_fn'](entity['_controller_state'], estimate)
+                entity['_controller_fn'](entity['_controller_state'], entity['estimate'])
 
             entity['state'] = model.dynamics(0, entity['state'], entity['action'])
         else:
