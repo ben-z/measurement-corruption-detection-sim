@@ -1,9 +1,10 @@
 module.exports.mySetInterval = function mySetInterval(callback, delay) {
     // setInterval, but runs at most as fast as the callback takes to run.
-    // callback should return a promise.
+    // `callback` should return a promise.
+    // `delay` is in milliseconds.
 
     let isCancelled = false;
-    let start = Date.now();
+    let start = Date.now(); // ms
     function loop() {
         if (isCancelled) {
             return;
