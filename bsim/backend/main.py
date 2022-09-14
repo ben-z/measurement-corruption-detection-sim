@@ -266,7 +266,7 @@ async def new_connection(websocket, path: str):
             await websocket.send(json.dumps({'error': 'Cannot parse request'}))
             break
 
-        print(f"[{request_id}] < {path}: {request}")
+        # print(f"[{request_id}] < {path}: {request}")
         try:
             response = {'id': request_id, 'response': handler(command)}
         except Exception:
@@ -278,7 +278,7 @@ async def new_connection(websocket, path: str):
             round_floats(strip_internal_vars(response)), cls=MyEncoder)
 
         await websocket.send(serialized_response)
-        print(f"[{request_id}] > {path}: {serialized_response}")
+        # print(f"[{request_id}] > {path}: {serialized_response}")
 
 start_server = websockets.serve(new_connection, "localhost", 8765)
 
