@@ -108,7 +108,7 @@ def world_handler(command: str):
                 'target_speed': 1, # m/s
             }
 
-            additional_allowed_options = set(['controller_tuning_options'])
+            additional_allowed_options = set(['controller_options'])
             unknown_option_keys = set(user_options.keys()) - set(default_options.keys()) - additional_allowed_options
             if unknown_option_keys:
                 raise Exception(f"ERROR: unknown options: {unknown_option_keys}")
@@ -132,7 +132,7 @@ def world_handler(command: str):
                     'controller_debug_output': {},
                 }
             elif options['controller'] == 'lookahead_lqr':
-                tuning_options = json.loads(options['controller_tuning_options']) if 'controller_tuning_options' in options else {}
+                tuning_options = json.loads(options['controller_options']) if 'controller_options' in options else {}
 
                 controller_state = {
                     'controller': 'lookahead_lqr',

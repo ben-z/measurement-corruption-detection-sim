@@ -35,7 +35,7 @@ async function main() {
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr`}));
         target_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
         target_speed = 5; // m/s
-        controller_tuning_options = {
+        controller_options = {
             Q: [
                 [1., 0., 0., 0., 0.],
                 [0., 1., 0., 0., 0.],
@@ -44,7 +44,7 @@ async function main() {
                 [0., 0., 0., 0., 1.]
             ]
         };
-        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr,target_path=${encodeURIComponent(JSON.stringify(target_path))},controller_tuning_options=${encodeURIComponent(JSON.stringify(controller_tuning_options))},target_speed=${target_speed}`}));
+        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr,target_path=${encodeURIComponent(JSON.stringify(target_path))},controller_options=${encodeURIComponent(JSON.stringify(controller_options))},target_speed=${target_speed}`}));
         egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entity/${ego}`, WEBSOCKET_OPTIONS);
     }
 
