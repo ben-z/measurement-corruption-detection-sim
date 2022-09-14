@@ -1,16 +1,27 @@
 module.exports.mySetInterval = function mySetInterval(callback, delay) {
-    // Takes in a callback, which returns a promise, and a delay in ms
+    // setInterval, but runs at most as fast as the callback takes to run.
+    // callback should return a promise.
+
     let isCancelled = false;
+    let start = Date.now();
     function loop() {
         if (isCancelled) {
             return;
         }
-        const start = Date.now();
         callback().then(() => {
             if (isCancelled) {
                 return;
             }
-            setTimeout(loop, Math.max(0, delay - (Date.now() - start)));
+            const now = Date.now();
+            const nextStart = start + delay;
+            const remainingTime = nextStart - now;
+            if (remainingTime < 0) {
+                // console.debug(`WARNING: loop is running behind schedule by ${-remainingTime} ms`);
+                start = now;
+            } else {
+                start = nextStart;
+            }
+            setTimeout(loop, Math.max(0, remainingTime));
         });
     }
     loop();
