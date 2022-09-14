@@ -36,7 +36,7 @@ async function main() {
         // target_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
         // target_path = [[20, 20], [20, -20], [-20, -20], [-20, 20]]; // square
         target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; // square with cut corners
-        target_speed = 5; // m/s
+        target_speed = 1; // m/s
         controller_options = {
             Q: [
                 [1., 0., 0., 0., 0.],

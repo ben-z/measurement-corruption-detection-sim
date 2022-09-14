@@ -7,6 +7,7 @@ import continuous_kinematic_bicycle as ckb
 import json
 import lookahead_lqr
 import mergedeep
+from MyEstimator import MyEstimator
 import numpy as np
 import path_following_kmpc as pfkmpc
 import re
@@ -108,7 +109,7 @@ def world_handler(command: str):
                 'target_path': np.array([ [-10,3], [12,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
                 'target_speed': 1, # m/s
                 'sensor': 'state_with_corruption',
-                'estimator': 'sensor',
+                'estimator': 'l1_optimizer',
             }
 
             additional_allowed_options = set(['controller_options'])
@@ -143,7 +144,15 @@ def world_handler(command: str):
             if options['estimator'] == 'sensor':
                 estimator_state = {
                     'estimator': 'sensor',
-                    '_estimator_fn': lambda est_state, measurement: (measurement, est_state, {}),
+                    '_estimator_fn': lambda est_state, measurement, prev_inputs, _true_state: (measurement, est_state, {}),
+                    '_estimator_state': None,
+                    'estimator_debug_output': {},
+                }
+            elif options['estimator'] == 'l1_optimizer':
+                estimator = MyEstimator(options['L'])
+                estimator_state = {
+                    'estimator': 'l1_optimizer',
+                    '_estimator_fn': estimator.tick,
                     '_estimator_state': None,
                     'estimator_debug_output': {},
                 }
@@ -221,7 +230,8 @@ def make_ego_handler(entity_id: str):
             entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
                 entity['_sensor_fn'](entity['_sensor_state'], state)
             entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
-                entity['_estimator_fn'](entity['_estimator_state'], entity['measurement'])
+                entity['_estimator_fn'](
+                    entity['_estimator_state'], entity['measurement'], entity['action'], state)
             # model = control.sample_system(entity['_model'].linearize(estimate, entity['action']), world_state['DT'])
             model = entity['_model']
 
