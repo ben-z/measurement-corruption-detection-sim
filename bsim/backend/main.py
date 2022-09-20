@@ -1,7 +1,7 @@
 import asyncio
+import control
 from copy import deepcopy
 import traceback
-from urllib.parse import parse_qsl
 import discrete_kinematic_bicycle as dkb
 import continuous_kinematic_bicycle as ckb
 import json
@@ -13,6 +13,8 @@ import path_following_kmpc as pfkmpc
 import re
 import secrets
 import sys
+from urllib.parse import parse_qsl
+from utils import JSONNumpyDecoder
 import websockets
 
 INITIAL_WORLD_STATE = {
@@ -24,7 +26,7 @@ INITIAL_WORLD_STATE = {
 world_state = deepcopy(INITIAL_WORLD_STATE)
 
 ENTITY_PATH_REGEX = re.compile(r'^/entities/(?P<entity_id>\w+)$')
-CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>[\w=%,-]+))?$')
+CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>[\w=%,-\.]+))?$')
 ENTITY_UPDATE_STATE_REGEX = re.compile(r'^update_state: (?P<new_state>.+)$')
 
 
@@ -108,33 +110,47 @@ def world_handler(command: str):
                 # coordinates of the waypoints in meters. This will form a closed path
                 'target_path': np.array([ [-10,3], [12,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
                 'target_speed': 1, # m/s
-                'sensor': 'state_with_corruption',
+                'sensor': 'model_output_with_corruption',
                 'estimator': 'l1_optimizer',
             }
 
-            additional_allowed_options = set(['controller_options'])
+            # check for invalid options
+            additional_allowed_options = set(['controller_options', 'plant_options'])
             unknown_option_keys = set(user_options.keys()) - set(default_options.keys()) - additional_allowed_options
             if unknown_option_keys:
                 raise Exception(f"ERROR: unknown options: {unknown_option_keys}")
 
+            # merge the user options with the default options
             options = {**default_options, **user_options}
             if isinstance(options['target_path'], str):
                 options['target_path'] = np.array(json.loads(options['target_path']))
 
-            if options['sensor'] == 'state':
+            plant_options = json.loads(options.get('plant_options', '{}'))
+
+            # create the vehicle
+            # plant_factory = ckb
+            # plant_model = plant_factory.make_model(options['L'])
+            plant_factory = dkb
+            plant_model = plant_factory.make_model(options['L'], world_state['DT'])
+            plant_initial_state = plant_options.get('initial_state', plant_factory.get_initial_state())
+            plant_initial_action = plant_options.get('initial_action', plant_factory.get_noop_action())
+            plant_state_normalizer = plant_factory.normalize_state
+
+            if options['sensor'] == 'model_output':
                 sensor_state = {
-                    'sensor': 'state',
-                    '_sensor_fn': lambda sstate, state: (state, sstate, {}),
-                    '_sensor_state': None,
+                    'sensor': 'model_output',
+                    '_sensor_fn': lambda sstate, x, u: (sstate['_model'].output(0, x, u), sstate, {}),
+                    '_sensor_state': {'_model': plant_model},
                     'sensor_debug_output': {},
                 }
-            elif options['sensor'] == 'state_with_corruption':
+            elif options['sensor'] == 'model_output_with_corruption':
                 sensor_state = {
-                    'sensor': 'state',
-                    '_sensor_fn': lambda sstate, state: (state*sstate['multiplicative_corruption']+sstate['additive_corruption'], sstate, {'sensor_state': sstate}),
+                    'sensor': 'model_output_with_corruption',
+                    '_sensor_fn': lambda sstate, x, u: (sstate['_model'].output(0, x, u)*sstate['multiplicative_corruption']+sstate['additive_corruption'], sstate, {'sensor_state': sstate}),
                     '_sensor_state': {
-                        'multiplicative_corruption': [1,1,1,1,1],
-                        'additive_corruption': [0,0,0,0,0],
+                        'multiplicative_corruption': np.ones(plant_model.noutputs),
+                        'additive_corruption': np.zeros(plant_model.noutputs),
+                        '_model': plant_model,
                     },
                     'sensor_debug_output': {},
                 }
@@ -149,7 +165,7 @@ def world_handler(command: str):
                     'estimator_debug_output': {},
                 }
             elif options['estimator'] == 'l1_optimizer':
-                estimator = MyEstimator(options['L'])
+                estimator = MyEstimator(options['L'], world_state['DT'])
                 estimator_state = {
                     'estimator': 'l1_optimizer',
                     '_estimator_fn': estimator.tick,
@@ -193,13 +209,13 @@ def world_handler(command: str):
 
             world_state['entities'][entity_id] = {
                 'type': 'ego',
-                'state': dkb.get_initial_state(),
-                'action': dkb.get_noop_action(),
+                'state': plant_initial_state,
+                'action': plant_initial_action,
                 'L': options['L'],
                 'target_path': options['target_path'],
                 '_handler': make_ego_handler(entity_id),
-                # '_model': ckb.make_continuous_kinematic_bicycle_model(options['L']),
-                '_model': dkb.make_discrete_kinematic_bicycle_model(options['L'], world_state['DT']),
+                '_model': plant_model,
+                '_model_state_normalizer': plant_state_normalizer,
                 **sensor_state,
                 **estimator_state,
                 **controller_state,
@@ -216,7 +232,7 @@ def make_ego_handler(entity_id: str):
         entity = world_state['entities'][entity_id]
 
         if command == 'reset':
-            entity['state'] = dkb.get_initial_state()
+            entity['state'] = ckb.get_initial_state()
             entity['action'] = dkb.get_noop_action()
         elif command.startswith('action: '):
             if entity['controller'] != 'manual':
@@ -225,23 +241,29 @@ def make_ego_handler(entity_id: str):
         elif command == 'state':
             pass # noop, just return the current state
         elif command == '_tick':
-            state = entity['state']
-
             entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
-                entity['_sensor_fn'](entity['_sensor_state'], state)
+                entity['_sensor_fn'](
+                    entity['_sensor_state'], entity['state'], entity['action'])
             entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
                 entity['_estimator_fn'](
-                    entity['_estimator_state'], entity['measurement'], entity['action'], state)
-            # model = control.sample_system(entity['_model'].linearize(estimate, entity['action']), world_state['DT'])
+                    entity['_estimator_state'], entity['measurement'], entity['action'], entity['state'])
             model = entity['_model']
+            # model = control.sample_system(entity['_model'], world_state['DT'])
+            # model = control.sample_system(entity['_model'].linearize(
+            #     entity['state'], entity['action']), world_state['DT'])
+            # model = control.sample_system(entity['_model'].linearize([0,0,0,1,0], [0, 0]), world_state['DT'])
+
+            if not model.isdtime():
+                raise Exception(f"ERROR: A discrete-time model is required!")
 
             # calculate control action
             entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
                 entity['_controller_fn'](entity['_controller_state'], entity['estimate'])
 
-            entity['state'] = model.dynamics(0, entity['state'], entity['action'])
+            entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']))
         elif ENTITY_UPDATE_STATE_REGEX.match(command):
-            new_state = json.loads(ENTITY_UPDATE_STATE_REGEX.match(command).group('new_state'))
+            new_state = json.loads(ENTITY_UPDATE_STATE_REGEX.match(
+                command).group('new_state'), cls=JSONNumpyDecoder)
             mergedeep.merge(entity, new_state, strategy=mergedeep.Strategy.TYPESAFE_REPLACE)
         else:
             raise Exception(f"ERROR: Unknown command: {command}")

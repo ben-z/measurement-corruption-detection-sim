@@ -1,16 +1,20 @@
-from utils import calc_input_effects_on_output, optimize_l1
+import control
 import continuous_kinematic_bicycle as ckb
 import numpy as np
 from numpy.linalg import eig, matrix_power, norm
 import time
+from utils import calc_input_effects_on_output, optimize_l1
+
+np.set_printoptions(suppress=True, precision=4)
 
 class MyEstimator:
-    def __init__(self, L, T=200, ticks_per_solve=200):
+    def __init__(self, L, dt, T=200, ticks_per_solve=200):
         """
         T: time horizon, the number of time steps
         ticks_per_solve: number of ticks between solves
         """
         self.T = T
+        self.dt = dt
         self.ticks_per_solve = ticks_per_solve
         self._tick_count = 0
         self.model = ckb.make_continuous_kinematic_bicycle_model(L)
@@ -46,7 +50,8 @@ class MyEstimator:
             # chicken and egg problem.
             print('solving estimation problem')
             # TODO: try linearizing at a set point, also change the actual model to that
-            linsys = self.model.linearize(true_state, [0, 0])
+            linsys = control.sample_system(self.model.linearize(true_state, [0, 0]), self.dt)
+            # linsys = control.sample_system(self.model.linearize([0, 0, 0, 1, 0], [0, 0]), self.dt)
             A = linsys.A
             B = linsys.B
             C = linsys.C
@@ -66,11 +71,14 @@ class MyEstimator:
                 n, p, self.T, Phi, np.reshape(np.transpose(measurements_without_input_effects), (p*self.T,)))
             l1_end = time.time()
             
+            diff_from_true = ckb.normalize_state(x0_hat_l1.value - self._true_states[:, 0])
+            
             print("status:", prob_l1.status)
             print("optimal value", prob_l1.value)
             print("optimal var", x0_hat_l1.value)
             print("true var", self._true_states[:,0])
-            print(f"dist to true var: {np.linalg.norm(self._true_states[:,0] - x0_hat_l1.value):.6f}")
+            print("opt - true", diff_from_true)
+            print(f"dist to true var: {norm(diff_from_true):.4f}")
             print(f"l1 solve time: {l1_end - l1_start:.4f}s")
             print("=================================")
             pass

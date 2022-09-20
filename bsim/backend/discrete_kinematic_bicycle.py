@@ -1,11 +1,19 @@
 import control
 import numpy as np
 
+from utils import wrap_to_pi
+
 def get_initial_state():
     return np.array([0, 0, 0, 0.0001, 0])
 
 def get_noop_action():
     return np.zeros(2)
+
+def normalize_state(state):
+    state[2] = wrap_to_pi(state[2])
+    state[4] = wrap_to_pi(state[4])
+    return state
+
 
 def discrete_kinematic_bicycle_model(t, x, u, params):
     # Kinematic bicycle model (rear axle reference frame, discrete time)
@@ -36,12 +44,26 @@ def discrete_kinematic_bicycle_model(t, x, u, params):
     return x
 
 
+def discrete_kinematic_bicycle_model_output(t, x, u, params):
+    y = np.zeros(6)
+
+    y[0:5] = x[0:5]
+    y[5] = x[0]  # additional sensor for x
+
+    return y
+
 def make_discrete_kinematic_bicycle_model(L=2.9, dt=0.01):
     return control.NonlinearIOSystem(
         discrete_kinematic_bicycle_model,
+        outfcn=discrete_kinematic_bicycle_model_output,
         inputs=('a', 'delta_dot'),
-        outputs=('x', 'y', 'theta', 'v', 'delta'),
+        # outputs=('x', 'y', 'theta', 'v', 'delta'),
+        outputs=('x', 'y', 'theta', 'v', 'delta', 'x1'),
         states=('x', 'y', 'theta', 'v', 'delta'),
         params={'L': L, 'dt': dt},
         dt=dt,
     )
+
+
+def make_model(*args, **kwargs):
+    return make_discrete_kinematic_bicycle_model(*args, **kwargs)

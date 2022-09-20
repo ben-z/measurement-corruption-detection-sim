@@ -1,6 +1,12 @@
 import control
 import math
 import numpy as np
+from discrete_kinematic_bicycle import normalize_state, get_noop_action
+
+_INITIAL_STATE = np.array([0, 0, 0, 0.0001, 0])
+
+def get_initial_state():
+    return np.copy(_INITIAL_STATE)
 
 def continuous_kinematic_bicycle_model(t, x, u, params):
     # Kinematic bicycle model (rear axle reference frame, continuous time)
@@ -11,7 +17,7 @@ def continuous_kinematic_bicycle_model(t, x, u, params):
     if 'L' in params:
         L = params['L']
 
-    x_dot = np.zeros(5)
+    x_dot = np.zeros(_INITIAL_STATE.shape)
     x_dot[0] = x[3] * np.cos(x[2])
     x_dot[1] = x[3] * np.sin(x[2])
     x_dot[2] = x[3] * np.tan(x[4]) / L
@@ -20,14 +26,28 @@ def continuous_kinematic_bicycle_model(t, x, u, params):
 
     return x_dot
 
+
+def continuous_kinematic_bicycle_model_output(t, x, u, params):
+    y = np.zeros(6)
+
+    y[0:5] = x[0:5]
+    y[5] = x[0] # additional sensor for x
+
+    return y
+
 def make_continuous_kinematic_bicycle_model(L=2.9):
     return control.NonlinearIOSystem(
         continuous_kinematic_bicycle_model,
+        outfcn=continuous_kinematic_bicycle_model_output,
         inputs=('a', 'delta_dot'),
-        outputs=('x', 'y', 'theta', 'v', 'delta'),
+        # outputs=('x', 'y', 'theta', 'v', 'delta'),
+        outputs=('x', 'y', 'theta', 'v', 'delta', 'x1'),
         states=('x', 'y', 'theta', 'v', 'delta'),
         params={'L': L},
     )
+
+def make_model(*args, **kwargs):
+    return make_continuous_kinematic_bicycle_model(*args, **kwargs)
 
 if __name__ == '__main__':
     sys = make_continuous_kinematic_bicycle_model()

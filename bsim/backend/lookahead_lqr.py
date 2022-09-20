@@ -39,7 +39,9 @@ def lookahead_lqr(state, estimate):
     # find the closest point on the path (assuming linear interpolation)
     target_path = state['target_path']
     model = state['model']
-    x, y, theta, v, delta = estimate
+    # x, y, theta, v, delta = estimate
+    x = estimate[0]
+    y = estimate[1]
 
     # Control performance after linearization is very poor
     linsys = model.linearize(estimate, [0, 0])
@@ -70,6 +72,8 @@ def lookahead_lqr(state, estimate):
     target_x[2] = current_path_heading
     target_x[3] = state['target_speed']
     target_x[4] = TARGET_STEERING
+
+    assert target_x.shape == estimate.shape, f"This controller only supports estimates of shape {target_x.shape}, got {estimate.shape}"
 
     debug_output['target_x'] = [target_x]
 

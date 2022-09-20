@@ -1,6 +1,7 @@
 from numpy.linalg import matrix_power
 import cvxpy as cp
 import numpy as np
+import json
 
 def closest_point_on_line_segment(p, a, b):
     """
@@ -97,6 +98,8 @@ def optimize_l1(n, p, T, Phi, y):
     # define the expression that we want to run l1/l2 optimization on
     optimizer = y - np.matmul(Phi, x0_hat_l1)
     # reshape to adapt to l1/l2 norm formulation
+    # Note that cp uses fortran ordering (column-major), this is different from numpy,
+    # which uses c ordering (row-major)
     optimizer_reshaped = cp.reshape(optimizer, (p, T))
     optimizer_final = cp.mixed_norm(optimizer_reshaped, p=2, q=1)
     # Equivalent to optimizer_final = cp.norm1(cp.norm(optimizer_reshaped, axis=1))
@@ -105,6 +108,34 @@ def optimize_l1(n, p, T, Phi, y):
 
     # Form and solve problem.
     prob = cp.Problem(obj)
-    prob.solve()  # Returns the optimal value.
+    prob.solve(verbose=True)  # Returns the optimal value.
 
     return (prob, x0_hat_l1)
+
+
+class JSONNumpyDecoder(json.JSONDecoder):
+    def decode(self, s):
+        data = super().decode(s)
+        return self._decode(data)
+
+    def _decode(self, data):
+        if isinstance(data, (int, float, str)):
+            return data
+        elif isinstance(data, dict):
+            return {self._decode(key): self._decode(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            decoded = [self._decode(element) for element in data]
+            npdecoded = np.array(decoded)
+            # if the list is a numpy array, return it as a numpy array
+            if npdecoded.dtype != object:
+                return npdecoded
+            else:
+                return decoded
+        elif data == 'NaN':
+            return np.nan
+        elif data == 'inf':
+            return np.inf
+        elif data == '-inf':
+            return -np.inf
+        else:
+            raise ValueError('Unknown data type: {}'.format(data))

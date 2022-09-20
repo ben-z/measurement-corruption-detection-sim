@@ -35,18 +35,25 @@ async function main() {
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr`}));
         // target_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
         // target_path = [[20, 20], [20, -20], [-20, -20], [-20, 20]]; // square
-        target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; // square with cut corners
+        // target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; // square with cut corners
+        target_path = [[-20, 0], [20, 0], [20, 5]]; // straight line
         target_speed = 1; // m/s
-        controller_options = {
-            Q: [
-                [1., 0., 0., 0., 0.],
-                [0., 1., 0., 0., 0.],
-                [0., 0., 1., 0., 0.],
-                [0., 0., 0., 10000., 0.],
-                [0., 0., 0., 0., 1.]
-            ]
-        };
-        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr,target_path=${encodeURIComponent(JSON.stringify(target_path))},controller_options=${encodeURIComponent(JSON.stringify(controller_options))},target_speed=${target_speed}`}));
+        plant_options = {
+            initial_state: [0,0,0,0.8,0],
+        }
+        controller = 'manual';
+        controller_options = {};
+        // controller = 'lookahead_lqr';
+        // controller_options = {
+        //     Q: [
+        //         [1., 0., 0., 0., 0.],
+        //         [0., 1., 0., 0., 0.],
+        //         [0., 0., 1., 0., 0.],
+        //         [0., 0., 0., 10000., 0.],
+        //         [0., 0., 0., 0., 1.],
+        //     ]
+        // };
+        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=${controller},target_path=${encodeURIComponent(JSON.stringify(target_path))},controller_options=${encodeURIComponent(JSON.stringify(controller_options))},plant_options=${encodeURIComponent(JSON.stringify(plant_options))},target_speed=${target_speed}`}));
         egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entities/${ego}`, WEBSOCKET_OPTIONS);
         ensureSucceeds(await egos[ego]._socket.open());
         // testing additive corruption
