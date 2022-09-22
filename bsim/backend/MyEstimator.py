@@ -94,7 +94,7 @@ class MyEstimator:
             # attack_vector is a pxT matrix
             attack_vector = (y - np.matmul(Phi, x0_hat_l1.value)).reshape((p, self.T), order='F')
             mean_attack_vector = np.mean(attack_vector, axis=1)
-            sensors_under_attack = np.abs(mean_attack_vector) > 0.5 # some arbitrary threshold, above which the sensor is faulty, can set this per-sensor using experimental data.
+            sensors_under_attack = np.abs(mean_attack_vector) > 0.5 # some arbitrary threshold, above which the sensor is faulty, below which is modelling error/noise, can set this per-sensor using experimental data.
             num_sensors_under_attack = np.sum(sensors_under_attack)
             print("mean attack vector:", mean_attack_vector)
             print("Sensors under attack:", sensors_under_attack)
