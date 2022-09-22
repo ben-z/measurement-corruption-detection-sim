@@ -125,7 +125,7 @@ def world_handler(command: str):
             if isinstance(options['target_path'], str):
                 options['target_path'] = np.array(json.loads(options['target_path']))
 
-            plant_options = json.loads(options.get('plant_options', '{}'))
+            plant_options = json.loads(options.get('plant_options', '{}'), cls=JSONNumpyDecoder)
 
             # create the vehicle
             # plant_factory = ckb
@@ -251,7 +251,7 @@ def make_ego_handler(entity_id: str):
             # model = control.sample_system(entity['_model'], world_state['DT'])
             # model = control.sample_system(entity['_model'].linearize(
             #     entity['state'], entity['action']), world_state['DT'])
-            # model = control.sample_system(entity['_model'].linearize([0,0,0,1,0], [0, 0]), world_state['DT'])
+            # model = control.sample_system(entity['_model'].linearize([0,0,entity['state'][2],5,0], [0, 0]), world_state['DT'])
 
             if not model.isdtime():
                 raise Exception(f"ERROR: A discrete-time model is required!")

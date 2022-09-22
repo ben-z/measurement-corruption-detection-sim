@@ -1,12 +1,29 @@
 import control
 import math
 import numpy as np
-from discrete_kinematic_bicycle import normalize_state, get_noop_action
+from utils import wrap_to_pi
+
 
 _INITIAL_STATE = np.array([0, 0, 0, 0.0001, 0])
+OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1', 'theta1', 'v1', 'delta1', 'x2', 'y2', 'theta2', 'v2', 'delta2')
+STATES = ('x', 'y', 'theta', 'v', 'delta')
+INPUTS = ('a', 'delta_dot')
+
+assert len(STATES) == _INITIAL_STATE.shape[0]
 
 def get_initial_state():
     return np.copy(_INITIAL_STATE)
+
+
+def get_noop_action():
+    return np.zeros(2)
+
+
+def normalize_state(state):
+    state[2] = wrap_to_pi(state[2])
+    state[4] = wrap_to_pi(state[4])
+    return state
+
 
 def continuous_kinematic_bicycle_model(t, x, u, params):
     # Kinematic bicycle model (rear axle reference frame, continuous time)
@@ -17,7 +34,8 @@ def continuous_kinematic_bicycle_model(t, x, u, params):
     if 'L' in params:
         L = params['L']
 
-    x_dot = np.zeros(_INITIAL_STATE.shape)
+    x_dot = np.zeros(len(STATES))
+    assert len(STATES) == 5
     x_dot[0] = x[3] * np.cos(x[2])
     x_dot[1] = x[3] * np.sin(x[2])
     x_dot[2] = x[3] * np.tan(x[4]) / L
@@ -28,10 +46,12 @@ def continuous_kinematic_bicycle_model(t, x, u, params):
 
 
 def continuous_kinematic_bicycle_model_output(t, x, u, params):
-    y = np.zeros(6)
+    y = np.zeros(len(OUTPUTS))
 
     y[0:5] = x[0:5]
-    y[5] = x[0] # additional sensor for x
+    # additional sensor
+    y[5:10] = x[0:5] 
+    y[10:15] = x[0:5] 
 
     return y
 
@@ -39,10 +59,9 @@ def make_continuous_kinematic_bicycle_model(L=2.9):
     return control.NonlinearIOSystem(
         continuous_kinematic_bicycle_model,
         outfcn=continuous_kinematic_bicycle_model_output,
-        inputs=('a', 'delta_dot'),
-        # outputs=('x', 'y', 'theta', 'v', 'delta'),
-        outputs=('x', 'y', 'theta', 'v', 'delta', 'x1'),
-        states=('x', 'y', 'theta', 'v', 'delta'),
+        inputs=INPUTS,
+        outputs=OUTPUTS,
+        states=STATES,
         params={'L': L},
     )
 

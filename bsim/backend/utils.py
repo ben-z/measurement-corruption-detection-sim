@@ -114,6 +114,14 @@ def optimize_l1(n, p, T, Phi, y):
 
 
 class JSONNumpyDecoder(json.JSONDecoder):
+    """
+    Decodes numerical lists as numpy lists.
+    Example usage:
+    ```python
+    data = json.loads(json_string, cls=JSONNumpyDecoder)
+    ```
+    """
+
     def decode(self, s):
         data = super().decode(s)
         return self._decode(data)
