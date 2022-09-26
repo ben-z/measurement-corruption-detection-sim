@@ -53,12 +53,12 @@ class MyEstimator:
             # TODO: use something other than the true state as the initial guess, perhaps the previous estimate
             # projected forward in time or the target state along the path (the latter requires a feedback from
             # the controller)?
+            # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
             linearization_state = true_state.copy()
-            linearization_state[4] = 0 # set the wheel angle to 0 because it changes too rapidly
+            linearization_state[4] = 0
+            linearization_input = np.zeros(self.model.ninputs)
             linsys = control.sample_system(
-                self.model.linearize(linearization_state, prev_inputs), self.dt)
-            # linsys = control.sample_system(
-            #     self.model.linearize([0, 0, true_state[2], true_state[3], 0], [0, 0]), self.dt)
+                self.model.linearize(linearization_state, linearization_input), self.dt)
             A = linsys.A
             B = linsys.B
             C = linsys.C

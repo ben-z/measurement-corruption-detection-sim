@@ -43,8 +43,11 @@ def lookahead_lqr(state, estimate):
     x = estimate[0]
     y = estimate[1]
 
-    # Control performance after linearization is very poor
-    linsys = model.linearize(estimate, [0, 0])
+    # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
+    linearization_state = estimate.copy()
+    linearization_state[4] = 0
+    linearization_input = np.zeros(model.ninputs)
+    linsys = model.linearize(linearization_state, linearization_input)
     # linsys = model
     linsysd = linsys.sample(state['dt'])
 

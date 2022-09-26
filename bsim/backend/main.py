@@ -112,6 +112,7 @@ def world_handler(command: str):
                 'target_speed': 1, # m/s
                 'sensor': 'model_output_with_corruption',
                 'estimator': 'l1_optimizer',
+                # 'estimator': 'first_n',
             }
 
             # check for invalid options
@@ -157,10 +158,10 @@ def world_handler(command: str):
             else:
                 raise Exception(f"ERROR: unknown sensor: '{options['sensor']}'")
 
-            if options['estimator'] == 'sensor':
+            if options['estimator'] == 'first_n':
                 estimator_state = {
                     'estimator': 'sensor',
-                    '_estimator_fn': lambda est_state, measurement, prev_inputs, _true_state: (measurement, est_state, {}),
+                    '_estimator_fn': lambda est_state, measurement, prev_inputs, _true_state: (measurement[0:plant_model.nstates], est_state, {}),
                     '_estimator_state': None,
                     'estimator_debug_output': {},
                 }

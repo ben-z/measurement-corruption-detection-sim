@@ -5,7 +5,9 @@ from utils import wrap_to_pi
 
 
 _INITIAL_STATE = np.array([0, 0, 0, 0.0001, 0])
-OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1', 'theta1', 'v1', 'delta1', 'x2', 'y2', 'theta2', 'v2', 'delta2')
+# OUTPUTS = ('x', 'y', 'theta', 'v', 'delta')
+OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1', 'theta1', 'v1', 'delta1')
+# OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1', 'theta1', 'v1', 'delta1', 'x2', 'y2', 'theta2', 'v2', 'delta2')
 STATES = ('x', 'y', 'theta', 'v', 'delta')
 INPUTS = ('a', 'delta_dot')
 
@@ -51,7 +53,7 @@ def continuous_kinematic_bicycle_model_output(t, x, u, params):
     y[0:5] = x[0:5]
     # additional sensor
     y[5:10] = x[0:5] 
-    y[10:15] = x[0:5] 
+    # y[10:15] = x[0:5] 
 
     return y
 
