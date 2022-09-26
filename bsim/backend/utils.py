@@ -1,7 +1,9 @@
 from numpy.linalg import matrix_power
 import cvxpy as cp
-import numpy as np
+from itertools import chain, combinations
 import json
+import numpy as np
+from multiprocessing.pool import ThreadPool as Pool
 
 def closest_point_on_line_segment(p, a, b):
     """
@@ -94,9 +96,9 @@ def optimize_l1(n, p, T, Phi, y):
     assert Phi.shape == (p*T, n)
     assert y.shape == (p*T,)
 
-    x0_hat_l1 = cp.Variable(n)
+    x0_hat_l0 = cp.Variable(n)
     # define the expression that we want to run l1/l2 optimization on
-    optimizer = y - np.matmul(Phi, x0_hat_l1)
+    optimizer = y - np.matmul(Phi, x0_hat_l0)
     # reshape to adapt to l1/l2 norm formulation
     # Note that cp uses fortran ordering (column-major), this is different from numpy,
     # which uses c ordering (row-major)
@@ -110,8 +112,48 @@ def optimize_l1(n, p, T, Phi, y):
     prob = cp.Problem(obj)
     prob.solve(verbose=True)  # Returns the optimal value.
 
-    return (prob, x0_hat_l1)
+    return (prob, x0_hat_l0)
 
+
+def optimize_l0(n, p, T, Phi, y):
+    # solves the l0 minimization problem
+    # n: int - number of states
+    # p: int - number of outputs
+    # T: int - number of time steps
+    # Phi: numpy.ndarray - matrix of size (p*T, n) - (C*A^0, C*A^1, ..., C*A^(T-1))'
+    # y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*T)
+    # returns: numpy.ndarray
+
+    assert Phi.shape == (p*T, n)
+    assert y.shape == (p*T,)
+
+    with Pool(processes=6) as pool:
+        solns = pool.starmap(optimize_l0_subproblem, [(n, p, T, Phi, y, attacked_sensor_indices) for attacked_sensor_indices in powerset(range(p))])
+
+    return solns[0]
+
+
+def optimize_l0_subproblem(n, p, T, Phi, y, attacked_sensor_indices, eps=0.1):
+    x0_hat_l0 = cp.Variable(n)
+    # define the expression that we want to run l1/l2 optimization on
+    optimizer = y - np.matmul(Phi, x0_hat_l0)
+
+    constraints = []
+    
+    for j in set(range(p)) - set(attacked_sensor_indices):
+        for t in range(T):
+            constraints.append(cp.abs(optimizer[p*t+j]) <= eps)
+    
+    prob = cp.Problem(cp.Minimize(0), constraints)
+    prob.solve(verbose=True)
+
+    return (prob, x0_hat_l0)
+
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
 class JSONNumpyDecoder(json.JSONDecoder):
     """

@@ -3,7 +3,7 @@ import continuous_kinematic_bicycle as ckb
 import numpy as np
 from numpy.linalg import eig, matrix_power, norm
 import time
-from utils import calc_input_effects_on_output, optimize_l1
+from utils import calc_input_effects_on_output, optimize_l1, optimize_l0
 
 np.set_printoptions(suppress=True, precision=4)
 
@@ -77,7 +77,7 @@ class MyEstimator:
             y = np.reshape(measurements_without_input_effects, (p*self.T,), order='F')
 
             l1_start = time.time()
-            prob_l1, x0_hat_l1 = optimize_l1(
+            prob_l1, x0_hat_l1 = optimize_l0(
                 n, p, self.T, Phi, y)
             l1_end = time.time()
             
