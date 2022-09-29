@@ -4,6 +4,7 @@ from itertools import chain, combinations
 import json
 import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
+import time
 
 def closest_point_on_line_segment(p, a, b):
     """
@@ -78,27 +79,26 @@ def calc_input_effects_on_output(A, B, C, inputs):
     effects = np.zeros((p, T))
     for k in range(T):
         for j in range(k):
-            effects[:, k] += np.matmul(np.matmul(C, matrix_power(A, k-1-j)),
-                                       np.matmul(B, inputs[:, j]))
+            effects[:, k] += C @ matrix_power(A, k-1-j) @ B @ inputs[:, j]
 
     return effects
 
 
-def optimize_l1(n, p, T, Phi, y):
+def optimize_l1(n, p, T, Phi, Y):
     # solves the l1/l2 norm minimization problem
     # n: int - number of states
     # p: int - number of outputs
     # T: int - number of time steps
     # Phi: numpy.ndarray - matrix of size (p*T, n) - (C*A^0, C*A^1, ..., C*A^(T-1))'
-    # y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*T)
+    # Y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*T)
     # returns: numpy.ndarray
 
     assert Phi.shape == (p*T, n)
-    assert y.shape == (p*T,)
+    assert Y.shape == (p*T,)
 
-    x0_hat_l0 = cp.Variable(n)
+    x0_hat = cp.Variable(n)
     # define the expression that we want to run l1/l2 optimization on
-    optimizer = y - np.matmul(Phi, x0_hat_l0)
+    optimizer = Y - np.matmul(Phi, x0_hat)
     # reshape to adapt to l1/l2 norm formulation
     # Note that cp uses fortran ordering (column-major), this is different from numpy,
     # which uses c ordering (row-major)
@@ -112,42 +112,56 @@ def optimize_l1(n, p, T, Phi, y):
     prob = cp.Problem(obj)
     prob.solve(verbose=True)  # Returns the optimal value.
 
-    return (prob, x0_hat_l0)
+    return (prob, x0_hat)
 
 
-def optimize_l0(n, p, T, Phi, y):
+def optimize_l0(n, p, T, Phi, Y, eps=0.2):
     # solves the l0 minimization problem
     # n: int - number of states
     # p: int - number of outputs
     # T: int - number of time steps
     # Phi: numpy.ndarray - matrix of size (p*T, n) - (C*A^0, C*A^1, ..., C*A^(T-1))'
-    # y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*T)
+    # Y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*T)
     # returns: numpy.ndarray
 
     assert Phi.shape == (p*T, n)
-    assert y.shape == (p*T,)
+    assert Y.shape == (p*T,)
 
-    with Pool(processes=6) as pool:
-        solns = pool.starmap(optimize_l0_subproblem, [(n, p, T, Phi, y, attacked_sensor_indices) for attacked_sensor_indices in powerset(range(p))])
+    # with Pool(processes=30) as pool:
+    #     solns = pool.starmap(optimize_l0_subproblem, [(n, p, T, Phi, Y, attacked_sensor_indices) for attacked_sensor_indices in powerset(range(p))])
+    for attacked_sensor_indices in powerset(range(p)):
+        prob, x_hat_l0 = optimize_l0_subproblem(n, p, T, Phi, Y, attacked_sensor_indices, eps)
+        if prob.status in ["optimal", "optimal_inaccurate"]:
+            return (prob, x_hat_l0)
 
-    return solns[0]
+    raise Exception("No solution found")
 
 
-def optimize_l0_subproblem(n, p, T, Phi, y, attacked_sensor_indices, eps=0.1):
-    x0_hat_l0 = cp.Variable(n)
-    # define the expression that we want to run l1/l2 optimization on
-    optimizer = y - np.matmul(Phi, x0_hat_l0)
+def optimize_l0_subproblem(n, p, T, Phi, Y, attacked_sensor_indices, eps):
+    x0_hat = cp.Variable(n)
+    optimizer = Y - np.matmul(Phi, x0_hat)
+    optimizer_reshaped = cp.reshape(optimizer, (p, T))
+    optimizer_final = cp.mixed_norm(optimizer_reshaped, p=2, q=1)
+
+    # Support both scalar eps and eps per sensor
+    if np.isscalar(eps):
+        eps = np.ones(p) * eps
 
     constraints = []
-    
     for j in set(range(p)) - set(attacked_sensor_indices):
         for t in range(T):
-            constraints.append(cp.abs(optimizer[p*t+j]) <= eps)
+            # constraints.append(cp.norm(optimizer[p*t+j]) <= eps)
+            constraints.append(optimizer[p*t+j] <= eps[j])
+            constraints.append(optimizer[p*t+j] >= -eps[j])
     
-    prob = cp.Problem(cp.Minimize(0), constraints)
-    prob.solve(verbose=True)
+    prob = cp.Problem(cp.Minimize(cp.norm(optimizer_final)), constraints)
+    start = time.time()
+    prob.solve()
+    end = time.time()
 
-    return (prob, x0_hat_l0)
+    print(f"Solved l0 subproblem in {end-start:.2f} seconds. Indices: {attacked_sensor_indices}, status: {prob.status}, value: {prob.value}")
+
+    return (prob, x0_hat)
 
 
 def powerset(iterable):

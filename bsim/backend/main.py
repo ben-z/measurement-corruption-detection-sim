@@ -125,6 +125,8 @@ def world_handler(command: str):
             options = {**default_options, **user_options}
             if isinstance(options['target_path'], str):
                 options['target_path'] = np.array(json.loads(options['target_path']))
+            if isinstance(options['target_speed'], str):
+                options['target_speed'] = float(options['target_speed'])
 
             plant_options = json.loads(options.get('plant_options', '{}'), cls=JSONNumpyDecoder)
 
@@ -170,7 +172,10 @@ def world_handler(command: str):
                 estimator_state = {
                     'estimator': 'l1_optimizer',
                     '_estimator_fn': estimator.tick,
-                    '_estimator_state': None,
+                    '_estimator_state': {
+                        'target_speed': options['target_speed'], # m/s
+                        'target_path': options['target_path'],
+                    },
                     'estimator_debug_output': {},
                 }
             else:
@@ -251,17 +256,20 @@ def make_ego_handler(entity_id: str):
             model = entity['_model']
             # model = control.sample_system(entity['_model'], world_state['DT'])
             # model = control.sample_system(entity['_model'].linearize(
-            #     entity['state'], entity['action']), world_state['DT'])
+            #     [0.0, 0.0, 0.7853981633974483, 5.0, 0.0], [0,0]), world_state['DT'])
             # model = control.sample_system(entity['_model'].linearize([0,0,entity['state'][2],5,0], [0, 0]), world_state['DT'])
 
-            if not model.isdtime():
-                raise Exception(f"ERROR: A discrete-time model is required!")
 
             # calculate control action
             entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
                 entity['_controller_fn'](entity['_controller_state'], entity['estimate'])
 
-            entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']))
+            # calculate new model state
+            if model.isdtime():
+                entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']))
+            else:
+                entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']) * world_state['DT'] + entity['state'])
+
         elif ENTITY_UPDATE_STATE_REGEX.match(command):
             new_state = json.loads(ENTITY_UPDATE_STATE_REGEX.match(
                 command).group('new_state'), cls=JSONNumpyDecoder)

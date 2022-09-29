@@ -5,8 +5,10 @@ from utils import wrap_to_pi
 
 
 _INITIAL_STATE = np.array([0, 0, 0, 0.0001, 0])
-# OUTPUTS = ('x', 'y', 'theta', 'v', 'delta')
-OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1', 'theta1', 'v1', 'delta1')
+OUTPUTS = ('x', 'y', 'theta', 'v', 'delta')
+OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1')
+OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1', 'v1')
+# OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1', 'theta1', 'v1', 'delta1')
 # OUTPUTS = ('x', 'y', 'theta', 'v', 'delta', 'x1', 'y1', 'theta1', 'v1', 'delta1', 'x2', 'y2', 'theta2', 'v2', 'delta2')
 STATES = ('x', 'y', 'theta', 'v', 'delta')
 INPUTS = ('a', 'delta_dot')
@@ -52,7 +54,9 @@ def continuous_kinematic_bicycle_model_output(t, x, u, params):
 
     y[0:5] = x[0:5]
     # additional sensor
-    y[5:10] = x[0:5] 
+    y[5:7] = x[0:2] 
+    y[7] = x[3] 
+    # y[5:10] = x[0:5] 
     # y[10:15] = x[0:5] 
 
     return y
@@ -69,6 +73,48 @@ def make_continuous_kinematic_bicycle_model(L=2.9):
 
 def make_model(*args, **kwargs):
     return make_continuous_kinematic_bicycle_model(*args, **kwargs)
+
+def _get_C():
+    """
+    Returns the output matrix C for the linearized model.
+    This currently only supports returning states without arithmetic.
+    Can extend to support arithmetic by using bit masks.
+    """
+    x = np.arange(len(STATES))
+    y = continuous_kinematic_bicycle_model_output(0, x, None, None)
+
+    C = np.zeros((len(OUTPUTS), len(STATES)))
+
+    for i in range(len(OUTPUTS)):
+        for j in range(len(STATES)):
+            C[i,j] = 1 if y[i] == x[j] else 0
+    
+    return C
+
+_C = _get_C()
+
+def get_linear_model_straight_line_ref(x,y,theta,v,delta,a,delta_dot,L):
+    A = np.array([
+        [0, 0, -v*np.sin(theta), np.cos(theta), 0],
+        [0, 0, v*np.cos(theta), np.sin(theta), 0],
+        [0, 0, 0, 0, v/L],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0]
+    ])
+
+    B = np.array([
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [1, 0],
+        [0, 1],
+    ])
+
+    C = _C.copy()
+
+    D = np.zeros((len(OUTPUTS), len(INPUTS)))
+
+    return A,B,C,D
 
 if __name__ == '__main__':
     sys = make_continuous_kinematic_bicycle_model()

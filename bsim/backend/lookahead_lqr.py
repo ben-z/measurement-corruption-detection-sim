@@ -43,26 +43,26 @@ def lookahead_lqr(state, estimate):
     x = estimate[0]
     y = estimate[1]
 
-    # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
-    linearization_state = estimate.copy()
-    linearization_state[4] = 0
-    linearization_input = np.zeros(model.ninputs)
-    linsys = model.linearize(linearization_state, linearization_input)
-    # linsys = model
-    linsysd = linsys.sample(state['dt'])
-
+    # pairs of points that form the path: [(p0, p1), (p1, p2), ..., (pn, p0)]
     path_segments = np.stack([target_path, np.roll(target_path, -1, axis=0)], axis=1)
 
     current_path_segment_index = np.argmin([
         distance_to_line_segment(np.array([x, y]), p1, p2) for p1, p2 in path_segments
     ])
-
     current_path_segment = path_segments[current_path_segment_index]
     current_path_heading = np.arctan2(current_path_segment[1, 1] - current_path_segment[0, 1], current_path_segment[1, 0] - current_path_segment[0, 0])
     current_path_segment_length = np.linalg.norm(current_path_segment[1] - current_path_segment[0])
 
     debug_output['current_path_segment'] = current_path_segment
-    
+
+    # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
+    linearization_state = np.array(
+        [0, 0, current_path_heading, state['target_speed'], 0])
+    linearization_input = np.zeros(model.ninputs)
+    linsys = model.linearize(linearization_state, linearization_input)
+    # linsys = model
+    linsysd = linsys.sample(state['dt'])
+
     TARGET_STEERING = 0 # rad
     LOOKAHEAD_M = 5 # meters
 
