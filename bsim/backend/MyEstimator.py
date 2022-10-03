@@ -91,7 +91,7 @@ class MyEstimator:
                 Phi[row_begin:row_end, :] = np.matmul(C, matrix_power(A, i))
             
             # input_effects has p rows and T columns
-            input_effects = calc_input_effects_on_output(A, B, C, self._inputs) * self.dt
+            input_effects = calc_input_effects_on_output(A, B, C, self._inputs)
             linearization_traj = self.model.dynamics(0, linearization_state, linearization_input)
             trajectory_effects = ((C @ linearization_traj) * self.dt).reshape((p, 1)) @ np.arange(0, self.T).reshape((1, self.T))
             measurements = self._measurements - input_effects - trajectory_effects - (C @ linearization_state).reshape((p, 1))
@@ -99,7 +99,7 @@ class MyEstimator:
             Y = np.reshape(measurements, (p*self.T,), order='F')
 
             solve_start = time.time()
-            # prob_l1, x0_hat_l1 = optimize_l0(n, p, self.T, Phi, Y, [0.15, 0.15, 0.035, 0.1, 0.1, 0.15, 0.15, 0.1])
+            # prob_l1, x0_hat_l1 = optimize_l0(n, p, self.T, Phi, Y, [0.15, 0.15, 0.035, 0.1, 0.3, 0.15, 0.15, 0.1])
             prob_l1, x0_hat_l1 = optimize_l1(n, p, self.T, Phi, Y)
             solve_end = time.time()
             
