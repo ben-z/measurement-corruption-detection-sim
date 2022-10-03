@@ -259,7 +259,6 @@ def make_ego_handler(entity_id: str):
             #     [0.0, 0.0, 0.7853981633974483, 5.0, 0.0], [0,0]), world_state['DT'])
             # model = control.sample_system(entity['_model'].linearize([0,0,entity['state'][2],5,0], [0, 0]), world_state['DT'])
 
-
             # calculate control action
             entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
                 entity['_controller_fn'](entity['_controller_state'], entity['estimate'])
@@ -268,6 +267,7 @@ def make_ego_handler(entity_id: str):
             if model.isdtime():
                 entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']))
             else:
+                # forward euler
                 entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']) * world_state['DT'] + entity['state'])
 
         elif ENTITY_UPDATE_STATE_REGEX.match(command):

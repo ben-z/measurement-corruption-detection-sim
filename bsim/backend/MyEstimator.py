@@ -28,7 +28,7 @@ def calc_desired_state_trajectory(linearization_state, T, dt):
 
 
 class MyEstimator:
-    def __init__(self, L, dt, T=20, ticks_per_solve=50):
+    def __init__(self, L, dt, T=2, ticks_per_solve=50):
         """
         T: time horizon, the number of time steps
         ticks_per_solve: number of ticks between solves
@@ -145,7 +145,7 @@ class MyEstimator:
             # attack_vector is a pxT matrix
             attack_vector = (Y - np.matmul(Phi, x0_hat_l1.value)).reshape((p, self.T), order='F')
             mean_attack_vector = np.mean(attack_vector, axis=1)
-            sensors_under_attack = np.abs(mean_attack_vector) > 0.5 # some arbitrary threshold, above which the sensor is faulty, below which is modelling error/noise, can set this per-sensor using experimental data.
+            sensors_under_attack = np.abs(mean_attack_vector) > 0.05 # some arbitrary threshold, above which the sensor is faulty, below which is modelling error/noise, can set this per-sensor using experimental data.
             num_sensors_under_attack = np.sum(sensors_under_attack)
             print("mean attack vector:", mean_attack_vector)
             print("Sensors under attack:", sensors_under_attack)
