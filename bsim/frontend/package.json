@@ -5,11 +5,12 @@
   "main": "index.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "watchify index.js --standalone bsim_js -o bundle.js -v"
+    "dev": "concurrently \"watchify index.js --standalone bsim_js -o bundle.js -v\" \"python -m http.server 9091\""
   },
   "author": "Ben Zhang <ben.zhang@uwaterloo.ca>",
   "license": "BSD-2-Clause",
   "devDependencies": {
+    "concurrently": "^7.4.0",
     "watchify": "^4.0.0"
   },
   "dependencies": {
