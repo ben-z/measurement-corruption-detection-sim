@@ -3,9 +3,29 @@ import continuous_kinematic_bicycle as ckb
 import numpy as np
 from numpy.linalg import eig, matrix_power, norm
 import time
-from utils import calc_input_effects_on_output, optimize_l1, optimize_l0, distance_to_line_segment
+from utils import calc_input_effects_on_output, optimize_l1, optimize_l0, distance_to_line_segment, wrap_to_pi
 
 np.set_printoptions(suppress=True, precision=4)
+
+def calc_desired_state_trajectory(linearization_state, T, dt):
+    """
+    returns a n-by-T matrix of desired state trajectory.
+    """
+    x0, y0, theta0, v0, delta0 = linearization_state
+    n = len(linearization_state)
+
+    desired_trajectory = np.zeros((n, T))
+    for t in range(T):
+        desired_trajectory[:, t] = np.array([
+            v0*np.cos(theta0)*t*dt + x0,
+            v0*np.sin(theta0)*t*dt + y0,
+            theta0,
+            v0,
+            delta0
+        ])
+    
+    return desired_trajectory
+
 
 class MyEstimator:
     def __init__(self, L, dt, T=20, ticks_per_solve=50):
@@ -92,9 +112,16 @@ class MyEstimator:
             
             # input_effects has p rows and T columns
             input_effects = calc_input_effects_on_output(A, B, C, self._inputs)
-            linearization_traj = self.model.dynamics(0, linearization_state, linearization_input)
-            trajectory_effects = ((C @ linearization_traj) * self.dt).reshape((p, 1)) @ np.arange(0, self.T).reshape((1, self.T))
-            measurements = self._measurements - input_effects - trajectory_effects - (C @ linearization_state).reshape((p, 1))
+            desired_trajectory = C @ calc_desired_state_trajectory(linearization_state, self.T, self.dt)
+            # linearization_traj = self.model.dynamics(0, linearization_state, linearization_input)
+            # trajectory_effects = ((C @ linearization_traj) * self.dt).reshape((p, 1)) @ np.arange(0, self.T).reshape((1, self.T))
+            # measurements = self._measurements - input_effects - trajectory_effects - (C @ linearization_state).reshape((p, 1))
+            measurements = self._measurements - input_effects - desired_trajectory
+
+            # normalize angular measurements
+            measurements[ckb.get_angular_outputs_mask(), :] = wrap_to_pi(measurements[ckb.get_angular_outputs_mask(), :])
+
+            # normalize measurements
             # Y is measurements stacked vertically
             Y = np.reshape(measurements, (p*self.T,), order='F')
 

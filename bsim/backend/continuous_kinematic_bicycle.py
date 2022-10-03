@@ -24,10 +24,17 @@ def get_noop_action():
 
 
 def normalize_state(state):
-    state[2] = wrap_to_pi(state[2])
-    state[4] = wrap_to_pi(state[4])
+    state[get_angular_states_mask()] = wrap_to_pi(state[get_angular_states_mask()])
     return state
 
+_ANGULAR_STATES_MASK = np.array([s.startswith(('theta', 'delta')) for s in STATES])
+def get_angular_states_mask():
+    return _ANGULAR_STATES_MASK
+
+_ANGULAR_OUTPUTS_MASK = np.array([s.startswith(('theta', 'delta')) for s in OUTPUTS])
+def get_angular_outputs_mask():
+    return _ANGULAR_OUTPUTS_MASK
+    
 
 def continuous_kinematic_bicycle_model(t, x, u, params):
     # Kinematic bicycle model (rear axle reference frame, continuous time)
