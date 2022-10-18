@@ -3,7 +3,7 @@ import continuous_kinematic_bicycle as ckb
 import numpy as np
 from numpy.linalg import eig, matrix_power, norm
 import time
-from utils import calc_input_effects_on_output, optimize_l1, optimize_l0, distance_to_line_segment, wrap_to_pi
+from utils import calc_input_effects_on_output, optimize_l1, optimize_l0, distance_to_line_segment, wrap_to_pi, get_l0_state_estimation_l2_bound, s_sparse_observability, get_error_estimation_l2_bounds
 
 np.set_printoptions(suppress=True, precision=4)
 
@@ -28,7 +28,7 @@ def calc_desired_state_trajectory(linearization_state, T, dt):
 
 
 class MyEstimator:
-    def __init__(self, L, dt, T=2, ticks_per_solve=50):
+    def __init__(self, L, dt, T=100, ticks_per_solve=100):
         """
         T: time horizon, the number of time steps
         ticks_per_solve: number of ticks between solves
@@ -125,27 +125,37 @@ class MyEstimator:
             # Y is measurements stacked vertically
             Y = np.reshape(measurements, (p*self.T,), order='F')
 
+            s_sparse_observability(A,C)
+            sensor_errors = np.array([0.15, 0.15, 0.8, 0.1, 0.3, 0.15, 0.15, 0.8, 0.1])
+            Dx = get_l0_state_estimation_l2_bound(A, C, sensor_errors, 1, self.T)
+            De = get_error_estimation_l2_bounds(A, C, Dx, sensor_errors, self.T)
+
             solve_start = time.time()
-            # prob_l1, x0_hat_l1 = optimize_l0(n, p, self.T, Phi, Y, [0.15, 0.15, 0.035, 0.1, 0.3, 0.15, 0.15, 0.1])
-            prob_l1, x0_hat_l1 = optimize_l1(n, p, self.T, Phi, Y)
+            prob, x0_hat = optimize_l0(n, p, self.T, Phi, Y, sensor_errors)
+            # prob, x0_hat = optimize_l1(n, p, self.T, Phi, Y)
             solve_end = time.time()
             
             diff_from_true = ckb.normalize_state(
-                x0_hat_l1.value + linearization_state - self._true_states[:, 0])
+                x0_hat.value + linearization_state - self._true_states[:, 0])
             
-            print("status:", prob_l1.status)
-            print("optimal value", prob_l1.value)
+            print("status:", prob.status)
+            print("optimal value", prob.value)
             print("optimal var (x0)",
-                  x0_hat_l1.value + linearization_state)
+                  x0_hat.value + linearization_state)
             print("true var (x0)", self._true_states[:,0])
             print("opt - true (x0)", diff_from_true)
-            print(f"dist to true var (x0): {norm(diff_from_true):.4f}")
+            print(f"l2 dist to true var (x0): {norm(diff_from_true):.4f}")
+            print(f"state estimation l2 error bound: {Dx:.4f}")
+            print(f"state estimation l2 error bound violated: {norm(diff_from_true) > Dx}")
             print(f"solve time: {solve_end - solve_start:.4f}s")
 
             # attack_vector is a pxT matrix
-            attack_vector = (Y - np.matmul(Phi, x0_hat_l1.value)).reshape((p, self.T), order='F')
+            attack_vector = (Y - np.matmul(Phi, x0_hat.value)).reshape((p, self.T), order='F')
+            attack_vector_norms = norm(attack_vector, axis=1)
+            print(f"attack vector norms: {attack_vector_norms}")
+            print(f"attack vector norms threshold: {De}")
             mean_attack_vector = np.mean(attack_vector, axis=1)
-            sensors_under_attack = np.abs(mean_attack_vector) > 0.05 # some arbitrary threshold, above which the sensor is faulty, below which is modelling error/noise, can set this per-sensor using experimental data.
+            sensors_under_attack = attack_vector_norms > De
             num_sensors_under_attack = np.sum(sensors_under_attack)
             print("mean attack vector:", mean_attack_vector)
             print("Sensors under attack:", sensors_under_attack)

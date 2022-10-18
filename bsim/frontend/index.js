@@ -1,5 +1,5 @@
 const WebSocketAsPromised = require('websocket-as-promised');
-const { mySetInterval } = require('./utils');
+const { mySetInterval, matrixMultiply, generateCircleApproximation } = require('./utils');
 
 function ensureSucceeds(res) {
     // Ensures that `res` doesn't have an `error` field
@@ -33,12 +33,13 @@ async function main() {
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=manual`}));
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=path_following_kmpc`}));
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr`}));
+        target_speed = 5; // m/s
         // target_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
         // target_path = [[20, 20], [20, -20], [-20, -20], [-20, 20]]; // square
-        // target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; initial_state = [15,0,-1.5708,0.8,0]; // square with cut corners
-        // target_path = [[-20, 0], [20, 0], [20, 5]]; // straight line
-        target_path = [[-20, -20], [20, 20], [-20,30]]; initial_state = [0,0,0,0.001,0]// diagonal line
-        target_speed = 5; // m/s
+        // target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; initial_state = [18,0,-1.5708,target_speed,0]; // square with cut corners
+        // target_path = [[-20, 0], [20, 0], [20, 5]]; initial_state = [0,0,0,0.001,0]; // straight line
+        // target_path = [[-20, -20], [20, 20], [-20,30]]; initial_state = [0,0,0,target_speed,0]; // diagonal line
+        target_path = generateCircleApproximation([0,0], 20, 16).reverse(); initial_state = [20,0,-1.5708,target_speed,0]; // circle
         plant_options = {
             initial_state: initial_state,
         }

@@ -164,6 +164,88 @@ def optimize_l0_subproblem(n, p, T, Phi, Y, attacked_sensor_indices, eps):
     return (prob, x0_hat)
 
 
+def get_l0_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_sensor_deviations: np.ndarray, qmax: int, T: int):
+    """
+    Calculates the l0 state estimation bound for a given system and sensor deviations.
+    """
+    n = A.shape[0]
+    p = C.shape[0]
+
+    Rs = [list(s) for s in powerset(range(p)) if len(s) == p - 2*qmax]
+
+    bound = -np.inf
+
+    for R in Rs:
+        max_noise_norm = np.linalg.norm(largest_sensor_deviations[R])
+
+        # C with only sensors in R
+        PC = C[R, :]
+
+        # Calculate O_R
+        O_R = np.zeros((len(R)*T, n))
+        for t in range(T):
+            O_R[t*len(R):(t+1)*len(R), :] = PC @ matrix_power(A, t)
+
+        pinv_O_R = np.linalg.pinv(O_R)
+
+        largest_singular_value = max(np.linalg.svd(pinv_O_R, compute_uv=False))
+
+        bound = max(bound, largest_singular_value * 2*max_noise_norm)
+
+    return bound
+
+def matrix_spectral_norm(A):
+    return max(np.linalg.eigvals(A))
+
+def get_error_estimation_l2_bounds(A: np.ndarray, C: np.ndarray, Dx: float, largest_sensor_deviations: np.ndarray, T: int):
+    """
+    Calculates the error estimation bounds for a given system and sensor deviations.
+    """
+    n = A.shape[0]
+    p = C.shape[0]
+
+    bounds = np.zeros(p)
+
+    for i in range(p):
+        O_i = np.zeros((T, n))
+        for t in range(T):
+            O_i[t, :] = C[i, :] @ matrix_power(A, t)
+        
+        largest_singular_value = max(np.linalg.svd(O_i, compute_uv=False))
+
+        bounds[i] = largest_singular_value * Dx + 2*largest_sensor_deviations[i]
+    
+    return bounds
+
+def s_sparse_observability(A,C):
+    """
+    Calculates the s-sparse observability of a system.
+    """
+    n = A.shape[0]
+    p = C.shape[0]
+
+    s = -1
+    for K in powerset(range(p)):
+        # K is the attacked sensors
+        remaining_sensors = list(set(range(p)) - set(K))
+        PC = C[remaining_sensors, :] # C with only sensors in K^c
+        p_Kc = len(remaining_sensors)
+
+        # Calculate observability matrix
+        O_K = np.zeros((p*n, n))
+        for i in range(n):
+            O_K[i*p_Kc:(i+1)*p_Kc, :] = PC @ matrix_power(A, i)
+        
+        O_K_rank = np.linalg.matrix_rank(O_K)
+
+        if s == -1 and O_K_rank < n:
+            # found the first non-full-rank entry
+            s = len(K) - 1
+            break
+
+    return s
+
+
 def powerset(iterable):
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
     s = list(iterable)
