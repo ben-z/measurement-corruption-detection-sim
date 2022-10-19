@@ -258,6 +258,45 @@ def get_observability_matrix(A, C, R=None, N=None):
 
     return O_R
 
+def is_l1_state_estimation_error_bounded(A, C, K, N=None):
+    """
+    Checks if the l1 state estimation error is bounded for a given system (A, C) and set of attacked sensors K.
+    """
+    n = A.shape[0]
+    p = C.shape[0]
+
+    if N is None:
+        N = n
+
+    K_c = list(set(range(p)) - set(K))
+
+    O_K = get_observability_matrix(A, C, K, N)
+    O_K_c = get_observability_matrix(A, C, K_c, N)
+
+    # TODO: find a way to check equation 25 for all x in the workspace.
+    pass
+
+def does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K(A, C, K, N=None):
+    """
+    Checks if the l1 state estimation error analytical bound hypothesis (Pajic, 2017, eqn 29) holds
+    for the system (A,C) and set of attacked sensors K. Note that equation 29 has to be true for all
+    K of size q for the exact theorem.
+    """
+    n = A.shape[0]
+    p = C.shape[0]
+    q = len(K)
+
+    if N is None:
+        N = n
+
+    K_c = list(set(range(p)) - set(K))
+
+    O_K = get_observability_matrix(A, C, K, N)
+    O_K_c = get_observability_matrix(A, C, K_c, N)
+
+    return (O_K_c.T @ O_K_c - q * N**2 * O_K.T @ O_K >= np.finfo(float).eps * np.eye(n)).all()
+
+
 
 def powerset(iterable):
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"

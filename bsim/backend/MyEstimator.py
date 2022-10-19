@@ -3,7 +3,11 @@ import continuous_kinematic_bicycle as ckb
 import numpy as np
 from numpy.linalg import eig, matrix_power, norm
 import time
-from utils import calc_input_effects_on_output, optimize_l1, optimize_l0, distance_to_line_segment, wrap_to_pi, get_l0_state_estimation_l2_bound, s_sparse_observability, get_error_estimation_l2_bounds
+from utils import calc_input_effects_on_output, optimize_l1, \
+    optimize_l0, distance_to_line_segment, wrap_to_pi, \
+    get_l0_state_estimation_l2_bound, s_sparse_observability, \
+    get_error_estimation_l2_bounds, \
+    does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K
 
 np.set_printoptions(suppress=True, precision=4)
 
@@ -130,6 +134,8 @@ class MyEstimator:
             Dx = get_l0_state_estimation_l2_bound(A, C, sensor_errors, 1, self.T)
             De = get_error_estimation_l2_bounds(A, C, Dx, sensor_errors, self.T)
 
+            does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K(A, C, np.array([3]), self.T)
+
             solve_start = time.time()
             prob, x0_hat = optimize_l0(n, p, self.T, Phi, Y, sensor_errors)
             # prob, x0_hat = optimize_l1(n, p, self.T, Phi, Y)
@@ -152,7 +158,7 @@ class MyEstimator:
             # attack_vector is a pxT matrix
             attack_vector = (Y - np.matmul(Phi, x0_hat.value)).reshape((p, self.T), order='F')
             attack_vector_norms = norm(attack_vector, axis=1)
-            print(f"attack vector norms: {attack_vector_norms}")
+            print(f"attack vector norms (l2 norm, all time steps): {attack_vector_norms}")
             print(f"attack vector norms threshold: {De}")
             mean_attack_vector = np.mean(attack_vector, axis=1)
             sensors_under_attack = attack_vector_norms > De
