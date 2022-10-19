@@ -178,13 +178,7 @@ def get_l0_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_senso
     for R in Rs:
         max_noise_norm = np.linalg.norm(largest_sensor_deviations[R])
 
-        # C with only sensors in R
-        PC = C[R, :]
-
-        # Calculate O_R
-        O_R = np.zeros((len(R)*T, n))
-        for t in range(T):
-            O_R[t*len(R):(t+1)*len(R), :] = PC @ matrix_power(A, t)
+        O_R = get_observability_matrix(A, C, R, T)
 
         pinv_O_R = np.linalg.pinv(O_R)
 
@@ -228,13 +222,8 @@ def s_sparse_observability(A,C):
     for K in powerset(range(p)):
         # K is the attacked sensors
         remaining_sensors = list(set(range(p)) - set(K))
-        PC = C[remaining_sensors, :] # C with only sensors in K^c
-        p_Kc = len(remaining_sensors)
 
-        # Calculate observability matrix
-        O_K = np.zeros((p*n, n))
-        for i in range(n):
-            O_K[i*p_Kc:(i+1)*p_Kc, :] = PC @ matrix_power(A, i)
+        O_K = get_observability_matrix(A, C, remaining_sensors, n) # C with only sensors in K^c
         
         O_K_rank = np.linalg.matrix_rank(O_K)
 
@@ -244,6 +233,30 @@ def s_sparse_observability(A,C):
             break
 
     return s
+
+
+def get_observability_matrix(A, C, R=None, N=None):
+    """
+    Calculates the observability matrix for a given system (A, C) and sensor set R after N time steps.
+    """
+    n = A.shape[0]
+    p = C.shape[0]
+
+    if R is None:
+        R = range(p)
+
+    if N is None:
+        N = n
+
+    # C with only sensors in R
+    PC = C[list(R), :]
+
+    # Calculate O_R
+    O_R = np.zeros((len(R)*N, n))
+    for t in range(N):
+        O_R[t*len(R):(t+1)*len(R), :] = PC @ matrix_power(A, t)
+
+    return O_R
 
 
 def powerset(iterable):
