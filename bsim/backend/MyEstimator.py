@@ -7,7 +7,8 @@ from utils import calc_input_effects_on_output, optimize_l1, \
     optimize_l0, distance_to_line_segment, wrap_to_pi, \
     get_l0_state_estimation_l2_bound, s_sparse_observability, \
     get_error_estimation_l2_bounds, \
-    does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K
+    does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K, \
+    is_l1_state_estimation_error_bounded, get_l1_state_estimation_l2_bound
 
 np.set_printoptions(suppress=True, precision=4)
 
@@ -135,6 +136,8 @@ class MyEstimator:
             De = get_error_estimation_l2_bounds(A, C, Dx, sensor_errors, self.T)
 
             does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K(A, C, np.array([3]), self.T)
+            is_l1_state_estimation_error_bounded(A, C, np.array([3]), self.T)
+            # get_l1_state_estimation_l2_bound(A, C, sensor_errors, np.array([3]), self.T)
 
             solve_start = time.time()
             prob, x0_hat = optimize_l0(n, p, self.T, Phi, Y, sensor_errors)
@@ -146,11 +149,11 @@ class MyEstimator:
             
             print("status:", prob.status)
             print("optimal value", prob.value)
-            print("optimal var (x0)",
+            print("optimal state (x0)",
                   x0_hat.value + linearization_state)
-            print("true var (x0)", self._true_states[:,0])
-            print("opt - true (x0)", diff_from_true)
-            print(f"l2 dist to true var (x0): {norm(diff_from_true):.4f}")
+            print("true state (x0)", self._true_states[:,0])
+            print("state estimation error", diff_from_true)
+            print(f"state estimation l2 error: {norm(diff_from_true):.4f}")
             print(f"state estimation l2 error bound: {Dx:.4f}")
             print(f"state estimation l2 error bound violated: {norm(diff_from_true) > Dx}")
             print(f"solve time: {solve_end - solve_start:.4f}s")

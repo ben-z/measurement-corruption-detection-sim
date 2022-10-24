@@ -296,6 +296,35 @@ def does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K(A, C, 
 
     return (O_K_c.T @ O_K_c - q * N**2 * O_K.T @ O_K >= np.finfo(float).eps * np.eye(n)).all()
 
+def get_l1_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_sensor_deviations: np.ndarray, K: np.ndarray, N: int):
+    """
+    Calculates the l1 state estimation bound for a given system and sensor deviations.
+    FIXME: CVX errors out on this formulation. The message is "Problem does not follow DCP rules."
+    """
+    n = A.shape[0]
+    p = C.shape[0]
+
+    K_c = list(set(range(p)) - set(K))
+
+    Os = [get_observability_matrix(A, C, [s], N) for s in range(p)]
+
+    sigma = np.linalg.norm(largest_sensor_deviations)
+
+    dx1_l1 = cp.Variable(n)
+    optimizer = cp.norm(dx1_l1)
+    constraint_lhs = sum(cp.norm(Os[i] @ dx1_l1) for i in K_c)
+    constraint_rhs = sum(cp.norm(Os[i] @ dx1_l1) for i in K) + 2*sigma
+    constraints = [constraint_lhs <= constraint_rhs]
+
+    prob = cp.Problem(cp.Maximize(optimizer), constraints)
+    start = time.time()
+    prob.solve()
+    end = time.time()
+
+    print(f"Solved l1 state estimation bound in {end-start:.2f} seconds. status: {prob.status}, value: {prob.value}")
+
+    return (prob, dx1_l1)
+
 
 
 def powerset(iterable):
