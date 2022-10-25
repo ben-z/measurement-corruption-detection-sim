@@ -69,7 +69,7 @@ class MyEstimator:
         self._true_states = np.roll(self._true_states, -1, axis=1)
         self._true_states[:,-1] = true_state
 
-        if self._tick_count >= self.T and self._tick_count % self.ticks_per_solve == 0:
+        if False and self._tick_count >= self.T and self._tick_count % self.ticks_per_solve == 0:
             # solve the estimation problem
             # TODO: use measurement instead of true_state. However, we don't know what the
             # true state is without first solving the estimation problem. This seems like a

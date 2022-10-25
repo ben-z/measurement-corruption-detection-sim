@@ -9,7 +9,7 @@ import time
 def closest_point_on_line_segment(p, a, b):
     """
     Find the closest point on the line segment defined by a and b to the point p.
-    Also returns the parameter t, which is the progress (0-1) along the line segment ab.
+    Also returns the parameter t, which is the progress [0,1] along the line segment ab.
     """
     # https://stackoverflow.com/a/1501725
     ap = p - a
@@ -35,7 +35,8 @@ def distance_to_line_segment(p, a, b):
 def closest_point_on_line(p, a, b):
     """
     Find the closest point on the line defined by a and b to the point p.
-    Also returns the parameter t, which is the progress (0-1) along the line ab.
+    Also returns the parameter t, which is the progress ([0,1] if on the line segment)
+    along the line ab.
     """
     # https://stackoverflow.com/a/1501725
     ap = p - a
