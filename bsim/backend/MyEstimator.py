@@ -12,15 +12,15 @@ from utils import calc_input_effects_on_output, optimize_l1, \
 
 np.set_printoptions(suppress=True, precision=4)
 
-def calc_desired_state_trajectory(linearization_state, T, dt):
+def calc_desired_state_trajectory(linearization_state, N, dt):
     """
-    returns a n-by-T matrix of desired state trajectory.
+    returns a n-by-N matrix of desired state trajectory.
     """
     x0, y0, theta0, v0, delta0 = linearization_state
     n = len(linearization_state)
 
-    desired_trajectory = np.zeros((n, T))
-    for t in range(T):
+    desired_trajectory = np.zeros((n, N))
+    for t in range(N):
         desired_trajectory[:, t] = np.array([
             v0*np.cos(theta0)*t*dt + x0,
             v0*np.sin(theta0)*t*dt + y0,
@@ -33,20 +33,20 @@ def calc_desired_state_trajectory(linearization_state, T, dt):
 
 
 class MyEstimator:
-    def __init__(self, L, dt, T=100, ticks_per_solve=100):
+    def __init__(self, L, dt, N=100, ticks_per_solve=100):
         """
-        T: time horizon, the number of time steps
+        N: time horizon, the number of time steps
         ticks_per_solve: number of ticks between solves
         """
-        self.T = T
+        self.N = N
         self.dt = dt
         self.ticks_per_solve = ticks_per_solve
         self._tick_count = 0
         self.L = L
         self.model = ckb.make_continuous_kinematic_bicycle_model(L)
-        self._measurements = np.zeros((self.model.noutputs, T))
-        self._inputs = np.zeros((self.model.ninputs, T))
-        self._true_states = np.zeros((self.model.nstates, T))
+        self._measurements = np.zeros((self.model.noutputs, N))
+        self._inputs = np.zeros((self.model.ninputs, N))
+        self._true_states = np.zeros((self.model.nstates, N))
 
     def tick(self, ext_state, measurement, prev_inputs, true_state=None):
         """
@@ -69,7 +69,7 @@ class MyEstimator:
         self._true_states = np.roll(self._true_states, -1, axis=1)
         self._true_states[:,-1] = true_state
 
-        if False and self._tick_count >= self.T and self._tick_count % self.ticks_per_solve == 0:
+        if False and self._tick_count >= self.N and self._tick_count % self.ticks_per_solve == 0:
             # solve the estimation problem
             # TODO: use measurement instead of true_state. However, we don't know what the
             # true state is without first solving the estimation problem. This seems like a
@@ -109,17 +109,17 @@ class MyEstimator:
             C = linsys.C
             n = A.shape[0]
             p = C.shape[0]
-            Phi = np.zeros((p*self.T, n))
-            for i in range(self.T):
+            Phi = np.zeros((p*self.N, n))
+            for i in range(self.N):
                 row_begin = i * p
                 row_end = row_begin + p
                 Phi[row_begin:row_end, :] = np.matmul(C, matrix_power(A, i))
             
-            # input_effects has p rows and T columns
+            # input_effects has p rows and N columns
             input_effects = calc_input_effects_on_output(A, B, C, self._inputs)
-            desired_trajectory = C @ calc_desired_state_trajectory(linearization_state, self.T, self.dt)
+            desired_trajectory = C @ calc_desired_state_trajectory(linearization_state, self.N, self.dt)
             # linearization_traj = self.model.dynamics(0, linearization_state, linearization_input)
-            # trajectory_effects = ((C @ linearization_traj) * self.dt).reshape((p, 1)) @ np.arange(0, self.T).reshape((1, self.T))
+            # trajectory_effects = ((C @ linearization_traj) * self.dt).reshape((p, 1)) @ np.arange(0, self.N).reshape((1, self.N))
             # measurements = self._measurements - input_effects - trajectory_effects - (C @ linearization_state).reshape((p, 1))
             measurements = self._measurements - input_effects - desired_trajectory
 
@@ -128,20 +128,20 @@ class MyEstimator:
 
             # normalize measurements
             # Y is measurements stacked vertically
-            Y = np.reshape(measurements, (p*self.T,), order='F')
+            Y = np.reshape(measurements, (p*self.N,), order='F')
 
             s_sparse_observability(A,C)
             sensor_errors = np.array([0.15, 0.15, 0.8, 0.1, 0.3, 0.15, 0.15, 0.8, 0.1])
-            Dx = get_l0_state_estimation_l2_bound(A, C, sensor_errors, 1, self.T)
-            De = get_error_estimation_l2_bounds(A, C, Dx, sensor_errors, self.T)
+            Dx = get_l0_state_estimation_l2_bound(A, C, sensor_errors, 1, self.N)
+            De = get_error_estimation_l2_bounds(A, C, Dx, sensor_errors, self.N)
 
-            does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K(A, C, np.array([3]), self.T)
-            is_l1_state_estimation_error_bounded(A, C, np.array([3]), self.T)
-            # get_l1_state_estimation_l2_bound(A, C, sensor_errors, np.array([3]), self.T)
+            does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K(A, C, np.array([3]), self.N)
+            is_l1_state_estimation_error_bounded(A, C, np.array([3]), self.N)
+            # get_l1_state_estimation_l2_bound(A, C, sensor_errors, np.array([3]), self.N)
 
             solve_start = time.time()
-            prob, x0_hat = optimize_l0(n, p, self.T, Phi, Y, sensor_errors)
-            # prob, x0_hat = optimize_l1(n, p, self.T, Phi, Y)
+            prob, x0_hat = optimize_l0(n, p, self.N, Phi, Y, sensor_errors)
+            # prob, x0_hat = optimize_l1(n, p, self.N, Phi, Y)
             solve_end = time.time()
             
             diff_from_true = ckb.normalize_state(
@@ -159,7 +159,7 @@ class MyEstimator:
             print(f"solve time: {solve_end - solve_start:.4f}s")
 
             # attack_vector is a pxT matrix
-            attack_vector = (Y - np.matmul(Phi, x0_hat.value)).reshape((p, self.T), order='F')
+            attack_vector = (Y - np.matmul(Phi, x0_hat.value)).reshape((p, self.N), order='F')
             attack_vector_norms = norm(attack_vector, axis=1)
             print(f"attack vector norms (l2 norm, all time steps): {attack_vector_norms}")
             print(f"attack vector norms threshold: {De}")

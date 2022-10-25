@@ -63,39 +63,39 @@ def calc_input_effects_on_output(A, B, C, inputs):
     # A: numpy.ndarray - matrix of size (n,n)
     # B: numpy.ndarray - matrix of size (n,m)
     # C: numpy.ndarray - matrix of size (p,n)
-    # inputs: numpy.ndarray - matrix of size (m,T)
-    # returns: numpy.ndarray - matrix of size (p,T)
+    # inputs: numpy.ndarray - matrix of size (m,N)
+    # returns: numpy.ndarray - matrix of size (p,N)
 
     n = A.shape[0]
     m = B.shape[1]
     p = C.shape[0]
-    T = inputs.shape[1]
+    N = inputs.shape[1]
 
     assert A.shape == (n, n)
     assert B.shape == (n, m)
     assert C.shape == (p, n)
-    assert inputs.shape == (m, T)
+    assert inputs.shape == (m, N)
 
     # TODO: make this faster by reusing the calculations for Phi
-    effects = np.zeros((p, T))
-    for k in range(T):
+    effects = np.zeros((p, N))
+    for k in range(N):
         for j in range(k):
             effects[:, k] += C @ matrix_power(A, k-1-j) @ B @ inputs[:, j]
 
     return effects
 
 
-def optimize_l1(n, p, T, Phi, Y):
+def optimize_l1(n, p, N, Phi, Y):
     # solves the l1/l2 norm minimization problem
     # n: int - number of states
     # p: int - number of outputs
-    # T: int - number of time steps
-    # Phi: numpy.ndarray - matrix of size (p*T, n) - (C*A^0, C*A^1, ..., C*A^(T-1))'
-    # Y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*T)
+    # N: int - number of time steps
+    # Phi: numpy.ndarray - matrix of size (p*N, n) - (C*A^0, C*A^1, ..., C*A^(N-1))'
+    # Y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*N)
     # returns: numpy.ndarray
 
-    assert Phi.shape == (p*T, n)
-    assert Y.shape == (p*T,)
+    assert Phi.shape == (p*N, n)
+    assert Y.shape == (p*N,)
 
     x0_hat = cp.Variable(n)
     # define the expression that we want to run l1/l2 optimization on
@@ -103,7 +103,7 @@ def optimize_l1(n, p, T, Phi, Y):
     # reshape to adapt to l1/l2 norm formulation
     # Note that cp uses fortran ordering (column-major), this is different from numpy,
     # which uses c ordering (row-major)
-    optimizer_reshaped = cp.reshape(optimizer, (p, T))
+    optimizer_reshaped = cp.reshape(optimizer, (p, N))
     optimizer_final = cp.mixed_norm(optimizer_reshaped, p=2, q=1)
     # Equivalent to optimizer_final = cp.norm1(cp.norm(optimizer_reshaped, axis=1))
 
@@ -116,32 +116,32 @@ def optimize_l1(n, p, T, Phi, Y):
     return (prob, x0_hat)
 
 
-def optimize_l0(n, p, T, Phi, Y, eps=0.2):
+def optimize_l0(n, p, N, Phi, Y, eps=0.2):
     # solves the l0 minimization problem
     # n: int - number of states
     # p: int - number of outputs
-    # T: int - number of time steps
-    # Phi: numpy.ndarray - matrix of size (p*T, n) - (C*A^0, C*A^1, ..., C*A^(T-1))'
-    # Y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*T)
+    # N: int - number of time steps
+    # Phi: numpy.ndarray - matrix of size (p*N, n) - (C*A^0, C*A^1, ..., C*A^(N-1))'
+    # Y: numpy.ndarray - measured outputs, with input effects subtracted, size (p*N)
     # returns: numpy.ndarray
 
-    assert Phi.shape == (p*T, n)
-    assert Y.shape == (p*T,)
+    assert Phi.shape == (p*N, n)
+    assert Y.shape == (p*N,)
 
     # with Pool(processes=30) as pool:
-    #     solns = pool.starmap(optimize_l0_subproblem, [(n, p, T, Phi, Y, attacked_sensor_indices) for attacked_sensor_indices in powerset(range(p))])
+    #     solns = pool.starmap(optimize_l0_subproblem, [(n, p, N, Phi, Y, attacked_sensor_indices) for attacked_sensor_indices in powerset(range(p))])
     for attacked_sensor_indices in powerset(range(p)):
-        prob, x_hat_l0 = optimize_l0_subproblem(n, p, T, Phi, Y, attacked_sensor_indices, eps)
+        prob, x_hat_l0 = optimize_l0_subproblem(n, p, N, Phi, Y, attacked_sensor_indices, eps)
         if prob.status in ["optimal", "optimal_inaccurate"]:
             return (prob, x_hat_l0)
 
     raise Exception("No solution found")
 
 
-def optimize_l0_subproblem(n, p, T, Phi, Y, attacked_sensor_indices, eps):
+def optimize_l0_subproblem(n, p, N, Phi, Y, attacked_sensor_indices, eps):
     x0_hat = cp.Variable(n)
     optimizer = Y - np.matmul(Phi, x0_hat)
-    optimizer_reshaped = cp.reshape(optimizer, (p, T))
+    optimizer_reshaped = cp.reshape(optimizer, (p, N))
     optimizer_final = cp.mixed_norm(optimizer_reshaped, p=2, q=1)
 
     # Support both scalar eps and eps per sensor
@@ -150,7 +150,7 @@ def optimize_l0_subproblem(n, p, T, Phi, Y, attacked_sensor_indices, eps):
 
     constraints = []
     for j in set(range(p)) - set(attacked_sensor_indices):
-        for t in range(T):
+        for t in range(N):
             # constraints.append(cp.norm(optimizer[p*t+j]) <= eps)
             constraints.append(optimizer[p*t+j] <= eps[j])
             constraints.append(optimizer[p*t+j] >= -eps[j])
@@ -165,7 +165,7 @@ def optimize_l0_subproblem(n, p, T, Phi, Y, attacked_sensor_indices, eps):
     return (prob, x0_hat)
 
 
-def get_l0_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_sensor_deviations: np.ndarray, qmax: int, T: int):
+def get_l0_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_sensor_deviations: np.ndarray, qmax: int, N: int):
     """
     Calculates the l0 state estimation bound for a given system and sensor deviations.
     """
@@ -179,7 +179,7 @@ def get_l0_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_senso
     for R in Rs:
         max_noise_norm = np.linalg.norm(largest_sensor_deviations[R])
 
-        O_R = get_observability_matrix(A, C, R, T)
+        O_R = get_observability_matrix(A, C, R, N)
 
         pinv_O_R = np.linalg.pinv(O_R)
 
@@ -192,7 +192,7 @@ def get_l0_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_senso
 def matrix_spectral_norm(A):
     return max(np.linalg.eigvals(A))
 
-def get_error_estimation_l2_bounds(A: np.ndarray, C: np.ndarray, Dx: float, largest_sensor_deviations: np.ndarray, T: int):
+def get_error_estimation_l2_bounds(A: np.ndarray, C: np.ndarray, Dx: float, largest_sensor_deviations: np.ndarray, N: int):
     """
     Calculates the error estimation bounds for a given system and sensor deviations.
     """
@@ -202,8 +202,8 @@ def get_error_estimation_l2_bounds(A: np.ndarray, C: np.ndarray, Dx: float, larg
     bounds = np.zeros(p)
 
     for i in range(p):
-        O_i = np.zeros((T, n))
-        for t in range(T):
+        O_i = np.zeros((N, n))
+        for t in range(N):
             O_i[t, :] = C[i, :] @ matrix_power(A, t)
         
         largest_singular_value = max(np.linalg.svd(O_i, compute_uv=False))
@@ -295,7 +295,7 @@ def does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K(A, C, 
     O_K = get_observability_matrix(A, C, K, N)
     O_K_c = get_observability_matrix(A, C, K_c, N)
 
-    return (O_K_c.T @ O_K_c - q * N**2 * O_K.T @ O_K >= np.finfo(float).eps * np.eye(n)).all()
+    return (O_K_c.N @ O_K_c - q * N**2 * O_K.N @ O_K >= np.finfo(float).eps * np.eye(n)).all()
 
 def get_l1_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_sensor_deviations: np.ndarray, K: np.ndarray, N: int):
     """
