@@ -51,24 +51,24 @@ def lookahead_lqr(state, estimate):
 
     # segment_info is used to make decisions about which segment to use
     segment_info = []
-    for p1, p2 in path_segments:
-        segment_length = np.linalg.norm(p2 - p1)
-        closest_point, progress = closest_point_on_line(np.array([x, y]), p1, p2)
+    for p0, p1 in path_segments:
+        segment_length = np.linalg.norm(p1 - p0)
+        closest_point, progress = closest_point_on_line(np.array([x, y]), p0, p1)
         if progress < 0:
-            closest_point = p1
+            closest_point = p0
             distance_travelled = 0
         elif progress > 1:
-            closest_point = p2
+            closest_point = p1
             distance_travelled = 0
         else:
             closest_point = closest_point
             distance_travelled = progress * segment_length
         
         segment_info.append({
+            'p0': p0,
             'p1': p1,
-            'p2': p2,
             'length': segment_length,
-            'heading': np.arctan2(p2[1] - p1[1], p2[0] - p1[0]),
+            'heading': np.arctan2(p1[1] - p0[1], p1[0] - p0[0]),
             'closest_point': closest_point,
             'progress': progress,
             'distance_from_ego': np.linalg.norm(closest_point - np.array([x, y])),
@@ -103,7 +103,7 @@ def lookahead_lqr(state, estimate):
 
     # compute the desired state
     target_x = np.zeros(estimate.shape)
-    target_x[:2] = lookahead_path_segment_info['p1'] + (lookahead_path_segment_info['p2'] - lookahead_path_segment_info['p1']) * target_progress
+    target_x[:2] = lookahead_path_segment_info['p0'] + (lookahead_path_segment_info['p1'] - lookahead_path_segment_info['p0']) * target_progress
     target_x[2] = lookahead_path_segment_info['heading']
     target_x[3] = state['target_speed']
     target_x[4] = TARGET_STEERING
