@@ -172,8 +172,8 @@ function drawVehicle(ctx, vehicle) {
         ctx.beginPath();
         ctx.strokeStyle = 'green';
         ctx.lineWidth = m_to_px(0.2);
-        ctx.moveTo(m_to_px(current_path_segment[0][0]), m_to_px(current_path_segment[0][1]));
-        ctx.lineTo(m_to_px(current_path_segment[1][0]), m_to_px(current_path_segment[1][1]));
+        ctx.moveTo(m_to_px(current_path_segment["p0"][0]), m_to_px(current_path_segment["p0"][1]));
+        ctx.lineTo(m_to_px(current_path_segment["p1"][0]), m_to_px(current_path_segment["p1"][1]));
         ctx.stroke();
         ctx.restore()
     }

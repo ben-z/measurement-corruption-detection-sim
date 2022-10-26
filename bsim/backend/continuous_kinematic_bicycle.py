@@ -101,6 +101,9 @@ def _get_C():
 
 _C = _get_C()
 
+def get_C():
+    return _C.copy()
+
 def get_linear_model_straight_line_ref(x,y,theta,v,delta,a,delta_dot,L):
     A = np.array([
         [0, 0, -v*np.sin(theta), np.cos(theta), 0],
@@ -118,7 +121,7 @@ def get_linear_model_straight_line_ref(x,y,theta,v,delta,a,delta_dot,L):
         [0, 1],
     ])
 
-    C = _C.copy()
+    C = get_C().copy()
 
     D = np.zeros((len(OUTPUTS), len(INPUTS)))
 

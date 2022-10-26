@@ -116,7 +116,7 @@ def optimize_l1(n, p, N, Phi, Y):
     return (prob, x0_hat)
 
 
-def optimize_l0(n, p, N, Phi, Y, eps=0.2):
+def optimize_l0(n, p, N, Phi, Y, eps: np.ndarray = 0.2):
     # solves the l0 minimization problem
     # n: int - number of states
     # p: int - number of outputs
@@ -295,7 +295,7 @@ def does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K(A, C, 
     O_K = get_observability_matrix(A, C, K, N)
     O_K_c = get_observability_matrix(A, C, K_c, N)
 
-    return (O_K_c.N @ O_K_c - q * N**2 * O_K.N @ O_K >= np.finfo(float).eps * np.eye(n)).all()
+    return (O_K_c.T @ O_K_c - q * N**2 * O_K.T @ O_K >= np.finfo(float).eps * np.eye(n)).all()
 
 def get_l1_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_sensor_deviations: np.ndarray, K: np.ndarray, N: int):
     """
@@ -326,6 +326,82 @@ def get_l1_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_senso
 
     return (prob, dx1_l1)
 
+class SegmentInfoItem:
+    def __init__(self, p0, p1, progress=np.nan) -> None:
+        self.p0 = p0
+        self.p1 = p1
+        self.length = np.linalg.norm(p1 - p0)
+        self.heading = np.arctan2(p1[1] - p0[1], p1[0] - p0[0])
+        self.progress = progress
+    
+    def set_progress(self, progress):
+        self.progress = progress
+
+    @property
+    def distance_travelled(self):
+        return self.progress * self.length
+    
+    @property
+    def distance_remaining(self):
+        return (1 - self.progress) * self.length
+    
+    @property
+    def closest_point(self):
+        return self.p0 + self.progress * (self.p1 - self.p0)
+    
+def generate_segment_info(pos: np.ndarray, path_points: np.ndarray):
+    """
+    Generates the segment information (closest point, distance travelled, etc.)
+    for a given path. Assumes linear interpolation between path points.
+    pos: the current position
+    path_points: the points on the path, the last point is assumed to be
+        connected to the first point to form a closed path.
+    """
+
+    # pairs of points that form the path: [(p0, p1), (p1, p2), ..., (pn, p0)]
+    path_segments = np.stack([path_points, np.roll(path_points, -1, axis=0)], axis=1)
+
+    # segment_info is used to make decisions about which segment to use
+    segment_info = []
+    for p0, p1 in path_segments:
+        _, progress = closest_point_on_line_segment(pos, p0, p1)
+
+        segment_info.append(SegmentInfoItem(p0, p1, progress))
+
+    return segment_info
+
+def move_along_path(segment_info, current_path_segment_idx, step_size_m):
+    """
+    Moves along the path by step_size_m starting from the point determined by
+    current_path_segment_idx and the corresponding progress. Mutates segment_info
+    and returns the updated info for the target segment.
+    """
+    remaining_m = step_size_m
+
+    while True:
+        current_path_segment = segment_info[current_path_segment_idx]
+        if (remaining_m >= 0 and current_path_segment.distance_remaining >= remaining_m) or \
+            (remaining_m < 0 and current_path_segment.distance_travelled >= -remaining_m):
+            # we don't travel enough to switch to the next/prev segment
+            current_path_segment.set_progress(current_path_segment.progress + remaining_m / current_path_segment.length)
+            yield current_path_segment
+            remaining_m = step_size_m
+        elif remaining_m >= 0:
+            # we travel to the next segment
+            remaining_m -= current_path_segment.distance_remaining
+            current_path_segment.set_progress(1)
+            
+            current_path_segment_idx = (current_path_segment_idx + 1) % len(segment_info)
+            segment_info[current_path_segment_idx].set_progress(0)
+        elif remaining_m < 0:
+            # we travel to the previous segment
+            remaining_m += current_path_segment.distance_travelled
+            current_path_segment.set_progress(0)
+            
+            current_path_segment_idx = (current_path_segment_idx - 1) % len(segment_info)
+            segment_info[current_path_segment_idx].set_progress(1)
+        else:
+            raise Exception("This shouldn't happen")
 
 
 def powerset(iterable):
