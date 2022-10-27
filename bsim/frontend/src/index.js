@@ -1,5 +1,7 @@
-const WebSocketAsPromised = require('websocket-as-promised');
-const { mySetInterval, matrixMultiply, generateCircleApproximation } = require('./utils');
+import WebSocketAsPromised from 'websocket-as-promised';
+import { mySetInterval, matrixMultiply, generateCircleApproximation } from './utils';
+import uPlot from 'uplot';
+import "uplot/dist/uPlot.min.css";
 
 function ensureSucceeds(res) {
     // Ensures that `res` doesn't have an `error` field
@@ -14,7 +16,8 @@ const egos = {
     ego1: {},
 }
 
-const exported = module.exports = {}
+// Variable used to expose an API
+const bsim_js = global.bsim_js = {};
 
 const WEBSOCKET_OPTIONS = {
     packMessage: data => JSON.stringify(data),
@@ -33,20 +36,20 @@ async function main() {
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=manual`}));
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=path_following_kmpc`}));
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr`}));
-        target_speed = 5; // m/s
+        const target_speed = 5; // m/s
         // target_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
         // target_path = [[20, 20], [20, -20], [-20, -20], [-20, 20]]; // square
-        // target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; initial_state = [18,0,-1.5708,target_speed,0]; // square with cut corners
-        // target_path = [[-20, 0], [20, 0], [20, 5]]; initial_state = [0,0,0,0.001,0]; // straight line
-        // target_path = [[-20, -20], [20, 20], [-20,30]]; initial_state = [0,0,0,target_speed,0]; // diagonal line
-        target_path = generateCircleApproximation([0,0], 20, 32).reverse(); initial_state = [20,0,-1.5708,target_speed,0]; // circle
-        plant_options = {
+        // target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; const initial_state = [18,0,-1.5708,target_speed,0]; // square with cut corners
+        // target_path = [[-20, 0], [20, 0], [20, 5]]; const initial_state = [0,0,0,0.001,0]; // straight line
+        // target_path = [[-20, -20], [20, 20], [-20,30]]; const initial_state = [0,0,0,target_speed,0]; // diagonal line
+        const target_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,0]; // circle
+        const plant_options = {
             initial_state: initial_state,
         }
         // controller = 'manual';
         // controller_options = {};
-        controller = 'lookahead_lqr';
-        controller_options = {
+        const controller = 'lookahead_lqr';
+        const controller_options = {
             Q: [
                 [1., 0., 0., 0., 0.],
                 [0., 1., 0., 0., 0.],
@@ -71,7 +74,9 @@ async function main() {
 
     const worldCanvas = document.getElementById('worldCanvas');
     worldCanvas.getContext('2d').translate(worldCanvas.width/2, worldCanvas.height/2)
-    const debugContainer = document.getElementById('debugContainer');
+    const rawDebugContainer = document.getElementById('rawDebugContainer');
+    const plotContainer = document.getElementById('plotContainer');
+    const plots = {};
 
     let errorCount = 0;
     const MAX_ERROR_COUNT = 10;
@@ -80,11 +85,12 @@ async function main() {
             const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
         
             drawWorld(worldCanvas, worldState);
-            drawDebugDashboard(debugContainer, worldState);
+            drawDebugDashboard(rawDebugContainer, worldState);
+            drawPlots(plots, plotContainer, worldState);
 
         } catch (e) {
             console.error(e);
-            displayError(debugContainer, e);
+            displayError(rawDebugContainer, e);
             ++errorCount;
             if (errorCount > MAX_ERROR_COUNT) {
                 console.error(`Too many errors, aborting`);
@@ -93,10 +99,11 @@ async function main() {
         }
     }, 10);
 
-    exported.tick = () => worldSocket.sendRequest({command: 'tick'}).then(console.log);
-    exported.getState = () => worldSocket.sendRequest({command: 'state'}).then(console.log);
-    exported.resetWorld = () => worldSocket.sendRequest({command: 'reset'}).then(console.log);
-    exported.corruptSensorAdditive = (ego, corruption) => egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify({_sensor_state: {additive_corruption: corruption}})}`}).then(console.log);
+    bsim_js.tick = () => worldSocket.sendRequest({command: 'tick'}).then(console.log);
+    bsim_js.getState = () => worldSocket.sendRequest({command: 'state'}).then(console.log);
+    bsim_js.resetWorld = () => worldSocket.sendRequest({command: 'reset'}).then(console.log);
+    bsim_js.corruptSensorAdditive = (ego, corruption) => egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify({_sensor_state: {additive_corruption: corruption}})}`}).then(console.log);
+    bsim_js.plots = plots;
 }
 
 function drawWorld(canvas, worldState) {
@@ -117,6 +124,50 @@ function drawWorld(canvas, worldState) {
 
 function drawDebugDashboard(container, worldState) {
     container.innerHTML = `<pre>${JSON.stringify(worldState, null, 2)}</pre>`;
+}
+
+function drawPlots(plots, container, worldState) {
+    const t = worldState.t;
+
+    for (const [entityName, entity] of Object.entries(worldState.entities)) {
+        if (entityName === 'ego1') {
+            {
+                // Velocity over time
+                const plotID = `${entityName}_velocity`;
+                if (!plots[plotID]) {
+                    const plotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(plotContainer);
+                    plots[plotID] = {
+                        plot: new uPlot({
+                            title: `${entityName} Velocity`,
+                            cursor: {
+                                sync: {
+                                    key: 'cursor_sync_key_time',
+                                }
+                            },
+                            width: 600,
+                            height: 300,
+                            scales: {
+                                x: {
+                                    time: false,
+                                },
+                            },
+                            series: [
+                                {
+                                    label: 'time (s)',
+                                }, 
+                                {
+                                    label: 'velocity (m/s)',
+                                },
+                            ]
+                        }, [[1,2,3,4,5], [10,10,10,10,10]], plotContainer),
+                        data: [],
+                    };
+                }
+                const plotObj = plots[plotID];
+            }
+        }
+    }
 }
 
 function displayError(container, e) {
