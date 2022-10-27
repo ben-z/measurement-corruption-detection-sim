@@ -1,5 +1,5 @@
 import WebSocketAsPromised from 'websocket-as-promised';
-import { mySetInterval, matrixMultiply, generateCircleApproximation } from './utils';
+import { mySetInterval, matrixMultiply, generateCircleApproximation, approxeq } from './utils';
 import uPlot from 'uplot';
 import "uplot/dist/uPlot.min.css";
 
@@ -155,19 +155,38 @@ const RAD_SCALE = {
     range: (self, min, max) => [Math.min(-Math.PI, min), Math.max(Math.PI, max)]
 }
 
+const DEFAULT_RAD_SPLITS = [-Math.PI, -Math.PI/2, 0, Math.PI/2, Math.PI];
+
 const RAD_AXIS = {
     scale: 'rad',
-    values: (self, splits) => ['-π', '-π/2', '0', 'π/2', 'π'],
-    splits: [-Math.PI, -Math.PI/2, 0, Math.PI/2, Math.PI],
+    values: (self, splits) => {
+        if (splits === DEFAULT_RAD_SPLITS) {
+            return ['-π', '-π/2', '0', 'π/2', 'π']
+        } else {
+            return splits.map(s => s.toFixed(2));
+        }
+    },
+    splits: (self, axisIdx, scaleMin, scaleMax) => {
+        if (approxeq(scaleMin, -Math.PI) && approxeq(scaleMax, Math.PI)) {
+            return DEFAULT_RAD_SPLITS;
+        } else {
+            return [scaleMin, (scaleMin+scaleMax)/2, scaleMax];
+        }
+    },
 }
 
 const COMMON_PLOT_SETTINGS = {
     cursor: {
         sync: {
             key: CURSOR_SYNC_KEY_TIME,
+        },
+        drag: {
+            x: true,
+            y: true,
+            uni: 20,
         }
     },
-    width: 600,
+    width: 800,
     height: 200,
 }
 
@@ -178,115 +197,59 @@ function drawPlots(plots, container, worldState) {
 
     for (const [entityName, entity] of Object.entries(worldState.entities)) {
         if (entityName === 'ego1') {
-            { // Velocity over time
-                const plotID = `${entityName}_velocity`;
+            { // Plots of basic ego state
+                const plotID = `${entityName}_basics`;
                 if (!plots[plotID]) {
                     const plotContainer = document.createElement('div', {id: plotID});
                     container.appendChild(plotContainer);
                     plots[plotID] = {
                         plot: new uPlot({
                             ...COMMON_PLOT_SETTINGS,
-                            title: `${entityName} Velocity`,
+                            title: `${entityName}`,
                             scales: {
                                 x: TIME_SCALE,
                                 "m/s": MPS_SCALE,
+                                "rad": RAD_SCALE,
                             },
                             series: [
                                 {
                                     label: 'time (s)',
+                                    value: (self, rawValue) => rawValue.toFixed(2),
                                 }, 
                                 {
                                     label: 'velocity (m/s)',
                                     stroke: "red",
                                     scale: "m/s",
+                                    value: (self, rawValue) => rawValue.toFixed(2),
+                                },
+                                {
+                                    label: 'heading (rad)',
+                                    stroke: "blue",
+                                    scale: "rad",
+                                    value: (self, rawValue) => rawValue.toFixed(2),
+                                },
+                                {
+                                    label: 'steering (rad)',
+                                    stroke: "green",
+                                    scale: "rad",
+                                    value: (self, rawValue) => rawValue.toFixed(2),
                                 },
                             ],
                             axes: [
                                 {},
                                 MPS_AXIS,
+                                {...RAD_AXIS, side: 1},
                             ]
-                        }, [[], []], plotContainer),
-                        data: [[], []],
+                        }, [[], [], [], []], plotContainer),
+                        data: [[], [], [], []],
                     };
                 }
                 const plotObj = plots[plotID];
                 const vehicleState = decodeVehicleState(entity.state);
                 plotObj.data[0] = [...plotObj.data[0].slice(-(PLOT_HORIZON_STEPS -1)), t];
                 plotObj.data[1] = [...plotObj.data[1].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.v];
-                plotObj.plot.setData(plotObj.data);
-            }
-            { // Heading over time
-                const plotID = `${entityName}_heading`;
-                if (!plots[plotID]) {
-                    const plotContainer = document.createElement('div', {id: plotID});
-                    container.appendChild(plotContainer);
-                    plots[plotID] = {
-                        plot: new uPlot({
-                            ...COMMON_PLOT_SETTINGS,
-                            title: `${entityName} Heading`,
-                            scales: {
-                                x: TIME_SCALE,
-                                "rad": RAD_SCALE,
-                            },
-                            series: [
-                                {
-                                    label: 'time (s)',
-                                }, 
-                                {
-                                    label: 'heading (rad)',
-                                    stroke: "red",
-                                    scale: "rad",
-                                },
-                            ],
-                            axes: [
-                                {},
-                                RAD_AXIS,
-                            ]
-                        }, [[], []], plotContainer),
-                        data: [[], []],
-                    };
-                }
-                const plotObj = plots[plotID];
-                const vehicleState = decodeVehicleState(entity.state);
-                plotObj.data[0] = [...plotObj.data[0].slice(-(PLOT_HORIZON_STEPS -1)), t];
-                plotObj.data[1] = [...plotObj.data[1].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.theta];
-                plotObj.plot.setData(plotObj.data);
-            }
-            { // Steering over time
-                const plotID = `${entityName}_steering`;
-                if (!plots[plotID]) {
-                    const plotContainer = document.createElement('div', {id: plotID});
-                    container.appendChild(plotContainer);
-                    plots[plotID] = {
-                        plot: new uPlot({
-                            ...COMMON_PLOT_SETTINGS,
-                            title: `${entityName} Steering`,
-                            scales: {
-                                x: TIME_SCALE,
-                                "rad": RAD_SCALE,
-                            },
-                            series: [
-                                {
-                                    label: 'time (s)',
-                                }, 
-                                {
-                                    label: 'steering (rad)',
-                                    stroke: "red",
-                                    scale: "rad",
-                                },
-                            ],
-                            axes: [
-                                {},
-                                RAD_AXIS,
-                            ]
-                        }, [[], []], plotContainer),
-                        data: [[], []],
-                    };
-                }
-                const plotObj = plots[plotID];
-                const vehicleState = decodeVehicleState(entity.state);
-                plotObj.data[0] = [...plotObj.data[0].slice(-(PLOT_HORIZON_STEPS -1)), t];
-                plotObj.data[1] = [...plotObj.data[1].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.delta];
+                plotObj.data[2] = [...plotObj.data[2].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.theta];
+                plotObj.data[3] = [...plotObj.data[3].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.delta];
                 plotObj.plot.setData(plotObj.data);
             }
         }

@@ -70,3 +70,7 @@ module.exports.generateCircleApproximation = function generateCircleApproximatio
     }
     return points;
 }
+
+module.exports.approxeq = function approxeq(a, b, epsilon=1e-6) {
+    return Math.abs(a - b) < epsilon;
+}
