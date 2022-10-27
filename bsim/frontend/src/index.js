@@ -78,9 +78,14 @@ async function main() {
     const plotContainer = document.getElementById('plotContainer');
     const plots = {};
 
+    let paused = false;
     let errorCount = 0;
     const MAX_ERROR_COUNT = 10;
     const loop = mySetInterval(async () => {
+        if (paused) {
+            return;
+        }
+            
         try {
             const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
         
@@ -100,6 +105,9 @@ async function main() {
     }, 10);
 
     bsim_js.tick = () => worldSocket.sendRequest({command: 'tick'}).then(console.log);
+    bsim_js.pause = () => {paused = true};
+    bsim_js.resume = () => {paused = false};
+    bsim_js.isPaused = () => paused;
     bsim_js.getState = () => worldSocket.sendRequest({command: 'state'}).then(console.log);
     bsim_js.resetWorld = () => worldSocket.sendRequest({command: 'reset'}).then(console.log);
     bsim_js.corruptSensorAdditive = (ego, corruption) => egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify({_sensor_state: {additive_corruption: corruption}})}`}).then(console.log);
@@ -126,31 +134,62 @@ function drawDebugDashboard(container, worldState) {
     container.innerHTML = `<pre>${JSON.stringify(worldState, null, 2)}</pre>`;
 }
 
+const CURSOR_SYNC_KEY_TIME = 'cursor_sync_key_time';
+
+const PLOT_HORIZON = 10; // seconds
+
+const TIME_SCALE = {
+    time: false,
+    range: (self, min, max) => bsim_js.isPaused() ? [min, max] : [max - PLOT_HORIZON, max],
+}
+
+const MPS_SCALE = {
+    range: (self, min, max) => [Math.min(0, min), Math.max(10, max)],
+}
+
+const MPS_AXIS = {
+    scale: 'm/s',
+}
+
+const RAD_SCALE = {
+    range: (self, min, max) => [Math.min(-Math.PI, min), Math.max(Math.PI, max)]
+}
+
+const RAD_AXIS = {
+    scale: 'rad',
+    values: (self, splits) => ['-π', '-π/2', '0', 'π/2', 'π'],
+    splits: [-Math.PI, -Math.PI/2, 0, Math.PI/2, Math.PI],
+}
+
+const COMMON_PLOT_SETTINGS = {
+    cursor: {
+        sync: {
+            key: CURSOR_SYNC_KEY_TIME,
+        }
+    },
+    width: 600,
+    height: 200,
+}
+
 function drawPlots(plots, container, worldState) {
     const t = worldState.t;
 
+    const PLOT_HORIZON_STEPS = PLOT_HORIZON / worldState.DT;
+
     for (const [entityName, entity] of Object.entries(worldState.entities)) {
         if (entityName === 'ego1') {
-            {
-                // Velocity over time
+            { // Velocity over time
                 const plotID = `${entityName}_velocity`;
                 if (!plots[plotID]) {
                     const plotContainer = document.createElement('div', {id: plotID});
                     container.appendChild(plotContainer);
                     plots[plotID] = {
                         plot: new uPlot({
+                            ...COMMON_PLOT_SETTINGS,
                             title: `${entityName} Velocity`,
-                            cursor: {
-                                sync: {
-                                    key: 'cursor_sync_key_time',
-                                }
-                            },
-                            width: 600,
-                            height: 300,
                             scales: {
-                                x: {
-                                    time: false,
-                                },
+                                x: TIME_SCALE,
+                                "m/s": MPS_SCALE,
                             },
                             series: [
                                 {
@@ -158,13 +197,97 @@ function drawPlots(plots, container, worldState) {
                                 }, 
                                 {
                                     label: 'velocity (m/s)',
+                                    stroke: "red",
+                                    scale: "m/s",
                                 },
+                            ],
+                            axes: [
+                                {},
+                                MPS_AXIS,
                             ]
-                        }, [[1,2,3,4,5], [10,10,10,10,10]], plotContainer),
-                        data: [],
+                        }, [[], []], plotContainer),
+                        data: [[], []],
                     };
                 }
                 const plotObj = plots[plotID];
+                const vehicleState = decodeVehicleState(entity.state);
+                plotObj.data[0] = [...plotObj.data[0].slice(-(PLOT_HORIZON_STEPS -1)), t];
+                plotObj.data[1] = [...plotObj.data[1].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.v];
+                plotObj.plot.setData(plotObj.data);
+            }
+            { // Heading over time
+                const plotID = `${entityName}_heading`;
+                if (!plots[plotID]) {
+                    const plotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(plotContainer);
+                    plots[plotID] = {
+                        plot: new uPlot({
+                            ...COMMON_PLOT_SETTINGS,
+                            title: `${entityName} Heading`,
+                            scales: {
+                                x: TIME_SCALE,
+                                "rad": RAD_SCALE,
+                            },
+                            series: [
+                                {
+                                    label: 'time (s)',
+                                }, 
+                                {
+                                    label: 'heading (rad)',
+                                    stroke: "red",
+                                    scale: "rad",
+                                },
+                            ],
+                            axes: [
+                                {},
+                                RAD_AXIS,
+                            ]
+                        }, [[], []], plotContainer),
+                        data: [[], []],
+                    };
+                }
+                const plotObj = plots[plotID];
+                const vehicleState = decodeVehicleState(entity.state);
+                plotObj.data[0] = [...plotObj.data[0].slice(-(PLOT_HORIZON_STEPS -1)), t];
+                plotObj.data[1] = [...plotObj.data[1].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.theta];
+                plotObj.plot.setData(plotObj.data);
+            }
+            { // Steering over time
+                const plotID = `${entityName}_steering`;
+                if (!plots[plotID]) {
+                    const plotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(plotContainer);
+                    plots[plotID] = {
+                        plot: new uPlot({
+                            ...COMMON_PLOT_SETTINGS,
+                            title: `${entityName} Steering`,
+                            scales: {
+                                x: TIME_SCALE,
+                                "rad": RAD_SCALE,
+                            },
+                            series: [
+                                {
+                                    label: 'time (s)',
+                                }, 
+                                {
+                                    label: 'steering (rad)',
+                                    stroke: "red",
+                                    scale: "rad",
+                                },
+                            ],
+                            axes: [
+                                {},
+                                RAD_AXIS,
+                            ]
+                        }, [[], []], plotContainer),
+                        data: [[], []],
+                    };
+                }
+                const plotObj = plots[plotID];
+                const vehicleState = decodeVehicleState(entity.state);
+                plotObj.data[0] = [...plotObj.data[0].slice(-(PLOT_HORIZON_STEPS -1)), t];
+                plotObj.data[1] = [...plotObj.data[1].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.delta];
+                plotObj.plot.setData(plotObj.data);
             }
         }
     }
