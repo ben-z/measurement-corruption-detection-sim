@@ -82,29 +82,31 @@ class MyEstimator:
         assert self.model.noutputs is not None
         assert self.model.ninputs is not None
 
+        # TODO: use measurement instead of true_state. However, we don't know what the
+        # true state is without first solving the estimation problem. This seems like a
+        # chicken and egg problem.
+        # TODO: use something other than the true state as the initial guess, perhaps the previous estimate
+        # projected forward in time or the target state along the path (the latter requires a feedback from
+        # the controller)?
+        # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
+        target_path = ext_state['target_path']
+
+        # This is used to infer the nominal trajectory and linearization
+        # TODO: use estimated x and y instead of true x and y
+        x = true_state[0]
+        y = true_state[1]
+
+        pos = np.array([x,y])
+        segment_info = generate_segment_info(pos, target_path)
+        current_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in segment_info])
+
+        debug_output['current_path_segment_idx'] = int(current_path_segment_idx)
+
         if self._tick_count >= self.N and self._tick_count % self.ticks_per_solve == 0:
             # solve the estimation problem
-            # TODO: use measurement instead of true_state. However, we don't know what the
-            # true state is without first solving the estimation problem. This seems like a
-            # chicken and egg problem.
             print('solving estimation problem')
-            # TODO: use something other than the true state as the initial guess, perhaps the previous estimate
-            # projected forward in time or the target state along the path (the latter requires a feedback from
-            # the controller)?
-            # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
-            target_path = ext_state['target_path']
 
-            # This is used to infer the nominal trajectory and linearization
-            # TODO: use estimated x and y instead of true x and y
-            x = true_state[0]
-            y = true_state[1]
-
-            pos = np.array([x,y])
-            segment_info = generate_segment_info(pos, target_path)
-            current_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in segment_info])
             current_path_segment = segment_info[current_path_segment_idx]
-
-            debug_output['current_path_segment_idx'] = int(current_path_segment_idx)
 
             m_per_step = ext_state['target_speed'] * self.dt
 
@@ -184,9 +186,13 @@ class MyEstimator:
             # print(f"state estimation l2 error bound: {Dx:.4f}")
             # print(f"state estimation l2 error bound violated: {norm(diff_from_true) > Dx}")
 
+            debug_output["state_estimation_l2_error_x0"] = norm(diff_from_true)
+
             print("estimated state (xf)", xf_hat)
             print("true state (xf)", self._true_states[:,-1])
             print(f"solve time: {solve_end - solve_start:.4f}s")
+
+            debug_output["state_estimation_l2_error_xf"] = norm(xf_hat - self._true_states[:,-1])
 
             # attack_vector is a pxT matrix
             attack_vector = (Y - np.matmul(Phi, x0_hat.value)).reshape((self.model.noutputs, self.N), order='F')

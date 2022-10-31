@@ -72,8 +72,8 @@ async function main() {
         // }, 3000)
     }
 
-    const worldCanvas = document.getElementById('worldCanvas');
-    worldCanvas.getContext('2d').translate(worldCanvas.width/2, worldCanvas.height/2)
+    const bevCanvas = document.getElementById('bevCanvas');
+    bevCanvas.getContext('2d').translate(bevCanvas.width/2, bevCanvas.height/2)
     const rawDebugContainer = document.getElementById('rawDebugContainer');
     const plotContainer = document.getElementById('plotContainer');
     const plots = {};
@@ -89,7 +89,8 @@ async function main() {
         try {
             const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
         
-            drawWorld(worldCanvas, worldState);
+            bsim_js.pushWorldState(worldState);
+            drawBEV(bevCanvas, worldState);
             drawDebugDashboard(rawDebugContainer, worldState);
             drawPlots(plots, plotContainer, worldState);
 
@@ -112,14 +113,34 @@ async function main() {
     bsim_js.resetWorld = () => worldSocket.sendRequest({command: 'reset'}).then(console.log);
     bsim_js.corruptSensorAdditive = (ego, corruption) => egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify({_sensor_state: {additive_corruption: corruption}})}`}).then(console.log);
     bsim_js.plots = plots;
-    bsim_js.plot_horizon = 10; // seconds
-    bsim_js.data_horizon = 10 * bsim_js.plot_horizon; // seconds
+    
+    // bsim settings
+    let plot_horizon = 10; // seconds
+    bsim_js.get_plot_horizon = () => plot_horizon;
+    bsim_js.set_plot_horizon = new_horizon => { plot_horizon = new_horizon; };
+    bsim_js.get_data_horizon = () => 10 * bsim_js.get_plot_horizon(); // seconds
+
+    let worldStates = [];
+    bsim_js.getBEVCanvas = () => bevCanvas;
+    bsim_js.getWorldStates = () => worldStates;
+    bsim_js.pushWorldState = s => {
+        worldStates = [
+            ...sliceToHorizon([worldStates], worldStates.map(st => st.t), s.t, bsim_js.get_plot_horizon())[0],
+            s
+        ];
+    }
 }
 
-function drawWorld(canvas, worldState) {
+function drawBEV(canvas, worldState) {
+    /*
+    Draws the BEV of the world
+    */
     const ctx = canvas.getContext('2d');
 
     ctx.clearRect(-canvas.width/2, -canvas.height/2, canvas.width, canvas.height);
+
+    ctx.font = '800 13px Courier New';
+    ctx.fillText(`t=${worldState.t.toFixed(2)}s`, -canvas.width/2 + 10, -canvas.height/2 + 20);
 
     for (const [entityName, entity] of Object.entries(worldState.entities)) {
         switch (entity.type) {
@@ -140,7 +161,7 @@ const CURSOR_SYNC_KEY_TIME = 'cursor_sync_key_time';
 
 const TIME_SCALE = {
     time: false,
-    range: (self, min, max) => self.bsim_hasSelect ? [min, max] : [max - bsim_js.plot_horizon, max],
+    range: (self, min, max) => self.bsim_hasSelect ? [min, max] : [max - bsim_js.get_plot_horizon(), max],
 }
 
 const MPS_SCALE = {
@@ -184,6 +205,46 @@ const COMMON_PLOT_SETTINGS = {
             x: true,
             y: true,
             uni: 20,
+        },
+        // move: (self, mouseLeft, mouseTop) => {
+        //     // const {x, y} = self.posToVal(mouseLeft, mouseTop);
+        //     // console.log("moved!", x, y);
+        //     // self.setCursor({x, y});
+        //     console.log("moved!")
+        // },
+        dataIdx: (self, seriesIdx, hoveredIdx, cursorXVal) => {
+            // find the closest non-null data point. Taken from
+            // https://github.com/leeoniya/uPlot/blob/5bebae5/demos/nearest-non-null.html#L55-L88
+            let xValues = self.data[0];
+            let yValues = self.data[seriesIdx];
+
+            if (yValues[hoveredIdx] == null) {
+                let nonNullLft = null,
+                    nonNullRgt = null,
+                    i;
+
+                i = hoveredIdx;
+                while (nonNullLft == null && i-- > 0) {
+                    if (yValues[i] != null)
+                        nonNullLft = i;
+                }
+
+                i = hoveredIdx;
+                while (nonNullRgt == null && i++ < yValues.length) {
+                    if (yValues[i] != null)
+                        nonNullRgt = i;
+                }
+
+                let rgtVal = nonNullRgt == null ? Infinity : xValues[nonNullRgt];
+                let lftVal = nonNullLft == null ? -Infinity : xValues[nonNullLft];
+
+                let lftDelta = cursorXVal - lftVal;
+                let rgtDelta = rgtVal - cursorXVal;
+
+                hoveredIdx = lftDelta <= rgtDelta ? nonNullLft : nonNullRgt;
+            }
+
+            return hoveredIdx;
         }
     },
     width: 800,
@@ -198,8 +259,29 @@ const COMMON_PLOT_SETTINGS = {
             self => {
                 self.bsim_hasSelect = false;
             }
-        ]
+        ],
+        'setCursor': [
+            self => {
+                // Update BEV based on cursor position
+                if (!bsim_js.isPaused() || !self.cursor.idx) {
+                    return;
+                }
+
+                drawBEV(bsim_js.getBEVCanvas(), bsim_js.getWorldStates()[self.cursor.idx]);
+            }
+        ],
     }
+}
+
+function sliceToHorizon(arrs, tarr, t, horizon) {
+    for (const arr of arrs) {
+        if (arr.length !== tarr.length) {
+            throw new Error(`sliceToHorizon: arr.length (${arr.length}) !== tarr.length (${tarr.length})`);
+        }
+    }
+    const res_tarr = predSlice(tarr, e => e >= t - horizon);
+    const res_arrs = arrs.map(arr => arr.slice(-res_tarr.length));
+    return res_arrs
 }
 
 function drawPlots(plots, container, worldState) {
@@ -248,7 +330,7 @@ function drawPlots(plots, container, worldState) {
                             axes: [
                                 {},
                                 MPS_AXIS,
-                                {...RAD_AXIS, side: 1},
+                                {...RAD_AXIS, side: 1, grid: {show: false}},
                             ]
                         }, [[], [], [], []], plotContainer),
                         data: [[], [], [], []],
@@ -256,10 +338,11 @@ function drawPlots(plots, container, worldState) {
                 }
                 const plotObj = plots[plotID];
                 const vehicleState = decodeVehicleState(entity.state);
-                plotObj.data[0] = [...predSlice(plotObj.data[0], e => e >= t - bsim_js.data_horizon), t];
-                plotObj.data[1] = [...plotObj.data[1].slice(-(plotObj.data[0].length - 1)), vehicleState.v];
-                plotObj.data[2] = [...plotObj.data[2].slice(-(plotObj.data[0].length -1)), vehicleState.theta];
-                plotObj.data[3] = [...plotObj.data[3].slice(-(plotObj.data[0].length -1)), vehicleState.delta];
+                const slicedData = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_plot_horizon());
+                plotObj.data[0] = [...slicedData[0], t];
+                plotObj.data[1] = [...slicedData[1], vehicleState.v];
+                plotObj.data[2] = [...slicedData[2], vehicleState.theta];
+                plotObj.data[3] = [...slicedData[3], vehicleState.delta];
                 plotObj.plot.setData(plotObj.data);
             }
             {
@@ -273,7 +356,13 @@ function drawPlots(plots, container, worldState) {
                             title: `${entityName} Estimator Debug`,
                             scales: {
                                 x: TIME_SCALE,
-                                "idx": {},
+                                idx: {
+                                    range: [0, 32],
+                                    
+                                },
+                                error: {
+                                    range: [-1, 1],
+                                },
                             },
                             series: [
                                 {
@@ -282,26 +371,54 @@ function drawPlots(plots, container, worldState) {
                                 }, 
                                 {
                                     label: 'Path Segment Index',
-                                    stroke: "red",
+                                    stroke: "blue",
                                     scale: "idx",
+                                    paths: uPlot.paths.stepped({align: 1}),
+                                    value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(0),
+                                },
+                                {
+                                    label: 'State estimation l2 error (x0)',
+                                    stroke: "red",
+                                    scale: "error",
+                                    value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(2),
+                                    points: {
+                                        space: 0,
+                                    }
+                                },
+                                {
+                                    label: 'State estimation l2 error (xf)',
+                                    stroke: "green",
+                                    scale: "error",
+                                    value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(2),
+                                    points: {
+                                        space: 0,
+                                    }
                                 },
                             ],
                             axes: [
                                 {},
                                 {
                                     scale: 'idx',
+                                    grid: {
+                                        show: false,
+                                    },
+                                },
+                                {
+                                    scale: 'error',
+                                    side: 1,
                                 }
                             ]
-                        }, [[], []], plotContainer),
-                        data: [[], []],
+                        }, [[], [], [], []], plotContainer),
+                        data: [[], [], [], []],
                     };
                 }
-                if (entity.estimator_debug_output.current_path_segment_idx) {
-                    const plotObj = plots[plotID];
-                    plotObj.data[0] = [...predSlice(plotObj.data[0], e => e >= t - bsim_js.data_horizon), t];
-                    plotObj.data[1] = [...plotObj.data[1].slice(-(plotObj.data[0].length - 1)), entity.estimator_debug_output.current_path_segment_idx];
-                    plotObj.plot.setData(plotObj.data);
-                }
+                const plotObj = plots[plotID];
+                const slicedData = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_plot_horizon());
+                plotObj.data[0] = [...slicedData[0], t];
+                plotObj.data[1] = [...slicedData[1], entity.estimator_debug_output.current_path_segment_idx];
+                plotObj.data[2] = [...slicedData[2], entity.estimator_debug_output.state_estimation_l2_error_x0];
+                plotObj.data[3] = [...slicedData[3], entity.estimator_debug_output.state_estimation_l2_error_xf];
+                plotObj.plot.setData(plotObj.data);
             }
         }
     }
