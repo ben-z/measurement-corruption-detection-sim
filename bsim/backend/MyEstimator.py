@@ -104,6 +104,8 @@ class MyEstimator:
             current_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in segment_info])
             current_path_segment = segment_info[current_path_segment_idx]
 
+            debug_output['current_path_segment_idx'] = int(current_path_segment_idx)
+
             m_per_step = ext_state['target_speed'] * self.dt
 
             # a generator to move along the path backwards, starting from the current state

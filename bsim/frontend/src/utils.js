@@ -74,3 +74,25 @@ module.exports.generateCircleApproximation = function generateCircleApproximatio
 module.exports.approxeq = function approxeq(a, b, epsilon=1e-6) {
     return Math.abs(a - b) < epsilon;
 }
+
+module.exports.predSlice = function predSlice(arr, predStart, predEnd) {
+    // predSlice is the same arr.slice, except it finds the start and end indices
+    // based on predStart and predEnd.
+    let start = predStart || 0;
+    let end = predEnd || arr.length;
+
+    if (typeof predStart === 'function') {
+        start = arr.findIndex(predStart);
+        if (start === -1) {
+            start = 0;
+        }
+    }
+    if (typeof predEnd === 'function') {
+        end = arr.findIndex(predEnd);
+        if (end === -1) {
+            end = arr.length;
+        }
+    }
+
+    return arr.slice(start, end);
+}

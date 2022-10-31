@@ -1,5 +1,5 @@
 import WebSocketAsPromised from 'websocket-as-promised';
-import { mySetInterval, matrixMultiply, generateCircleApproximation, approxeq } from './utils';
+import { mySetInterval, matrixMultiply, generateCircleApproximation, approxeq, predSlice } from './utils';
 import uPlot from 'uplot';
 import "uplot/dist/uPlot.min.css";
 
@@ -112,6 +112,8 @@ async function main() {
     bsim_js.resetWorld = () => worldSocket.sendRequest({command: 'reset'}).then(console.log);
     bsim_js.corruptSensorAdditive = (ego, corruption) => egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify({_sensor_state: {additive_corruption: corruption}})}`}).then(console.log);
     bsim_js.plots = plots;
+    bsim_js.plot_horizon = 10; // seconds
+    bsim_js.data_horizon = 10 * bsim_js.plot_horizon; // seconds
 }
 
 function drawWorld(canvas, worldState) {
@@ -136,11 +138,9 @@ function drawDebugDashboard(container, worldState) {
 
 const CURSOR_SYNC_KEY_TIME = 'cursor_sync_key_time';
 
-const PLOT_HORIZON = 10; // seconds
-
 const TIME_SCALE = {
     time: false,
-    range: (self, min, max) => bsim_js.isPaused() ? [min, max] : [max - PLOT_HORIZON, max],
+    range: (self, min, max) => self.bsim_hasSelect ? [min, max] : [max - bsim_js.plot_horizon, max],
 }
 
 const MPS_SCALE = {
@@ -188,12 +188,22 @@ const COMMON_PLOT_SETTINGS = {
     },
     width: 800,
     height: 200,
+    hooks: {
+        'setSelect': [
+            self => {
+                self.bsim_hasSelect = self.select.width > 0 || self.select.height > 0;
+            }
+        ],
+        'setScale': [
+            self => {
+                self.bsim_hasSelect = false;
+            }
+        ]
+    }
 }
 
 function drawPlots(plots, container, worldState) {
     const t = worldState.t;
-
-    const PLOT_HORIZON_STEPS = PLOT_HORIZON / worldState.DT;
 
     for (const [entityName, entity] of Object.entries(worldState.entities)) {
         if (entityName === 'ego1') {
@@ -246,11 +256,52 @@ function drawPlots(plots, container, worldState) {
                 }
                 const plotObj = plots[plotID];
                 const vehicleState = decodeVehicleState(entity.state);
-                plotObj.data[0] = [...plotObj.data[0].slice(-(PLOT_HORIZON_STEPS -1)), t];
-                plotObj.data[1] = [...plotObj.data[1].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.v];
-                plotObj.data[2] = [...plotObj.data[2].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.theta];
-                plotObj.data[3] = [...plotObj.data[3].slice(-(PLOT_HORIZON_STEPS -1)), vehicleState.delta];
+                plotObj.data[0] = [...predSlice(plotObj.data[0], e => e >= t - bsim_js.data_horizon), t];
+                plotObj.data[1] = [...plotObj.data[1].slice(-(plotObj.data[0].length - 1)), vehicleState.v];
+                plotObj.data[2] = [...plotObj.data[2].slice(-(plotObj.data[0].length -1)), vehicleState.theta];
+                plotObj.data[3] = [...plotObj.data[3].slice(-(plotObj.data[0].length -1)), vehicleState.delta];
                 plotObj.plot.setData(plotObj.data);
+            }
+            {
+                const plotID = `${entityName}_estimator`;
+                if (!plots[plotID]) {
+                    const plotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(plotContainer);
+                    plots[plotID] = {
+                        plot: new uPlot({
+                            ...COMMON_PLOT_SETTINGS,
+                            title: `${entityName} Estimator Debug`,
+                            scales: {
+                                x: TIME_SCALE,
+                                "idx": {},
+                            },
+                            series: [
+                                {
+                                    label: 'time (s)',
+                                    value: (self, rawValue) => rawValue.toFixed(2),
+                                }, 
+                                {
+                                    label: 'Path Segment Index',
+                                    stroke: "red",
+                                    scale: "idx",
+                                },
+                            ],
+                            axes: [
+                                {},
+                                {
+                                    scale: 'idx',
+                                }
+                            ]
+                        }, [[], []], plotContainer),
+                        data: [[], []],
+                    };
+                }
+                if (entity.estimator_debug_output.current_path_segment_idx) {
+                    const plotObj = plots[plotID];
+                    plotObj.data[0] = [...predSlice(plotObj.data[0], e => e >= t - bsim_js.data_horizon), t];
+                    plotObj.data[1] = [...plotObj.data[1].slice(-(plotObj.data[0].length - 1)), entity.estimator_debug_output.current_path_segment_idx];
+                    plotObj.plot.setData(plotObj.data);
+                }
             }
         }
     }
