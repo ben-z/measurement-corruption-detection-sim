@@ -176,6 +176,8 @@ class MyEstimator:
             
             xf_hat = evolution_matrix[-self.model.nstates:, :] @ x0_hat.value + linearization_state_xf
             
+            debug_output["true_states"] = self._true_states.T
+            
             print("status:", prob.status)
             print("optimal value", prob.value)
             print("optimal state (x0)",

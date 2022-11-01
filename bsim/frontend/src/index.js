@@ -513,6 +513,21 @@ function drawVehicle(ctx, vehicle) {
         ctx.stroke();
         ctx.restore();
     }
+
+    // draw true states of the vehicle used in the estimator
+    if (vehicle.estimator_debug_output.true_states) {
+        const true_vehicle_states = vehicle.estimator_debug_output.true_states.map(decodeVehicleState);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = 'red';
+        ctx.fillStyle = 'red';
+        for (const s of true_vehicle_states) {
+            ctx.arc(m_to_px(s.x), m_to_px(s.y), m_to_px(0.2), 0, 2 * Math.PI);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 main();
