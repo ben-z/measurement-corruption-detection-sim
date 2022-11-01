@@ -122,6 +122,7 @@ async function main() {
 
     let worldStates = [];
     bsim_js.getBEVCanvas = () => bevCanvas;
+    bsim_js.getRawDebugContainer = () => rawDebugContainer;
     bsim_js.getWorldStates = () => worldStates;
     bsim_js.pushWorldState = s => {
         worldStates = [
@@ -206,12 +207,7 @@ const COMMON_PLOT_SETTINGS = {
             y: true,
             uni: 20,
         },
-        // move: (self, mouseLeft, mouseTop) => {
-        //     // const {x, y} = self.posToVal(mouseLeft, mouseTop);
-        //     // console.log("moved!", x, y);
-        //     // self.setCursor({x, y});
-        //     console.log("moved!")
-        // },
+        lock: true,
         dataIdx: (self, seriesIdx, hoveredIdx, cursorXVal) => {
             // find the closest non-null data point. Taken from
             // https://github.com/leeoniya/uPlot/blob/5bebae5/demos/nearest-non-null.html#L55-L88
@@ -268,6 +264,7 @@ const COMMON_PLOT_SETTINGS = {
                 }
 
                 drawBEV(bsim_js.getBEVCanvas(), bsim_js.getWorldStates()[self.cursor.idx]);
+                drawDebugDashboard(bsim_js.getRawDebugContainer(), bsim_js.getWorldStates()[self.cursor.idx]);
             }
         ],
     }
