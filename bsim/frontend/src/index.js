@@ -125,7 +125,7 @@ async function main() {
     bsim_js.getWorldStates = () => worldStates;
     bsim_js.pushWorldState = s => {
         worldStates = [
-            ...sliceToHorizon([worldStates], worldStates.map(st => st.t), s.t, bsim_js.get_plot_horizon())[0],
+            ...sliceToHorizon([worldStates], worldStates.map(st => st.t), s.t, bsim_js.get_data_horizon())[0],
             s
         ];
     }
@@ -280,6 +280,10 @@ function sliceToHorizon(arrs, tarr, t, horizon) {
         }
     }
     const res_tarr = predSlice(tarr, e => e >= t - horizon);
+    // TODO: this takes a long time. Replace this with a ring buffer.
+    // Then we don't need this function at all.
+    // When we need to resize (i.e. when we change the horizon),
+    // we simply need to recreate the ring buffer.
     const res_arrs = arrs.map(arr => arr.slice(-res_tarr.length));
     return res_arrs
 }
@@ -338,11 +342,11 @@ function drawPlots(plots, container, worldState) {
                 }
                 const plotObj = plots[plotID];
                 const vehicleState = decodeVehicleState(entity.state);
-                const slicedData = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_plot_horizon());
-                plotObj.data[0] = [...slicedData[0], t];
-                plotObj.data[1] = [...slicedData[1], vehicleState.v];
-                plotObj.data[2] = [...slicedData[2], vehicleState.theta];
-                plotObj.data[3] = [...slicedData[3], vehicleState.delta];
+                plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
+                plotObj.data[0].push(t);
+                plotObj.data[1].push(vehicleState.v);
+                plotObj.data[2].push(vehicleState.theta);
+                plotObj.data[3].push(vehicleState.delta);
                 plotObj.plot.setData(plotObj.data);
             }
             {
@@ -413,11 +417,11 @@ function drawPlots(plots, container, worldState) {
                     };
                 }
                 const plotObj = plots[plotID];
-                const slicedData = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_plot_horizon());
-                plotObj.data[0] = [...slicedData[0], t];
-                plotObj.data[1] = [...slicedData[1], entity.estimator_debug_output.current_path_segment_idx];
-                plotObj.data[2] = [...slicedData[2], entity.estimator_debug_output.state_estimation_l2_error_x0];
-                plotObj.data[3] = [...slicedData[3], entity.estimator_debug_output.state_estimation_l2_error_xf];
+                plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
+                plotObj.data[0].push(t);
+                plotObj.data[1].push(entity.estimator_debug_output.current_path_segment_idx);
+                plotObj.data[2].push(entity.estimator_debug_output.state_estimation_l2_error_x0);
+                plotObj.data[3].push(entity.estimator_debug_output.state_estimation_l2_error_xf);
                 plotObj.plot.setData(plotObj.data);
             }
         }
