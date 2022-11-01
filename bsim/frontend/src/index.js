@@ -207,7 +207,7 @@ const COMMON_PLOT_SETTINGS = {
             y: true,
             uni: 20,
         },
-        lock: true,
+        // lock: true, // FIXME: this breaks double-click auto-scale
         dataIdx: (self, seriesIdx, hoveredIdx, cursorXVal) => {
             // find the closest non-null data point. Taken from
             // https://github.com/leeoniya/uPlot/blob/5bebae5/demos/nearest-non-null.html#L55-L88
