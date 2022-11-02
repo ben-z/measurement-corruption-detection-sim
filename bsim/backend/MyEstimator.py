@@ -37,24 +37,30 @@ def calc_desired_state_trajectory_on_a_line(linearization_state, N, dt):
 
 
 class MyEstimator:
-    def __init__(self, L, dt, N=30, ticks_per_solve=100):
+    def __init__(self, L, dt, N=30, min_ticks_per_solve=50):
         """
         N: time horizon, the number of time steps
-        ticks_per_solve: number of ticks between solves
+        min_ticks_per_solve: minimum number of ticks between solver invocations
         """
         self.N = N
         self.dt = dt
-        self.ticks_per_solve = ticks_per_solve
-        self._tick_count = 0
+        self.min_ticks_per_solve = min_ticks_per_solve
         self.L = L
         self.model = ckb.make_continuous_kinematic_bicycle_model(L)
         # for type checking
         assert self.model.nstates is not None
         assert self.model.noutputs is not None
         assert self.model.ninputs is not None
-        self._measurements = np.zeros((self.model.noutputs, N))
-        self._inputs = np.zeros((self.model.ninputs, N))
-        self._true_states = np.zeros((self.model.nstates, N))
+        self._last_solve_tick = -min_ticks_per_solve
+        self._tick_count = 0
+        self._prev_path_segment_index = -1
+        self._clear_data()
+
+    def _clear_data(self):
+        self._measurements = np.zeros((self.model.noutputs, self.N))
+        self._inputs = np.zeros((self.model.ninputs, self.N))
+        self._true_states = np.zeros((self.model.nstates, self.N))
+        self._num_data_points = 0
 
     def tick(self, ext_state, measurement, prev_inputs, true_state=None):
         """
@@ -68,14 +74,6 @@ class MyEstimator:
         # TODO: This is currently passing through the first set of sensors. Use the estimate from the actual estimator instead.
         estimate = measurement[0:self.model.nstates]
         debug_output = {}
-
-        # Collect measurements
-        self._measurements = np.roll(self._measurements, -1, axis=1)
-        self._measurements[:,-1] = measurement
-        self._inputs = np.roll(self._inputs, -1, axis=1)
-        self._inputs[:,-1] = prev_inputs
-        self._true_states = np.roll(self._true_states, -1, axis=1)
-        self._true_states[:,-1] = true_state
 
         # for type checking
         assert self.model.nstates is not None
@@ -100,9 +98,27 @@ class MyEstimator:
         segment_info = generate_segment_info(pos, target_path)
         current_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in segment_info])
 
+        debug_output["prev_path_segment_index"] = int(self._prev_path_segment_index)
         debug_output['current_path_segment_idx'] = int(current_path_segment_idx)
 
-        if self._tick_count >= self.N and self._tick_count % self.ticks_per_solve == 0:
+        # when we switch path segments, we want to drop old data because they are from a different linearization path
+        if current_path_segment_idx != self._prev_path_segment_index:
+            self._clear_data()
+
+        # Collect measurements
+        self._measurements = np.roll(self._measurements, -1, axis=1)
+        self._measurements[:,-1] = measurement
+        self._inputs = np.roll(self._inputs, -1, axis=1)
+        self._inputs[:,-1] = prev_inputs
+        self._true_states = np.roll(self._true_states, -1, axis=1)
+        self._true_states[:,-1] = true_state
+        self._num_data_points += 1
+
+        debug_output["num_data_points"] = self._num_data_points
+
+        if self._num_data_points >= self.N and self._tick_count - self._last_solve_tick >= self.min_ticks_per_solve:
+            self._last_solve_tick = self._tick_count
+
             # solve the estimation problem
             print('solving estimation problem')
 
@@ -123,17 +139,39 @@ class MyEstimator:
                 desired_state_trajectory[3, k] = ext_state['target_speed']
                 desired_state_trajectory[4, k] = 0
 
+            continuous_linear_models = []
             linear_models = []
             for k in range(self.N):
                 linearization_state = desired_state_trajectory[:, k]
                 linearization_input = np.zeros(self.model.ninputs)
-                Ac, Bc, Cc, Dc = ckb.get_linear_model_straight_line_ref(*linearization_state, *linearization_input, L=self.L)
-                linear_models.append(control.sample_system(control.ss(Ac, Bc, Cc, Dc), self.dt))
+                sysc = ckb.get_linear_model_straight_line_ref(*linearization_state, *linearization_input, L=self.L)
+
+                # avoid repeated calculations of the same model
+                if k > 0 and all([np.array_equal(new, old) for new, old in zip(sysc, continuous_linear_models[-1])]):
+                    continuous_linear_models.append(continuous_linear_models[-1])
+                    linear_models.append(linear_models[-1])
+                    continue
+
+                continuous_linear_models.append(sysc)
+                linear_models.append(control.sample_system(control.ss(*sysc), self.dt))
+
+            # Calculate a signature, mainly used for debugging.
+            # The array denotes the number of same models used in a row.
+            # i.e. [5,21] means that in the first 5 time steps, the same model was used,
+            # and in the next 21 time steps, the same model was used.
+            time_varying_model_signature = [1]
+            for k in range(1, self.N):
+                if np.array_equal(linear_models[k], linear_models[k-1]):
+                    time_varying_model_signature[-1] += 1
+                else:
+                    time_varying_model_signature.append(1)
+
+            debug_output["time_varying_model_signature"] = time_varying_model_signature
 
             evolution_matrix = np.zeros((self.model.nstates*self.N, self.model.nstates))
             evolution_matrix[0:self.model.nstates, :] = np.eye(self.model.nstates)
             for k in range(1, self.N):
-                evolution_matrix[k*self.model.nstates:(k+1)*self.model.nstates, :] = evolution_matrix[(k-1)*self.model.nstates:k*self.model.nstates, :] @ linear_models[k-1].A
+                evolution_matrix[k*self.model.nstates:(k+1)*self.model.nstates, :] = linear_models[k-1].A @ evolution_matrix[(k-1)*self.model.nstates:k*self.model.nstates, :]
             
             input_effect_matrix_As = block_diag(*[np.eye(self.model.nstates) for _ in range(self.N)])
             for k in range(1, self.N):
@@ -147,7 +185,8 @@ class MyEstimator:
 
             input_effects = (block_diag(*[ckb.get_C()]*self.N) @ input_effect_matrix_As @ input_effect_matrix_Bs @ self._inputs.reshape((self.model.ninputs*self.N,1), order='F')).reshape((self.model.noutputs, self.N), order='F')
             desired_trajectory = ckb.get_C() @ desired_state_trajectory
-            measurements = self._measurements - input_effects - desired_trajectory
+            # measurements = self._measurements - input_effects - desired_trajectory
+            measurements = self._measurements - desired_trajectory
             # normalize angular measurements
             measurements[ckb.get_angular_outputs_mask(), :] = wrap_to_pi(measurements[ckb.get_angular_outputs_mask(), :])
 
@@ -171,30 +210,37 @@ class MyEstimator:
             
             linearization_state_x0 = desired_state_trajectory[:, 0]
             linearization_state_xf = desired_state_trajectory[:, -1]
-            diff_from_true = ckb.normalize_state(
+            diff_from_true_x0 = ckb.normalize_state(
                 x0_hat.value + linearization_state_x0 - self._true_states[:, 0])
             
             xf_hat = evolution_matrix[-self.model.nstates:, :] @ x0_hat.value + linearization_state_xf
             
             debug_output["true_states"] = self._true_states.T
             
+            print("time_varying_model_signature", time_varying_model_signature)
             print("status:", prob.status)
             print("optimal value", prob.value)
-            print("optimal state (x0)",
-                  x0_hat.value + linearization_state_x0)
+            print("optimal state (x0)", x0_hat.value + linearization_state_x0)
             print("true state (x0)", self._true_states[:,0])
-            print("state estimation error", diff_from_true)
-            print(f"state estimation l2 error: {norm(diff_from_true):.4f}")
+            print("state estimation error (x0)", diff_from_true_x0)
+            print(f"state estimation l2 error (x0): {norm(diff_from_true_x0):.4f}")
             # print(f"state estimation l2 error bound: {Dx:.4f}")
-            # print(f"state estimation l2 error bound violated: {norm(diff_from_true) > Dx}")
+            # print(f"state estimation l2 error bound violated: {norm(diff_from_true_x0) > Dx}")
 
-            debug_output["state_estimation_l2_error_x0"] = norm(diff_from_true)
+            debug_output["state_estimation_error_x0"] = diff_from_true_x0
+            debug_output["state_estimation_l2_error_x0"] = norm(diff_from_true_x0)
+
+            diff_from_true_xf = ckb.normalize_state(xf_hat - self._true_states[:, -1])
 
             print("estimated state (xf)", xf_hat)
             print("true state (xf)", self._true_states[:,-1])
-            print(f"solve time: {solve_end - solve_start:.4f}s")
+            print("state estimation error (xf)", diff_from_true_xf)
+            print(f"state estimation l2 error (xf): {norm(diff_from_true_xf):.4f}")
 
-            debug_output["state_estimation_l2_error_xf"] = norm(xf_hat - self._true_states[:,-1])
+            debug_output["state_estimation_error_xf"] = diff_from_true_xf
+            debug_output["state_estimation_l2_error_xf"] = norm(diff_from_true_xf)
+
+            print(f"solve time: {solve_end - solve_start:.4f}s")
 
             # attack_vector is a pxT matrix
             attack_vector = (Y - np.matmul(Phi, x0_hat.value)).reshape((self.model.noutputs, self.N), order='F')
@@ -209,5 +255,9 @@ class MyEstimator:
             # print("Number of sensors under attack:", num_sensors_under_attack)
             print("=================================")
             pass
+
+        self._prev_path_segment_index = current_path_segment_idx
+        debug_output["tick_count"] = self._tick_count
+        debug_output["last_solve_tick"] = self._last_solve_tick
 
         return estimate, ext_state, debug_output
