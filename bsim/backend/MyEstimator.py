@@ -185,8 +185,8 @@ class MyEstimator:
 
             input_effects = (block_diag(*[ckb.get_C()]*self.N) @ input_effect_matrix_As @ input_effect_matrix_Bs @ self._inputs.reshape((self.model.ninputs*self.N,1), order='F')).reshape((self.model.noutputs, self.N), order='F')
             desired_trajectory = ckb.get_C() @ desired_state_trajectory
-            # measurements = self._measurements - input_effects - desired_trajectory
-            measurements = self._measurements - desired_trajectory
+            measurements = self._measurements - input_effects - desired_trajectory
+            # measurements = self._measurements - desired_trajectory
             # normalize angular measurements
             measurements[ckb.get_angular_outputs_mask(), :] = wrap_to_pi(measurements[ckb.get_angular_outputs_mask(), :])
 

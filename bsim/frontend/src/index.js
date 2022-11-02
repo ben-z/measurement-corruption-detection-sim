@@ -42,23 +42,23 @@ async function main() {
         // target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; const initial_state = [18,0,-1.5708,target_speed,0]; // square with cut corners
         // target_path = [[-20, 0], [20, 0], [20, 5]]; const initial_state = [0,0,0,0.001,0]; // straight line
         // target_path = [[-20, -20], [20, 20], [-20,30]]; const initial_state = [0,0,0,target_speed,0]; // diagonal line
-        // const target_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,0]; // circle
-        const target_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
+        const target_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,0]; // circle
+        // const target_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
         const plant_options = {
             initial_state: initial_state,
         }
-        const controller = 'manual';
-        const controller_options = {};
-        // const controller = 'lookahead_lqr';
-        // const controller_options = {
-        //     Q: [
-        //         [1., 0., 0., 0., 0.],
-        //         [0., 1., 0., 0., 0.],
-        //         [0., 0., 1., 0., 0.],
-        //         [0., 0., 0., 10000., 0.],
-        //         [0., 0., 0., 0., 1.],
-        //     ]
-        // };
+        // const controller = 'manual';
+        // const controller_options = {};
+        const controller = 'lookahead_lqr';
+        const controller_options = {
+            Q: [
+                [1., 0., 0., 0., 0.],
+                [0., 1., 0., 0., 0.],
+                [0., 0., 1., 0., 0.],
+                [0., 0., 0., 10000., 0.],
+                [0., 0., 0., 0., 1.],
+            ]
+        };
         ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=${controller},target_path=${encodeURIComponent(JSON.stringify(target_path))},controller_options=${encodeURIComponent(JSON.stringify(controller_options))},plant_options=${encodeURIComponent(JSON.stringify(plant_options))},target_speed=${target_speed}`}));
         egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entities/${ego}`, WEBSOCKET_OPTIONS);
         ensureSucceeds(await egos[ego]._socket.open());
