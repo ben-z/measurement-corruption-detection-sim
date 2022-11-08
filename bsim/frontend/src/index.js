@@ -113,6 +113,7 @@ async function main() {
     bsim_js.getState = () => worldSocket.sendRequest({command: 'state'}).then(console.log);
     bsim_js.resetWorld = () => worldSocket.sendRequest({command: 'reset'}).then(console.log);
     bsim_js.corruptSensorAdditive = (ego, corruption) => egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify({_sensor_state: {additive_corruption: corruption}})}`}).then(console.log);
+    bsim_js.corruptSensorMultiplicative = (ego, corruption) => egos[ego]._socket.sendRequest({ command: `update_state: ${JSON.stringify({ _sensor_state: { multiplicative_corruption: corruption}})}`}).then(console.log);
     bsim_js.plots = plots;
     
     // bsim settings
