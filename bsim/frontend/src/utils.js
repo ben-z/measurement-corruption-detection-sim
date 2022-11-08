@@ -96,3 +96,69 @@ module.exports.predSlice = function predSlice(arr, predStart, predEnd) {
 
     return arr.slice(start, end);
 }
+
+function* travelAlongPath(path, slist) {
+    // path is a list of [x, y] points.
+    // slist is a list of s values (progress along the path, in meters).
+    // Yields [x, y, yaw] at each point in slist, where yaw is the
+    // direction of the path at that point, assuming linear interpolation.
+
+    let pi = 0;
+    let pi_t = 0;
+    for (let si = 0; si < slist.length; si++) {
+        const s = slist[si];
+        const prevS = si > 0 ? slist[si - 1] : 0;
+        let remainingS = s - prevS;
+        while (remainingS > 0) {
+            const [x, y] = path[pi];
+            const [next_x, next_y] = path[(pi+1) % path.length];
+            const segmentLen = Math.sqrt((next_x - x)**2 + (next_y - y)**2);
+            const remainingSegmentLen = segmentLen * (1 - pi_t);
+            
+            const t = remainingS / segmentLen + pi_t;
+            if (t >= 1) {
+                remainingS -= remainingSegmentLen;
+                pi = (pi + 1) % path.length;
+                pi_t = 0;
+            } else {
+                pi_t = t;
+                remainingS = 0;
+            }
+        }
+        const [x, y] = path[pi];
+        const [next_x, next_y] = path[(pi+1) % path.length];
+        const yaw = Math.atan2(next_y - y, next_x - x);
+        yield [x + (next_x - x) * pi_t, y + (next_y - y) * pi_t, yaw];
+    }
+}
+module.exports.travelAlongPath = travelAlongPath;
+
+module.exports.frenet2global_path = function frenet2global_path(path, slist, dlist) {
+    // path is a list of [x, y] points
+    // s is a list of s values
+    // d is a list of d values
+    // returns a list of [x, y] points
+
+    const globalPath = [];
+    const dIterator = dlist[Symbol.iterator]();
+    for (const [x, y, yaw] of travelAlongPath(path, slist)) {
+        const d = dIterator.next().value;
+        globalPath.push(frenet2global_point([0, d], [x, y], yaw));
+    }
+    return globalPath;
+}
+
+function frenet2global_point(frenet, origin, heading) {
+    // frenet is [s, d]
+    // origin is [x, y]
+    // heading is in radians
+    // returns [x, y]
+
+    const s = frenet[0];
+    const d = frenet[1];
+
+    const x = origin[0] + s * Math.cos(heading) - d * Math.sin(heading);
+    const y = origin[1] + s * Math.sin(heading) + d * Math.cos(heading);
+    return [x, y];
+}
+module.exports.frenet2global_point = frenet2global_point;

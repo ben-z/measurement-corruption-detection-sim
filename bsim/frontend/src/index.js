@@ -1,5 +1,5 @@
 import WebSocketAsPromised from 'websocket-as-promised';
-import { mySetInterval, matrixMultiply, generateCircleApproximation, approxeq, predSlice } from './utils';
+import { mySetInterval, matrixMultiply, generateCircleApproximation, approxeq, predSlice, frenet2global_path } from './utils';
 import uPlot from 'uplot';
 import "uplot/dist/uPlot.min.css";
 
@@ -37,13 +37,16 @@ async function main() {
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=path_following_kmpc`}));
         // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr`}));
         const target_speed = 5; // m/s
-        // target_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
-        // target_path = [[20, 20], [20, -20], [-20, -20], [-20, 20]]; // square
-        // target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; const initial_state = [18,0,-1.5708,target_speed,0]; // square with cut corners
-        // target_path = [[-20, 0], [20, 0], [20, 5]]; const initial_state = [0,0,0,0.001,0]; // straight line
-        // target_path = [[-20, -20], [20, 20], [-20,30]]; const initial_state = [0,0,0,target_speed,0]; // diagonal line
-        const target_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,0]; // circle
+        // const target_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
+        // const target_path = [[20, 20], [20, -20], [-20, -20], [-20, 20]]; // square
+        // const target_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; const initial_state = [18,0,-1.5708,target_speed,0]; // square with cut corners
+        // const target_path = [[-20, 0], [20, 0], [20, 5]]; const initial_state = [0,0,0,0.001,0]; // straight line
+        // const target_path = [[-20, -20], [20, 20], [-20,30]]; const initial_state = [0,0,0,target_speed,0]; // diagonal line
         // const target_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
+        const slist = [...Array(16).keys()].map(i => i * 5);
+        const dlist = new Array(slist.length).fill(0);
+        // const target_path = frenet2global_path([[-20, 0], [20, 0], [20, 5]], slist, dlist); const initial_state = [0,0,0,0.001,0]; // straight line
+        const target_path = frenet2global_path(generateCircleApproximation([0,0], 20, 32).reverse(), slist, dlist); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
         const plant_options = {
             initial_state: initial_state,
         }

@@ -121,10 +121,11 @@ class MyEstimator:
 
         debug_output["time_varying_model_signature"] = time_varying_model_signature
 
-        if len(time_varying_model_signature) > 1:
-            print(f"There are more than one model used in the estimation problem (signature {time_varying_model_signature})."
-                    " This is not supported yet. Deferring to a future time step.")
-            return estimate
+        # # Prevent the solver from using multiple models
+        # if len(time_varying_model_signature) > 1:
+        #     print(f"There are more than one model used in the estimation problem (signature {time_varying_model_signature})."
+        #             " This is not supported yet. Deferring to a future time step.")
+        #     return estimate
 
         self._last_solve_tick = self._tick_count
 
@@ -173,9 +174,18 @@ class MyEstimator:
         diff_from_true_x0 = ckb.normalize_state(
             x0_hat.value + linearization_state_x0 - self._true_states[:, 0])
         
+        estimated_states = (evolution_matrix @ x0_hat.value).reshape((self.model.nstates, self.N), order='F') + desired_state_trajectory
+        diff_from_true = estimated_states - self._true_states
+        for t in range(self.N):
+            diff_from_true[:,t] = ckb.normalize_state(diff_from_true[:,t])
+        
         xf_hat = evolution_matrix[-self.model.nstates:, :] @ x0_hat.value + linearization_state_xf
         
+        assert(np.allclose(x0_hat.value + linearization_state_x0, estimated_states[:,0]))
+        assert(np.allclose(xf_hat, estimated_states[:,-1]))
         debug_output["true_states"] = self._true_states.T
+        debug_output["estimated_states"] = estimated_states.T
+        debug_output["diff_from_true"] = diff_from_true.T
         
         print("time_varying_model_signature", time_varying_model_signature)
         print("status:", prob.status)
