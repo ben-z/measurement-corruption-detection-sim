@@ -13,6 +13,7 @@ import path_following_kmpc as pfkmpc
 import re
 import secrets
 import sys
+import static_slice_planner as ssp
 from urllib.parse import parse_qsl
 from utils import JSONNumpyDecoder
 import websockets
@@ -108,11 +109,12 @@ def world_handler(command: str):
                 'controller': 'manual',
                 'L': 2.9,
                 # coordinates of the waypoints in meters. This will form a closed path
-                'target_path': np.array([ [-10,3], [12,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
+                'global_ref_path': np.array([ [-10,3], [12,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
                 'target_speed': 1, # m/s
                 'sensor': 'model_output_with_corruption',
                 'estimator': 'l1_optimizer',
                 # 'estimator': 'first_n',
+                'planner': 'static_slice',
             }
 
             # check for invalid options
@@ -123,8 +125,8 @@ def world_handler(command: str):
 
             # merge the user options with the default options
             options = {**default_options, **user_options}
-            if isinstance(options['target_path'], str):
-                options['target_path'] = np.array(json.loads(options['target_path']))
+            if isinstance(options['global_ref_path'], str):
+                options['global_ref_path'] = np.array(json.loads(options['global_ref_path']))
             if isinstance(options['target_speed'], str):
                 options['target_speed'] = float(options['target_speed'])
 
@@ -139,6 +141,7 @@ def world_handler(command: str):
             plant_initial_action = plant_options.get('initial_action', plant_factory.get_noop_action())
             plant_state_normalizer = plant_factory.normalize_state
 
+            # Sensor
             if options['sensor'] == 'model_output':
                 sensor_state = {
                     'sensor': 'model_output',
@@ -160,6 +163,7 @@ def world_handler(command: str):
             else:
                 raise Exception(f"ERROR: unknown sensor: '{options['sensor']}'")
 
+            # Estimator
             if options['estimator'] == 'first_n':
                 estimator_state = {
                     'estimator': 'sensor',
@@ -174,13 +178,29 @@ def world_handler(command: str):
                     '_estimator_fn': estimator.tick,
                     '_estimator_state': {
                         'target_speed': options['target_speed'], # m/s
-                        'target_path': options['target_path'],
+                        # TODO: this should be coming from the planner
+                        # 'target_path': options['target_path'],
                     },
                     'estimator_debug_output': {},
                 }
             else:
                 raise Exception(f"ERROR: unknown estimator: '{options['estimator']}'")
 
+            # Planner
+            if options['planner'] == 'static_slice':
+                planner_lookahead_m = 10
+                planner_lookbehind_m = 10
+                planner = ssp.StaticSlicePlanner(options['global_ref_path'], planner_lookahead_m, planner_lookbehind_m)
+                planner_state = {
+                    'planner': 'static_slice',
+                    '_planner_fn': planner.tick,
+                    '_planner_state': {},
+                    'planner_debug_output': {},
+                }
+            else:
+                raise Exception(f"ERROR: unknown planner: '{options['planner']}'")
+
+            # Controller
             if options['controller'] == 'manual':
                 controller_state = {
                     'controller': 'manual',
@@ -192,7 +212,7 @@ def world_handler(command: str):
                 controller_state = {
                     'controller': 'path_following_kmpc',
                     '_controller_fn': pfkmpc.path_following_kmpc,
-                    '_controller_state': pfkmpc.get_initial_state(target_path=options['target_path'], dt=world_state['DT'], L=options['L']),
+                    '_controller_state': pfkmpc.get_initial_state(target_path=options['global_ref_path'], dt=world_state['DT'], L=options['L']),
                     'controller_debug_output': {},
                 }
             elif options['controller'] == 'lookahead_lqr':
@@ -202,7 +222,6 @@ def world_handler(command: str):
                     'controller': 'lookahead_lqr',
                     '_controller_fn': lookahead_lqr.lookahead_lqr,
                     '_controller_state': lookahead_lqr.get_initial_state(
-                        target_path=options['target_path'],
                         target_speed=options['target_speed'],
                         dt=world_state['DT'],
                         L=options['L'],
@@ -218,12 +237,13 @@ def world_handler(command: str):
                 'state': plant_initial_state,
                 'action': plant_initial_action,
                 'L': options['L'],
-                'target_path': options['target_path'],
+                'global_ref_path': options['global_ref_path'],
                 '_handler': make_ego_handler(entity_id),
                 '_model': plant_model,
                 '_model_state_normalizer': plant_state_normalizer,
                 **sensor_state,
                 **estimator_state,
+                **planner_state,
                 **controller_state,
             }
         else:
@@ -247,12 +267,19 @@ def make_ego_handler(entity_id: str):
         elif command == 'state':
             pass # noop, just return the current state
         elif command == '_tick':
+            # sensor
             entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
-                entity['_sensor_fn'](
-                    entity['_sensor_state'], entity['state'], entity['action'])
+                entity['_sensor_fn'](entity['_sensor_state'], entity['state'], entity['action'])
+            # estimator
             entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
-                entity['_estimator_fn'](
-                    entity['_estimator_state'], entity['measurement'], entity['action'], entity['state'])
+                entity['_estimator_fn'](entity['_estimator_state'], entity['measurement'], entity['action'], entity['state'])
+            # planner
+            entity['planner_output'], entity['_planner_state'], entity['planner_debug_output'] = \
+                entity['_planner_fn'](entity['_planner_state'], entity['estimate'], entity['action'])
+
+            entity['_controller_state']['target_path'] = entity['planner_output']['target_path']
+            entity['_estimator_state']['target_path'] = entity['planner_output']['target_path']
+
             model = entity['_model']
             # model = control.sample_system(entity['_model'], world_state['DT'])
             # model = control.sample_system(entity['_model'].linearize(
@@ -263,7 +290,7 @@ def make_ego_handler(entity_id: str):
             entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
                 entity['_controller_fn'](entity['_controller_state'], entity['estimate'])
 
-            # calculate new model state
+            # calculate new plant state
             if model.isdtime():
                 entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']))
             else:

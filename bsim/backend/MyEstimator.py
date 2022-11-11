@@ -47,7 +47,7 @@ class MyEstimator:
         self.min_ticks_per_solve = min_ticks_per_solve
         self.L = L
         self.model = ckb.make_continuous_kinematic_bicycle_model(L)
-        self._last_solve_tick = -min_ticks_per_solve
+        self._last_solve_tick = 50000000 #-min_ticks_per_solve
         self._tick_count = 0
         self._prev_path_segment_index = -1
         self._clear_data()
@@ -81,12 +81,12 @@ class MyEstimator:
 
         # a generator to move along the path backwards, starting from the current state
         desired_trajectory_generator = chain(
-            [current_path_segment],
+            [(current_path_segment, current_path_segment_idx)],
             move_along_path(deepcopy(segment_info), current_path_segment_idx, -m_per_step)
         )
         desired_state_trajectory = np.zeros((self.model.nstates, self.N))
         for k in range(self.N-1, -1, -1):
-            info = next(desired_trajectory_generator)
+            info, _ = next(desired_trajectory_generator)
             desired_state_trajectory[:2, k] = info.closest_point
             desired_state_trajectory[2, k] = info.heading
             desired_state_trajectory[3, k] = ext_state['target_speed']
@@ -165,8 +165,8 @@ class MyEstimator:
         # get_l1_state_estimation_l2_bound(A, C, sensor_errors, np.array([3]), self.N)
 
         solve_start = time.time()
-        # prob, x0_hat = optimize_l0(self.model.nstates, self.model.noutputs, self.N, Phi, Y, sensor_errors)
-        prob, x0_hat = optimize_l1(self.model.nstates, self.model.noutputs, self.N, Phi, Y)
+        prob, x0_hat = optimize_l0(self.model.nstates, self.model.noutputs, self.N, Phi, Y, sensor_errors)
+        # prob, x0_hat = optimize_l1(self.model.nstates, self.model.noutputs, self.N, Phi, Y)
         solve_end = time.time()
         
         linearization_state_x0 = desired_state_trajectory[:, 0]
@@ -247,7 +247,9 @@ class MyEstimator:
         # projected forward in time or the target state along the path (the latter requires a feedback from
         # the controller)?
         # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
-        target_path = ext_state['target_path']
+        target_path = ext_state.get('target_path')
+        if target_path is None:
+            return estimate, ext_state, debug_output
 
         # This is used to infer the nominal trajectory and linearization
         # TODO: use estimated x and y instead of true x and y
@@ -255,7 +257,7 @@ class MyEstimator:
         y = true_state[1]
 
         pos = np.array([x,y])
-        segment_info = generate_segment_info(pos, target_path)
+        segment_info = generate_segment_info(pos, target_path, wrap=False)
         current_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in segment_info])
 
         debug_output["prev_path_segment_index"] = int(self._prev_path_segment_index)
