@@ -42,11 +42,11 @@ async function main() {
         // const global_ref_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; const initial_state = [18,0,-1.5708,target_speed,0]; // square with cut corners
         // const global_ref_path = [[-20, 0], [20, 0], [20, 5]]; const initial_state = [0,0,0,0.001,0]; // straight line
         // const global_ref_path = [[-20, -20], [20, 20], [-20,30]]; const initial_state = [0,0,0,target_speed,0]; // diagonal line
-        // const global_ref_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
-        const slist = [...Array(16).keys()].map(i => i * 5);
-        const dlist = new Array(slist.length).fill(0);
+        const global_ref_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
+        // const slist = [...Array(100).keys()].map(i => i);
+        // const dlist = new Array(slist.length).fill(0);
         // const global_ref_path = frenet2global_path([[-20, 0], [20, 0], [20, 5]], slist, dlist); const initial_state = [0,0,0,0.001,0]; // straight line
-        const global_ref_path = frenet2global_path(generateCircleApproximation([0,0], 20, 32).reverse(), slist, dlist); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
+        // const global_ref_path = frenet2global_path(generateCircleApproximation([0,0], 20, 32).reverse(), slist, dlist); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
         const plant_options = {
             initial_state: initial_state,
         }
@@ -539,6 +539,17 @@ function drawVehicle(ctx, vehicle) {
         ctx.strokeStyle = 'lightgreen';
         ctx.fillStyle = 'lightgreen';
         ctx.arc(m_to_px(vehicle.planner_debug_output.lookahead_point[0]), m_to_px(vehicle.planner_debug_output.lookahead_point[1]), m_to_px(0.3), 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // draw planner lookbehind point
+    if (vehicle.planner_debug_output.lookbehind_point) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = 'lightgreen';
+        ctx.fillStyle = 'lightgreen';
+        ctx.arc(m_to_px(vehicle.planner_debug_output.lookbehind_point[0]), m_to_px(vehicle.planner_debug_output.lookbehind_point[1]), m_to_px(0.3), 0, 2 * Math.PI);
         ctx.stroke();
         ctx.restore();
     }

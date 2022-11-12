@@ -47,7 +47,7 @@ class MyEstimator:
         self.min_ticks_per_solve = min_ticks_per_solve
         self.L = L
         self.model = ckb.make_continuous_kinematic_bicycle_model(L)
-        self._last_solve_tick = 50000000 #-min_ticks_per_solve
+        self._last_solve_tick = -min_ticks_per_solve
         self._tick_count = 0
         self._prev_path_segment_index = -1
         self._clear_data()
@@ -165,8 +165,8 @@ class MyEstimator:
         # get_l1_state_estimation_l2_bound(A, C, sensor_errors, np.array([3]), self.N)
 
         solve_start = time.time()
-        prob, x0_hat = optimize_l0(self.model.nstates, self.model.noutputs, self.N, Phi, Y, sensor_errors)
-        # prob, x0_hat = optimize_l1(self.model.nstates, self.model.noutputs, self.N, Phi, Y)
+        # prob, x0_hat = optimize_l0(self.model.nstates, self.model.noutputs, self.N, Phi, Y, sensor_errors)
+        prob, x0_hat = optimize_l1(self.model.nstates, self.model.noutputs, self.N, Phi, Y)
         solve_end = time.time()
         
         linearization_state_x0 = desired_state_trajectory[:, 0]
