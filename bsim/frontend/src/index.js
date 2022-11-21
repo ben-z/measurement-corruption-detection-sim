@@ -544,16 +544,16 @@ function drawVehicle(ctx, vehicle) {
         ctx.restore();
     }
 
-    // draw planner lookbehind point
-    if (vehicle.planner_debug_output.lookbehind_point) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.strokeStyle = 'lightgreen';
-        ctx.fillStyle = 'lightgreen';
-        ctx.arc(m_to_px(vehicle.planner_debug_output.lookbehind_point[0]), m_to_px(vehicle.planner_debug_output.lookbehind_point[1]), m_to_px(0.3), 0, 2 * Math.PI);
-        ctx.stroke();
-        ctx.restore();
-    }
+    // // draw planner lookbehind point
+    // if (vehicle.planner_debug_output.lookbehind_point) {
+    //     ctx.save();
+    //     ctx.beginPath();
+    //     ctx.strokeStyle = 'lightgreen';
+    //     ctx.fillStyle = 'lightgreen';
+    //     ctx.arc(m_to_px(vehicle.planner_debug_output.lookbehind_point[0]), m_to_px(vehicle.planner_debug_output.lookbehind_point[1]), m_to_px(0.3), 0, 2 * Math.PI);
+    //     ctx.stroke();
+    //     ctx.restore();
+    // }
 
     // draw path memory
     const path_memory = vehicle.estimator_debug_output.path_memory;

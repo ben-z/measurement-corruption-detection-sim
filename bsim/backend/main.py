@@ -189,7 +189,7 @@ def world_handler(command: str):
             # Planner
             if options['planner'] == 'static_slice':
                 planner_lookahead_m = 10
-                planner_lookbehind_m = 10
+                planner_lookbehind_m = 0
                 planner = ssp.StaticSlicePlanner(options['global_ref_path'], planner_lookahead_m, planner_lookbehind_m)
                 planner_state = {
                     'planner': 'static_slice',
