@@ -260,7 +260,7 @@ class MyEstimator:
         target_path_segment_info = generate_segment_info(pos, target_path, wrap=False)
         target_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in target_path_segment_info])
 
-        # TODO: implement removing points from the path memory
+        # TODO: implement removing points from the path memory (eviction)
         path_memory_segment_info = generate_segment_info(pos, self._path_points, wrap=False)
         if len(path_memory_segment_info) == 0:
             # we don't have any paths in memory
@@ -268,7 +268,10 @@ class MyEstimator:
             self._path_points = target_path
             path_memory_segment_info = target_path_segment_info
         else:
-            current_path_memory_segment_idx = np.argmin([norm(info.closest_point - pos) for info in path_memory_segment_info])
+            # search in reverse, so that when segments overlap, we take the latest segment
+            # TODO: we really want to search from the segment index from the previous tick (assuming the vehicle does not teleport).
+            # But for now it's okay to assume the latest closest segment is the correct one.
+            current_path_memory_segment_idx = len(path_memory_segment_info) - 1 - np.argmin([norm(info.closest_point - pos) for info in reversed(path_memory_segment_info)])
             self._path_points = np.concatenate((self._path_points[:current_path_memory_segment_idx+2], target_path[target_path_segment_idx+2:]), axis=0)
 
         debug_output["target_path_segment_idx"] = int(target_path_segment_idx)

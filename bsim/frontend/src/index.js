@@ -137,6 +137,25 @@ async function main() {
     }
 }
 
+function getOrCreateBEVToggleState(toggle_id, toggle_label, toggle_default) {
+    toggle_id = `bev-toggle-${toggle_id}`;
+    let toggle = document.getElementById(toggle_id);
+    if (!toggle) {
+        const container = document.createElement('div');
+        toggle = document.createElement('input');
+        toggle.type = 'checkbox';
+        toggle.id = toggle_id;
+        toggle.checked = toggle_default;
+        const label = document.createElement('label');
+        label.htmlFor = toggle_id;
+        label.appendChild(document.createTextNode(toggle_label));
+        container.appendChild(toggle);
+        container.appendChild(label);
+        document.getElementById('bevToggleContainer').appendChild(container);
+    }
+    return toggle.checked;
+}
+
 function drawBEV(canvas, worldState) {
     /*
     Draws the BEV of the world
@@ -151,7 +170,7 @@ function drawBEV(canvas, worldState) {
     for (const [entityName, entity] of Object.entries(worldState.entities)) {
         switch (entity.type) {
             case 'ego':
-                drawVehicle(ctx, entity);
+                drawVehicle(ctx, entityName, entity);
                 break;
             default:
                 console.error(`Unknown entity type "${entity.type}" for entity "${entityName}"`);
@@ -434,7 +453,7 @@ function displayError(container, e) {
     container.innerHTML = `<pre class="alert">Error: ${e.message}\nPlease see the debug console for more info.</pre>`;
 }
 
-function drawVehicle(ctx, vehicle) {
+function drawVehicle(ctx, vehicleName, vehicle) {
     const vehicle_length = vehicle.L; // m
     const tireWidth = 0.2; // m
     const tireLength = 0.5; // m
@@ -466,7 +485,7 @@ function drawVehicle(ctx, vehicle) {
 
     // draw path memory
     const path_memory = vehicle.estimator_debug_output.path_memory;
-    if (path_memory) {
+    if (path_memory && getOrCreateBEVToggleState(`${vehicleName}-detector_path_memory`, `${vehicleName} detector path memory`, true)) {
         ctx.save()
         ctx.beginPath()
         ctx.strokeStyle = 'gray';
@@ -494,7 +513,7 @@ function drawVehicle(ctx, vehicle) {
     // draw target path
     const target_path = vehicle.planner_output.target_path;
     const IS_CLOSED_PATH = false;
-    if (target_path) {
+    if (target_path && getOrCreateBEVToggleState(`${vehicleName}-target_path`, `${vehicleName} target path`, true)) {
         ctx.save()
         ctx.beginPath()
         ctx.setLineDash([m_to_px(0.25), m_to_px(0.5)])
@@ -545,7 +564,7 @@ function drawVehicle(ctx, vehicle) {
     }
 
     // draw target vehicle trajectory
-    if (vehicle.controller_debug_output.target_x) {
+    if (vehicle.controller_debug_output.target_x && getOrCreateBEVToggleState(`${vehicleName}-controller_target`, `${vehicleName} controller target`, true)) {
         const target_vehicle_states = vehicle.controller_debug_output.target_x.map(decodeVehicleState);
 
         ctx.save();
@@ -560,7 +579,7 @@ function drawVehicle(ctx, vehicle) {
     }
 
     // draw planner lookahead point
-    if (vehicle.planner_debug_output.lookahead_point) {
+    if (vehicle.planner_debug_output.lookahead_point && getOrCreateBEVToggleState(`${vehicleName}-planner_lookahead_point`, `${vehicleName} planner lookahead point`, true)) {
         ctx.save();
         ctx.beginPath();
         ctx.strokeStyle = 'lightgreen';
@@ -571,7 +590,7 @@ function drawVehicle(ctx, vehicle) {
     }
 
     // draw planner lookbehind point
-    if (vehicle.planner_debug_output.lookbehind_point) {
+    if (vehicle.planner_debug_output.lookbehind_point && getOrCreateBEVToggleState(`${vehicleName}-planner_lookbehind_point`, `${vehicleName} planner lookbehind point`, false)) {
         ctx.save();
         ctx.beginPath();
         ctx.strokeStyle = 'lightgreen';
