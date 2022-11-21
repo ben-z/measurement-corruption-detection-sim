@@ -350,4 +350,5 @@ async def new_connection(websocket, path: str):
 start_server = websockets.serve(new_connection, "localhost", 8765)
 
 asyncio.get_event_loop().run_until_complete(start_server)
+print("Starting backend event loop...")
 asyncio.get_event_loop().run_forever()

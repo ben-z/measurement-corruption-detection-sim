@@ -376,7 +376,7 @@ function drawPlots(plots, container, worldState) {
                                     value: (self, rawValue) => rawValue.toFixed(2),
                                 }, 
                                 {
-                                    label: 'Path Segment Index',
+                                    label: 'Path Memory Index',
                                     stroke: "blue",
                                     scale: "idx",
                                     paths: uPlot.paths.stepped({align: 1}),
@@ -421,7 +421,7 @@ function drawPlots(plots, container, worldState) {
                 const plotObj = plots[plotID];
                 plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
                 plotObj.data[0].push(t);
-                plotObj.data[1].push(entity.estimator_debug_output.current_path_segment_idx);
+                plotObj.data[1].push(entity.estimator_debug_output.path_memory_segment_idx);
                 plotObj.data[2].push(entity.estimator_debug_output.state_estimation_l2_error_x0);
                 plotObj.data[3].push(entity.estimator_debug_output.state_estimation_l2_error_xf);
                 plotObj.plot.setData(plotObj.data);
@@ -464,30 +464,31 @@ function drawVehicle(ctx, vehicle) {
 
     ctx.stroke();
 
+    // TODO: dynamically enable and disable plots
     // draw target path
-    const target_path = vehicle.planner_output.target_path;
+    // const target_path = vehicle.planner_output.target_path;
     const IS_CLOSED_PATH = false;
-    if (target_path) {
-        ctx.save()
-        ctx.beginPath()
-        ctx.setLineDash([m_to_px(0.25), m_to_px(0.5)])
-        ctx.moveTo(m_to_px(target_path[0][0]), m_to_px(target_path[0][1]));
-        // rotate the array to the right and draw lines. This gives us a closed path.
-        for (const [x, y] of target_path.slice(1).concat(IS_CLOSED_PATH ? [target_path[0]] : [])) {
-        // for (const [x, y] of [...target_path.slice(1), target_path[0]]) {
-            ctx.lineTo(m_to_px(x), m_to_px(y));
-        }
-        ctx.stroke();
-        ctx.restore()
-        ctx.save()
-        for (const [x, y] of target_path) {
-        // for (const [x, y] of [...target_path.slice(1), target_path[0]]) {
-            ctx.beginPath()
-            ctx.arc(m_to_px(x), m_to_px(y), m_to_px(0.2), 0, 2 * Math.PI);
-            ctx.stroke();
-        }
-        ctx.restore()
-    }
+    // if (target_path) {
+    //     ctx.save()
+    //     ctx.beginPath()
+    //     ctx.setLineDash([m_to_px(0.25), m_to_px(0.5)])
+    //     ctx.moveTo(m_to_px(target_path[0][0]), m_to_px(target_path[0][1]));
+    //     // rotate the array to the right and draw lines. This gives us a closed path.
+    //     for (const [x, y] of target_path.slice(1).concat(IS_CLOSED_PATH ? [target_path[0]] : [])) {
+    //     // for (const [x, y] of [...target_path.slice(1), target_path[0]]) {
+    //         ctx.lineTo(m_to_px(x), m_to_px(y));
+    //     }
+    //     ctx.stroke();
+    //     ctx.restore()
+    //     ctx.save()
+    //     for (const [x, y] of target_path) {
+    //     // for (const [x, y] of [...target_path.slice(1), target_path[0]]) {
+    //         ctx.beginPath()
+    //         ctx.arc(m_to_px(x), m_to_px(y), m_to_px(0.2), 0, 2 * Math.PI);
+    //         ctx.stroke();
+    //     }
+    //     ctx.restore()
+    // }
 
     // draw closest path segment
     if (vehicle.controller_debug_output.current_path_segment) {
@@ -552,6 +553,28 @@ function drawVehicle(ctx, vehicle) {
         ctx.arc(m_to_px(vehicle.planner_debug_output.lookbehind_point[0]), m_to_px(vehicle.planner_debug_output.lookbehind_point[1]), m_to_px(0.3), 0, 2 * Math.PI);
         ctx.stroke();
         ctx.restore();
+    }
+
+    // draw path memory
+    const path_memory = vehicle.estimator_debug_output.path_memory;
+    if (path_memory) {
+        ctx.save()
+        ctx.beginPath()
+        ctx.setLineDash([m_to_px(0.25), m_to_px(0.5)])
+        ctx.moveTo(m_to_px(path_memory[0][0]), m_to_px(path_memory[0][1]));
+        // rotate the array to the right and draw lines. This gives us a closed path.
+        for (const [x, y] of path_memory.slice(1).concat(IS_CLOSED_PATH ? [path_memory[0]] : [])) {
+            ctx.lineTo(m_to_px(x), m_to_px(y));
+        }
+        ctx.stroke();
+        ctx.restore()
+        ctx.save()
+        for (const [x, y] of path_memory) {
+            ctx.beginPath()
+            ctx.arc(m_to_px(x), m_to_px(y), m_to_px(0.2), 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+        ctx.restore()
     }
 
     // draw true states of the vehicle used in the estimator

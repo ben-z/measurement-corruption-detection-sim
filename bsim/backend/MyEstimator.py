@@ -49,7 +49,7 @@ class MyEstimator:
         self.model = ckb.make_continuous_kinematic_bicycle_model(L)
         self._last_solve_tick = -min_ticks_per_solve
         self._tick_count = 0
-        self._prev_path_segment_index = -1
+        self._path_points: np.ndarray = np.array([]) # keep a running list of historical path points so that we can look back
         self._clear_data()
 
     def _clear_data(self):
@@ -257,15 +257,23 @@ class MyEstimator:
         y = true_state[1]
 
         pos = np.array([x,y])
-        segment_info = generate_segment_info(pos, target_path, wrap=False)
-        current_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in segment_info])
+        target_path_segment_info = generate_segment_info(pos, target_path, wrap=False)
+        target_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in target_path_segment_info])
 
-        debug_output["prev_path_segment_index"] = int(self._prev_path_segment_index)
-        debug_output['current_path_segment_idx'] = int(current_path_segment_idx)
+        # TODO: implement removing points from the path memory
+        path_memory_segment_info = generate_segment_info(pos, self._path_points, wrap=False)
+        if len(path_memory_segment_info) == 0:
+            # we don't have any paths in memory
+            current_path_memory_segment_idx = target_path_segment_idx
+            self._path_points = target_path
+            path_memory_segment_info = target_path_segment_info
+        else:
+            current_path_memory_segment_idx = np.argmin([norm(info.closest_point - pos) for info in path_memory_segment_info])
+            self._path_points = np.concatenate((self._path_points[:current_path_memory_segment_idx+2], target_path[target_path_segment_idx+2:]), axis=0)
 
-        # # when we switch path segments, we want to drop old data because they are from a different linearization path
-        # if current_path_segment_idx != self._prev_path_segment_index:
-        #     self._clear_data()
+        debug_output["target_path_segment_idx"] = int(target_path_segment_idx)
+        debug_output["path_memory"] = self._path_points
+        debug_output["path_memory_segment_idx"] = int(current_path_memory_segment_idx)
 
         # Collect measurements
         self._measurements = np.roll(self._measurements, -1, axis=1)
@@ -279,9 +287,9 @@ class MyEstimator:
         debug_output["num_data_points"] = self._num_data_points
 
         if self._num_data_points >= self.N and self._tick_count - self._last_solve_tick >= self.min_ticks_per_solve:
-            estimate = self._solve(ext_state, debug_output, segment_info, current_path_segment_idx)
+            estimate = self._solve(
+                ext_state, debug_output, path_memory_segment_info, current_path_memory_segment_idx)
 
-        self._prev_path_segment_index = current_path_segment_idx
         debug_output["tick_count"] = self._tick_count
         debug_output["last_solve_tick"] = self._last_solve_tick
 
