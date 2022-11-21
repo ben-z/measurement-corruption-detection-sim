@@ -130,8 +130,10 @@ def optimize_l0(n, p, N, Phi, Y, eps: np.ndarray = 0.2):
 
     # with Pool(processes=30) as pool:
     #     solns = pool.starmap(optimize_l0_subproblem, [(n, p, N, Phi, Y, attacked_sensor_indices) for attacked_sensor_indices in powerset(range(p))])
-    for attacked_sensor_indices in powerset(range(p)):
-        prob, x_hat_l0 = optimize_l0_subproblem(n, p, N, Phi, Y, attacked_sensor_indices, eps)
+    solns = [optimize_l0_subproblem(n, p, N, Phi, Y, attacked_sensor_indices, eps) for attacked_sensor_indices in powerset(range(p)) if len(attacked_sensor_indices) <= 1]
+    for prob, x_hat_l0 in solns:
+    # for attacked_sensor_indices in powerset(range(p)):
+        # prob, x_hat_l0 = optimize_l0_subproblem(n, p, N, Phi, Y, attacked_sensor_indices, eps)
         if prob.status in ["optimal", "optimal_inaccurate"]:
             return (prob, x_hat_l0)
 
@@ -349,17 +351,20 @@ class SegmentInfoItem:
     def closest_point(self):
         return self.p0 + self.progress * (self.p1 - self.p0)
     
-def generate_segment_info(pos: np.ndarray, path_points: np.ndarray):
+def generate_segment_info(pos: np.ndarray, path_points: np.ndarray, wrap=True):
     """
     Generates the segment information (closest point, distance travelled, etc.)
     for a given path. Assumes linear interpolation between path points.
     pos: the current position
     path_points: the points on the path, the last point is assumed to be
         connected to the first point to form a closed path.
+    wrap: whether to wrap around the path or not.
     """
 
     # pairs of points that form the path: [(p0, p1), (p1, p2), ..., (pn, p0)]
     path_segments = np.stack([path_points, np.roll(path_points, -1, axis=0)], axis=1)
+    if not wrap:
+        path_segments = path_segments[:-1]
 
     # segment_info is used to make decisions about which segment to use
     segment_info = []
@@ -384,7 +389,7 @@ def move_along_path(segment_info, current_path_segment_idx, step_size_m):
             (remaining_m < 0 and current_path_segment.distance_travelled >= -remaining_m):
             # we don't travel enough to switch to the next/prev segment
             current_path_segment.set_progress(current_path_segment.progress + remaining_m / current_path_segment.length)
-            yield current_path_segment
+            yield current_path_segment, current_path_segment_idx
             remaining_m = step_size_m
         elif remaining_m >= 0:
             # we travel to the next segment
