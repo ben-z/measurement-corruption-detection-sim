@@ -12,7 +12,7 @@ from utils import calc_input_effects_on_output, optimize_l1, \
     get_error_estimation_l2_bounds, \
     does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K, \
     is_l1_state_estimation_error_bounded, get_l1_state_estimation_l2_bound, \
-    closest_point_on_line, generate_segment_info, move_along_path
+    closest_point_on_line, generate_segment_info, move_along_path, EndOfPathError
 
 np.set_printoptions(suppress=True, precision=4)
 
@@ -260,7 +260,6 @@ class MyEstimator:
         target_path_segment_info = generate_segment_info(pos, target_path, wrap=False)
         target_path_current_segment_idx = np.argmin([norm(info.closest_point - pos) for info in target_path_segment_info])
 
-        # TODO: implement removing points from the path memory (eviction)
         path_memory_segment_info = generate_segment_info(pos, self._path_points, wrap=False)
         if len(path_memory_segment_info) == 0:
             # we don't have any paths in memory
@@ -300,5 +299,14 @@ class MyEstimator:
 
         debug_output["tick_count"] = self._tick_count
         debug_output["last_solve_tick"] = self._last_solve_tick
+
+        # evict old path memory (arbitrarily set to be 2x the number of states needed for the solver)
+        lookbehind_m = ext_state["target_speed"] * self.N * self.dt * 2
+        try:
+            eviction_threshold_segment_idx = next(move_along_path(deepcopy(path_memory_segment_info), path_memory_current_segment_idx, -lookbehind_m, wrap=False))[1]
+        except EndOfPathError:
+            eviction_threshold_segment_idx = 0
+        self._path_points = self._path_points[eviction_threshold_segment_idx:]
+        debug_output["eviction_threshold_segment_idx"] = int(eviction_threshold_segment_idx)
 
         return estimate, ext_state, debug_output

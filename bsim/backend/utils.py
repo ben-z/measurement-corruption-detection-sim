@@ -375,7 +375,10 @@ def generate_segment_info(pos: np.ndarray, path_points: np.ndarray, wrap=True):
 
     return segment_info
 
-def move_along_path(segment_info, current_path_segment_idx, step_size_m):
+class EndOfPathError(ValueError):
+    pass
+
+def move_along_path(segment_info, current_path_segment_idx, step_size_m, wrap=True):
     """
     Moves along the path by step_size_m starting from the point determined by
     current_path_segment_idx and the corresponding progress. Mutates segment_info
@@ -396,14 +399,25 @@ def move_along_path(segment_info, current_path_segment_idx, step_size_m):
             remaining_m -= current_path_segment.distance_remaining
             current_path_segment.set_progress(1)
             
-            current_path_segment_idx = (current_path_segment_idx + 1) % len(segment_info)
+            # current_path_segment_idx = (current_path_segment_idx + 1) % len(segment_info)
+            current_path_segment_idx += 1
+            if current_path_segment_idx >= len(segment_info):
+                if wrap:
+                    current_path_segment_idx = 0
+                else:
+                    raise EndOfPathError("Cannot move forward along path, reached end of path")
             segment_info[current_path_segment_idx].set_progress(0)
         elif remaining_m < 0:
             # we travel to the previous segment
             remaining_m += current_path_segment.distance_travelled
             current_path_segment.set_progress(0)
             
-            current_path_segment_idx = (current_path_segment_idx - 1) % len(segment_info)
+            current_path_segment_idx -= 1
+            if current_path_segment_idx < 0:
+                if wrap:
+                    current_path_segment_idx = len(segment_info) - 1
+                else:
+                    raise EndOfPathError("Cannot move backward along path, reached end of path")
             segment_info[current_path_segment_idx].set_progress(1)
         else:
             raise Exception("This shouldn't happen")
