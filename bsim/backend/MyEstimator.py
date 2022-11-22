@@ -258,25 +258,30 @@ class MyEstimator:
 
         pos = np.array([x,y])
         target_path_segment_info = generate_segment_info(pos, target_path, wrap=False)
-        target_path_segment_idx = np.argmin([norm(info.closest_point - pos) for info in target_path_segment_info])
+        target_path_current_segment_idx = np.argmin([norm(info.closest_point - pos) for info in target_path_segment_info])
 
         # TODO: implement removing points from the path memory (eviction)
         path_memory_segment_info = generate_segment_info(pos, self._path_points, wrap=False)
         if len(path_memory_segment_info) == 0:
             # we don't have any paths in memory
-            current_path_memory_segment_idx = target_path_segment_idx
+            path_memory_current_segment_idx = target_path_current_segment_idx
             self._path_points = target_path
             path_memory_segment_info = target_path_segment_info
         else:
             # search in reverse, so that when segments overlap, we take the latest segment
             # TODO: we really want to search from the segment index from the previous tick (assuming the vehicle does not teleport).
             # But for now it's okay to assume the latest closest segment is the correct one.
-            current_path_memory_segment_idx = len(path_memory_segment_info) - 1 - np.argmin([norm(info.closest_point - pos) for info in reversed(path_memory_segment_info)])
-            self._path_points = np.concatenate((self._path_points[:current_path_memory_segment_idx+2], target_path[target_path_segment_idx+2:]), axis=0)
+            path_memory_current_segment_idx = len(path_memory_segment_info) - 1 - np.argmin([norm(info.closest_point - pos) for info in reversed(path_memory_segment_info)])
+            # We want to append the remainder of the target path to the path memory.
+            # To handle different path lengths, we need to find the segment on the target path that's just after the current segment in the path memory.
+            path_memory_current_segment_dist_remaining = path_memory_segment_info[path_memory_current_segment_idx].distance_remaining
+            target_path_segment_idx_at_the_end_of_path_memory_segment = next(move_along_path(deepcopy(target_path_segment_info), target_path_current_segment_idx, path_memory_current_segment_dist_remaining))[1]
+            self._path_points = np.concatenate(
+                (self._path_points[:path_memory_current_segment_idx+2], target_path[target_path_segment_idx_at_the_end_of_path_memory_segment+1:]), axis=0)
 
-        debug_output["target_path_segment_idx"] = int(target_path_segment_idx)
+        debug_output["target_path_current_segment_idx"] = int(target_path_current_segment_idx)
         debug_output["path_memory"] = self._path_points
-        debug_output["path_memory_segment_idx"] = int(current_path_memory_segment_idx)
+        debug_output["path_memory_segment_idx"] = int(path_memory_current_segment_idx)
 
         # Collect measurements
         self._measurements = np.roll(self._measurements, -1, axis=1)
@@ -291,7 +296,7 @@ class MyEstimator:
 
         if self._num_data_points >= self.N and self._tick_count - self._last_solve_tick >= self.min_ticks_per_solve:
             estimate = self._solve(
-                ext_state, debug_output, path_memory_segment_info, current_path_memory_segment_idx)
+                ext_state, debug_output, path_memory_segment_info, path_memory_current_segment_idx)
 
         debug_output["tick_count"] = self._tick_count
         debug_output["last_solve_tick"] = self._last_solve_tick

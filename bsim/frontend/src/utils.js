@@ -135,8 +135,8 @@ module.exports.travelAlongPath = travelAlongPath;
 
 module.exports.frenet2global_path = function frenet2global_path(path, slist, dlist) {
     // path is a list of [x, y] points
-    // s is a list of s values
-    // d is a list of d values
+    // s is a list of s values (m)
+    // d is a list of d values (m)
     // returns a list of [x, y] points
 
     const globalPath = [];
@@ -149,7 +149,7 @@ module.exports.frenet2global_path = function frenet2global_path(path, slist, dli
 }
 
 function frenet2global_point(frenet, origin, heading) {
-    // frenet is [s, d]
+    // frenet is [s, d] (in meters)
     // origin is [x, y]
     // heading is in radians
     // returns [x, y]

@@ -42,5 +42,4 @@ class StaticSlicePlanner:
 
         return {
             'target_path': target_path,
-            'starting_segment_id': int(lookbehind_path_segment_idx),
         }, ext_state, debug_output

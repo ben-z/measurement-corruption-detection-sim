@@ -13,7 +13,8 @@ import path_following_kmpc as pfkmpc
 import re
 import secrets
 import sys
-import static_slice_planner as ssp
+from static_slice_planner import StaticSlicePlanner
+from subdivision_planner import SubdivisionPlanner
 from urllib.parse import parse_qsl
 from utils import JSONNumpyDecoder
 import websockets
@@ -114,7 +115,8 @@ def world_handler(command: str):
                 'sensor': 'model_output_with_corruption',
                 'estimator': 'l1_optimizer',
                 # 'estimator': 'first_n',
-                'planner': 'static_slice',
+                # 'planner': 'static_slice',
+                'planner': 'subdivision',
             }
 
             # check for invalid options
@@ -190,9 +192,19 @@ def world_handler(command: str):
             if options['planner'] == 'static_slice':
                 planner_lookahead_m = 10
                 planner_lookbehind_m = 0
-                planner = ssp.StaticSlicePlanner(options['global_ref_path'], planner_lookahead_m, planner_lookbehind_m)
+                planner = StaticSlicePlanner(options['global_ref_path'], planner_lookahead_m, planner_lookbehind_m)
                 planner_state = {
                     'planner': 'static_slice',
+                    '_planner_fn': planner.tick,
+                    '_planner_state': {},
+                    'planner_debug_output': {},
+                }
+            elif options['planner'] == 'subdivision':
+                planner_lookahead_m = 10
+                planner_subdivision_m = 1
+                planner = SubdivisionPlanner(options['global_ref_path'], planner_lookahead_m, planner_subdivision_m)
+                planner_state = {
+                    'planner': 'subdivision',
                     '_planner_fn': planner.tick,
                     '_planner_state': {},
                     'planner_debug_output': {},
