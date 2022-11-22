@@ -16,6 +16,8 @@ from utils import calc_input_effects_on_output, optimize_l1, \
 
 np.set_printoptions(suppress=True, precision=4)
 
+PATH_MEMORY_EVICT_MULTIPLIER = 2
+
 def calc_desired_state_trajectory_on_a_line(linearization_state, N, dt):
     """
     returns a n-by-N matrix of desired state trajectory.
@@ -110,8 +112,8 @@ class MyEstimator:
 
         # Calculate a signature, mainly used for debugging.
         # The array denotes the number of same models used in a row.
-        # i.e. [5,21] means that in the first 5 time steps, the same model was used,
-        # and in the next 21 time steps, the same model was used.
+        # e.g. [5,21] means that in the first 5 time steps, the one model was used,
+        # and in the next 21 time steps, another model was used.
         time_varying_model_signature = [1]
         for k in range(1, self.N):
             if np.array_equal(linear_models[k], linear_models[k-1]):
@@ -300,8 +302,8 @@ class MyEstimator:
         debug_output["tick_count"] = self._tick_count
         debug_output["last_solve_tick"] = self._last_solve_tick
 
-        # evict old path memory (arbitrarily set to be 2x the number of states needed for the solver)
-        lookbehind_m = ext_state["target_speed"] * self.N * self.dt * 2
+        # evict old path memory (arbitrarily set to be a multiplier on the number of states needed for the solver)
+        lookbehind_m = ext_state["target_speed"] * self.N * self.dt * PATH_MEMORY_EVICT_MULTIPLIER
         try:
             eviction_threshold_segment_idx = next(move_along_path(deepcopy(path_memory_segment_info), path_memory_current_segment_idx, -lookbehind_m, wrap=False))[1]
         except EndOfPathError:
