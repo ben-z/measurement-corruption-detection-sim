@@ -5,6 +5,7 @@ import json
 import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
 import time
+from typing import Dict, Any
 
 def closest_point_on_line_segment(p, a, b):
     """
@@ -472,3 +473,11 @@ def frenet2global_point(x, y, theta, s, d):
     x += s * np.cos(theta) - d * np.sin(theta)
     y += s * np.sin(theta) + d * np.cos(theta)
     return x, y
+
+def ensure_options_are_known(options: Dict[str, Any], known_options: Dict[str, Any], name: str = ""):
+    """
+    Ensures that all options in options are in known_options.
+    """
+    unknown_options = set(options) - set(known_options)
+    if unknown_options:
+        raise ValueError(f"Unknown {f'{name} ' if name else ''}options: {unknown_options}")

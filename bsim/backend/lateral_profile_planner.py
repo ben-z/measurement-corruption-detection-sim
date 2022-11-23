@@ -39,12 +39,28 @@ def get_lateral_deviation(lateral_deviation_profile, t):
     
     raise Exception(f'Unsupported interpolation method {lateral_deviation_profile["interpolation"]}')
 
+DEFAULT_LATERAL_DEVIATION_PROFILE = {
+    'interpolation': 'linear',
+    'periodic': True,
+    'points': [
+        {'t': 0, 'lateral_deviation': 0},
+        {'t': 5, 'lateral_deviation': 0},
+        {'t': 10, 'lateral_deviation': 3},
+        {'t': 20, 'lateral_deviation': 3},
+        {'t': 30, 'lateral_deviation': 0},
+        {'t': 35, 'lateral_deviation': 0},
+        {'t': 40, 'lateral_deviation': -3},
+        {'t': 50, 'lateral_deviation': -3},
+        {'t': 60, 'lateral_deviation': 0},
+    ],
+}
+
 class LateralProfilePlanner:
     """
     Planner that follows a lateral deviation profile.
     """
 
-    def __init__(self, global_ref_path, lookahead_m, subdivision_m, target_speed, lateral_deviation_profile):
+    def __init__(self, global_ref_path, target_speed, lookahead_m=10., subdivision_m=1., lateral_deviation_profile=DEFAULT_LATERAL_DEVIATION_PROFILE):
         self.global_ref_path = global_ref_path
         self.lookahead_m = lookahead_m
         self.target_speed = target_speed

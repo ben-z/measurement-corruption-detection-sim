@@ -62,7 +62,33 @@ async function main() {
                 [0., 0., 0., 0., 1.],
             ]
         };
-        ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=${controller},global_ref_path=${encodeURIComponent(JSON.stringify(global_ref_path))},controller_options=${encodeURIComponent(JSON.stringify(controller_options))},plant_options=${encodeURIComponent(JSON.stringify(plant_options))},target_speed=${target_speed}`}));
+        const planner = 'lateral_profile';
+        const planner_options = {
+            lateral_deviation_profile: {
+                'interpolation': 'linear',
+                'periodic': true,
+                'points': [
+                    { 't': 0, 'lateral_deviation': 0 },
+                    { 't': 5, 'lateral_deviation': 0 },
+                    { 't': 10, 'lateral_deviation': 3 },
+                    { 't': 20, 'lateral_deviation': 3 },
+                    { 't': 30, 'lateral_deviation': 0 },
+                    { 't': 35, 'lateral_deviation': 0 },
+                    { 't': 40, 'lateral_deviation': -3 },
+                    { 't': 50, 'lateral_deviation': -3 },
+                    { 't': 60, 'lateral_deviation': 0 },
+                ],
+            }
+        };
+        ensureSucceeds(await worldSocket.sendRequest({
+            command: `create_entity: ego ${ego}`
+                  + ` controller=${controller}`
+                  + `,global_ref_path=${encodeURIComponent(JSON.stringify(global_ref_path))}`
+                  + `,controller_options=${encodeURIComponent(JSON.stringify(controller_options))}`
+                  + `,plant_options=${encodeURIComponent(JSON.stringify(plant_options))}`
+                  + `,target_speed=${target_speed}`
+                  + `,planner=${planner},planner_options=${encodeURIComponent(JSON.stringify(planner_options))}`
+        }));
         egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entities/${ego}`, WEBSOCKET_OPTIONS);
         ensureSucceeds(await egos[ego]._socket.open());
         // testing additive corruption

@@ -11,7 +11,7 @@ class SubdivisionPlanner:
     Planner that returns a subdivided slice of the static target path
     """
 
-    def __init__(self, global_ref_path, lookahead_m, subdivision_m):
+    def __init__(self, global_ref_path, lookahead_m=10., subdivision_m=1.):
         self.global_ref_path = global_ref_path
         self.lookahead_m = lookahead_m
         self.subdivision_m = subdivision_m

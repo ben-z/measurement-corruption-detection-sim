@@ -8,7 +8,7 @@ class StaticSlicePlanner:
     Planner that returns a slice of the static target path
     """
 
-    def __init__(self, global_ref_path, lookahead_m, lookbehind_m):
+    def __init__(self, global_ref_path, lookahead_m=10., lookbehind_m=0.):
         self.global_ref_path = global_ref_path
         self.lookahead_m = lookahead_m
         self.lookbehind_m = lookbehind_m

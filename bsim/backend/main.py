@@ -17,8 +17,9 @@ from static_slice_planner import StaticSlicePlanner
 from subdivision_planner import SubdivisionPlanner
 from lateral_profile_planner import LateralProfilePlanner
 from urllib.parse import parse_qsl
-from utils import JSONNumpyDecoder
+from utils import JSONNumpyDecoder, ensure_options_are_known
 import websockets
+from typing import Dict, Any
 
 INITIAL_WORLD_STATE = {
     't': 0,
@@ -104,7 +105,7 @@ def world_handler(command: str):
         if entity_id in world_state['entities']:
             raise Exception(f"ERROR: entity with ID '{entity_id}' already exists")
 
-        user_options = dict(parse_qsl(entity_options, separator=",", strict_parsing=True)) if entity_options else {}
+        user_options: Dict[str, Any] = dict(parse_qsl(entity_options, separator=",", strict_parsing=True)) if entity_options else {}
 
         if entity_type == 'ego':
             default_options = {
@@ -112,29 +113,38 @@ def world_handler(command: str):
                 'L': 2.9,
                 # coordinates of the waypoints in meters. This will form a closed path
                 'global_ref_path': np.array([ [-10,3], [12,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
-                'target_speed': 1, # m/s
+                'target_speed': 1., # m/s
                 'sensor': 'model_output_with_corruption',
                 'estimator': 'l1_optimizer',
                 # 'estimator': 'first_n',
                 # 'planner': 'static_slice',
                 # 'planner': 'subdivision',
                 'planner': 'lateral_profile',
+                # Default options for these modules are defined in their respective handlers
+                'plant_options': {},
+                'controller_options': {},
+                'planner_options': {},
             }
 
             # check for invalid options
-            additional_allowed_options = set(['controller_options', 'plant_options'])
-            unknown_option_keys = set(user_options.keys()) - set(default_options.keys()) - additional_allowed_options
-            if unknown_option_keys:
-                raise Exception(f"ERROR: unknown options: {unknown_option_keys}")
+            ensure_options_are_known(user_options, default_options, entity_id)
+
+            # unpack user options that are stringified in transit
+            if isinstance(user_options.get('global_ref_path'), str):
+                user_options['global_ref_path'] = np.array(json.loads(user_options['global_ref_path']))
+            if isinstance(user_options.get('target_speed'), str):
+                user_options['target_speed'] = float(user_options['target_speed'])
+            if isinstance(user_options.get('plant_options'), str):
+                user_options['plant_options'] = json.loads(user_options['plant_options'], cls=JSONNumpyDecoder)
+            if isinstance(user_options.get('controller_options'), str):
+                user_options['controller_options'] = json.loads(user_options['controller_options'], cls=JSONNumpyDecoder)
+            if isinstance(user_options.get('planner_options'), str):
+                user_options['planner_options'] = json.loads(user_options['planner_options'], cls=JSONNumpyDecoder)
 
             # merge the user options with the default options
-            options = {**default_options, **user_options}
-            if isinstance(options['global_ref_path'], str):
-                options['global_ref_path'] = np.array(json.loads(options['global_ref_path']))
-            if isinstance(options['target_speed'], str):
-                options['target_speed'] = float(options['target_speed'])
-
-            plant_options = json.loads(options.get('plant_options', '{}'), cls=JSONNumpyDecoder)
+            options = mergedeep.merge({}, default_options, user_options, strategy=mergedeep.Strategy.TYPESAFE_REPLACE)
+            
+            plant_options = options['plant_options']
 
             # create the vehicle
             # plant_factory = ckb
@@ -192,9 +202,7 @@ def world_handler(command: str):
 
             # Planner
             if options['planner'] == 'static_slice':
-                planner_lookahead_m = 10
-                planner_lookbehind_m = 0
-                planner = StaticSlicePlanner(options['global_ref_path'], planner_lookahead_m, planner_lookbehind_m)
+                planner = StaticSlicePlanner(options['global_ref_path'], **options['planner_options'])
                 planner_state = {
                     'planner': 'static_slice',
                     '_planner_fn': planner.tick,
@@ -202,9 +210,7 @@ def world_handler(command: str):
                     'planner_debug_output': {},
                 }
             elif options['planner'] == 'subdivision':
-                planner_lookahead_m = 10
-                planner_subdivision_m = 1
-                planner = SubdivisionPlanner(options['global_ref_path'], planner_lookahead_m, planner_subdivision_m)
+                planner = SubdivisionPlanner(options['global_ref_path'], **options['planner_options'])
                 planner_state = {
                     'planner': 'subdivision',
                     '_planner_fn': planner.tick,
@@ -212,24 +218,7 @@ def world_handler(command: str):
                     'planner_debug_output': {},
                 }
             elif options['planner'] == 'lateral_profile':
-                planner_lookahead_m = 10
-                planner_subdivision_m = 1
-                lateral_deviation_profile = {
-                    'interpolation': 'linear',
-                    'periodic': True,
-                    'points': [
-                        {'t': 0, 'lateral_deviation': 0},
-                        {'t': 5, 'lateral_deviation': 0},
-                        {'t': 10, 'lateral_deviation': 3},
-                        {'t': 20, 'lateral_deviation': 3},
-                        {'t': 30, 'lateral_deviation': 0},
-                        {'t': 35, 'lateral_deviation': 0},
-                        {'t': 40, 'lateral_deviation': -3},
-                        {'t': 50, 'lateral_deviation': -3},
-                        {'t': 60, 'lateral_deviation': 0},
-                    ],
-                }
-                planner = LateralProfilePlanner(options['global_ref_path'], planner_lookahead_m, planner_subdivision_m, options['target_speed'], lateral_deviation_profile)
+                planner = LateralProfilePlanner(options['global_ref_path'], options['target_speed'], **options['planner_options'])
                 planner_state = {
                     'planner': 'lateral_profile',
                     '_planner_fn': planner.tick,
@@ -255,8 +244,6 @@ def world_handler(command: str):
                     'controller_debug_output': {},
                 }
             elif options['controller'] == 'lookahead_lqr':
-                tuning_options = json.loads(options['controller_options']) if 'controller_options' in options else {}
-
                 controller_state = {
                     'controller': 'lookahead_lqr',
                     '_controller_fn': lookahead_lqr.lookahead_lqr,
@@ -264,7 +251,7 @@ def world_handler(command: str):
                         target_speed=options['target_speed'],
                         dt=world_state['DT'],
                         L=options['L'],
-                        **tuning_options,
+                        **options['controller_options'],
                     ),
                     'controller_debug_output': {},
                 }
