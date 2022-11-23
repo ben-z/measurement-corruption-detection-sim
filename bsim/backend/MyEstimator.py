@@ -16,7 +16,7 @@ from utils import calc_input_effects_on_output, optimize_l1, \
 
 np.set_printoptions(suppress=True, precision=4)
 
-PATH_MEMORY_EVICT_MULTIPLIER = 2
+PATH_MEMORY_EVICT_MULTIPLIER = 10
 
 def calc_desired_state_trajectory_on_a_line(linearization_state, N, dt):
     """

@@ -420,7 +420,7 @@ def move_along_path(segment_info, current_path_segment_idx, step_size_m, wrap=Tr
                     raise EndOfPathError("Cannot move backward along path, reached end of path")
             segment_info[current_path_segment_idx].set_progress(1)
         else:
-            raise Exception("This shouldn't happen")
+            raise Exception(f"This shouldn't happen! remaining_m: {remaining_m}")
 
 
 def powerset(iterable):
@@ -462,3 +462,13 @@ class JSONNumpyDecoder(json.JSONDecoder):
             return -np.inf
         else:
             raise ValueError('Unknown data type: {}'.format(data))
+
+def frenet2global_point(x, y, theta, s, d):
+    """
+    Converts a point in frenet coordinates to global coordinates.
+    x, y, theta: the global coordinates of the reference point
+    s, d: the frenet coordinates of the point
+    """
+    x += s * np.cos(theta) - d * np.sin(theta)
+    y += s * np.sin(theta) + d * np.cos(theta)
+    return x, y

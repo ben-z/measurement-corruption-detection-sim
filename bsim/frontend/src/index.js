@@ -221,6 +221,14 @@ const RAD_AXIS = {
     },
 }
 
+const LATDEV_SCALE = {
+    range: (self, min, max) => [Math.min(-5, min), Math.max(5, max)],
+}
+
+const LATDEV_AXIS = {
+    scale: 'latdev',
+}
+
 const COMMON_PLOT_SETTINGS = {
     cursor: {
         sync: {
@@ -445,6 +453,46 @@ function drawPlots(plots, container, worldState) {
                 plotObj.data[3].push(entity.estimator_debug_output.state_estimation_l2_error_xf);
                 plotObj.plot.setData(plotObj.data);
             }
+            {
+                const plotID = `${entityName}_planner`;
+                if (!plots[plotID]) {
+                    const plotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(plotContainer);
+                    const plot_settings = {
+                        ...COMMON_PLOT_SETTINGS,
+                        title: `${entityName} Planner Debug`,
+                        scales: {
+                            x: TIME_SCALE,
+                            latdev: LATDEV_SCALE,
+                        },
+                        series: [
+                            {
+                                label: 'time (s)',
+                                value: (self, rawValue) => rawValue.toFixed(2),
+                            }, 
+                            {
+                                label: 'Target Lateral Deviation',
+                                stroke: "blue",
+                                scale: "latdev",
+                                value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(2),
+                            },
+                        ],
+                        axes: [
+                            {},
+                            LATDEV_AXIS,
+                        ]
+                    }
+                    plots[plotID] = {
+                        plot: new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), plotContainer),
+                        data: Array(plot_settings.series.length).fill([]),
+                    };
+                }
+                const plotObj = plots[plotID];
+                plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
+                plotObj.data[0].push(t);
+                plotObj.data[1].push(entity.planner_debug_output.target_lateral_deviations?.[0]);
+                plotObj.plot.setData(plotObj.data);
+            }
         }
     }
 }
@@ -460,28 +508,57 @@ function drawVehicle(ctx, vehicleName, vehicle) {
 
     const vehicleState = decodeVehicleState(vehicle.state);
 
-    const rearAxleCenter = [vehicleState.x, vehicleState.y];
-    const frontAxleCenter = addvector(rearAxleCenter, [vehicle_length * Math.cos(vehicleState.theta), vehicle_length * Math.sin(vehicleState.theta)]);
+    if (getOrCreateBEVToggleState(`${vehicleName}_state`, `${vehicleName} State`, true)) {
+        const rearAxleCenter = [vehicleState.x, vehicleState.y];
+        const frontAxleCenter = addvector(rearAxleCenter, [vehicle_length * Math.cos(vehicleState.theta), vehicle_length * Math.sin(vehicleState.theta)]);
 
-    ctx.beginPath();
-    // draw wheelbase
-    ctx.moveTo(...rearAxleCenter.map(m_to_px));
-    ctx.lineTo(...frontAxleCenter.map(m_to_px));
+        ctx.beginPath();
+        // draw wheelbase
+        ctx.moveTo(...rearAxleCenter.map(m_to_px));
+        ctx.lineTo(...frontAxleCenter.map(m_to_px));
 
-    // draw wheels
-    ctx.save()
-    ctx.translate(m_to_px(rearAxleCenter[0]), m_to_px(rearAxleCenter[1]));
-    ctx.rotate(vehicleState.theta)
-    ctx.rect(m_to_px(-tireLength/2), m_to_px(-tireWidth/2), m_to_px(tireLength), m_to_px(tireWidth));
-    ctx.restore()
+        // draw wheels
+        ctx.save()
+        ctx.translate(m_to_px(rearAxleCenter[0]), m_to_px(rearAxleCenter[1]));
+        ctx.rotate(vehicleState.theta)
+        ctx.rect(m_to_px(-tireLength/2), m_to_px(-tireWidth/2), m_to_px(tireLength), m_to_px(tireWidth));
+        ctx.restore()
 
-    ctx.save()
-    ctx.translate(m_to_px(frontAxleCenter[0]), m_to_px(frontAxleCenter[1]));
-    ctx.rotate(vehicleState.theta + vehicleState.delta)
-    ctx.rect(m_to_px(-tireLength/2), m_to_px(-tireWidth/2), m_to_px(tireLength), m_to_px(tireWidth));
-    ctx.restore()
+        ctx.save()
+        ctx.translate(m_to_px(frontAxleCenter[0]), m_to_px(frontAxleCenter[1]));
+        ctx.rotate(vehicleState.theta + vehicleState.delta)
+        ctx.rect(m_to_px(-tireLength/2), m_to_px(-tireWidth/2), m_to_px(tireLength), m_to_px(tireWidth));
+        ctx.restore()
 
-    ctx.stroke();
+        ctx.stroke();
+    }
+
+    // draw global reference path
+    const global_ref_path = vehicle.global_ref_path;
+    if (global_ref_path && getOrCreateBEVToggleState(`${vehicleName}-global_ref_path`, `${vehicleName} global reference path`, true)) {
+        const is_closed = true;
+        ctx.save()
+        ctx.beginPath()
+        ctx.strokeStyle = 'gray';
+        ctx.fillStyle = 'gray';
+        ctx.setLineDash([m_to_px(0.05), m_to_px(0.5)])
+        ctx.moveTo(m_to_px(global_ref_path[0][0]), m_to_px(global_ref_path[0][1]));
+        // rotate the array to the right and draw lines. This gives us a closed path.
+        for (const [x, y] of global_ref_path.slice(1).concat(is_closed ? [global_ref_path[0]] : [])) {
+            ctx.lineTo(m_to_px(x), m_to_px(y));
+        }
+        ctx.stroke();
+        ctx.restore()
+        ctx.save()
+        for (const [x, y] of global_ref_path) {
+            ctx.beginPath()
+            ctx.strokeStyle = 'gray';
+            ctx.fillStyle = 'gray';
+            ctx.arc(m_to_px(x), m_to_px(y), m_to_px(0.2), 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+        ctx.restore()
+    }
 
     // draw path memory
     const path_memory = vehicle.estimator_debug_output.path_memory;

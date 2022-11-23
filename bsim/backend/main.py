@@ -15,6 +15,7 @@ import secrets
 import sys
 from static_slice_planner import StaticSlicePlanner
 from subdivision_planner import SubdivisionPlanner
+from lateral_profile_planner import LateralProfilePlanner
 from urllib.parse import parse_qsl
 from utils import JSONNumpyDecoder
 import websockets
@@ -116,7 +117,8 @@ def world_handler(command: str):
                 'estimator': 'l1_optimizer',
                 # 'estimator': 'first_n',
                 # 'planner': 'static_slice',
-                'planner': 'subdivision',
+                # 'planner': 'subdivision',
+                'planner': 'lateral_profile',
             }
 
             # check for invalid options
@@ -209,6 +211,31 @@ def world_handler(command: str):
                     '_planner_state': {},
                     'planner_debug_output': {},
                 }
+            elif options['planner'] == 'lateral_profile':
+                planner_lookahead_m = 10
+                planner_subdivision_m = 1
+                lateral_deviation_profile = {
+                    'interpolation': 'linear',
+                    'periodic': True,
+                    'points': [
+                        {'t': 0, 'lateral_deviation': 0},
+                        {'t': 5, 'lateral_deviation': 0},
+                        {'t': 10, 'lateral_deviation': 3},
+                        {'t': 20, 'lateral_deviation': 3},
+                        {'t': 30, 'lateral_deviation': 0},
+                        {'t': 35, 'lateral_deviation': 0},
+                        {'t': 40, 'lateral_deviation': -3},
+                        {'t': 50, 'lateral_deviation': -3},
+                        {'t': 60, 'lateral_deviation': 0},
+                    ],
+                }
+                planner = LateralProfilePlanner(options['global_ref_path'], planner_lookahead_m, planner_subdivision_m, options['target_speed'], lateral_deviation_profile)
+                planner_state = {
+                    'planner': 'lateral_profile',
+                    '_planner_fn': planner.tick,
+                    '_planner_state': {},
+                    'planner_debug_output': {},
+                }
             else:
                 raise Exception(f"ERROR: unknown planner: '{options['planner']}'")
 
@@ -286,6 +313,7 @@ def make_ego_handler(entity_id: str):
             entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
                 entity['_estimator_fn'](entity['_estimator_state'], entity['measurement'], entity['action'], entity['state'])
             # planner
+            entity['_planner_state']['t'] = world_state['t']
             entity['planner_output'], entity['_planner_state'], entity['planner_debug_output'] = \
                 entity['_planner_fn'](entity['_planner_state'], entity['estimate'], entity['action'])
 
