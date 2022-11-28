@@ -268,7 +268,7 @@ const LATDEV_AXIS = {
 }
 
 const EXECUTION_TIME_SCALE = {
-    range: (self, min, max) => [Math.min(0, min), Math.max(0.5, max)],
+    range: (self, min, max) => [0, 0.05],
 }
 
 const EXECUTION_TIME_AXIS = {
@@ -367,13 +367,13 @@ function drawPlots(plots, container, worldState) {
     const t = worldState.t;
 
     {
-        const plotID = `execution_times`;
+        const plotID = `execution_time`;
         if (!plots[plotID]) {
             const plotContainer = document.createElement('div', {id: plotID});
             container.appendChild(plotContainer);
             const plot_settings = {
                 ...COMMON_PLOT_SETTINGS,
-                title: `Execution Times`,
+                title: `Execution Time (s)`,
                 scales: {
                     x: TIME_SCALE,
                     execution_time: EXECUTION_TIME_SCALE,
@@ -387,13 +387,13 @@ function drawPlots(plots, container, worldState) {
                         label: 'World (s)',
                         stroke: "blue",
                         scale: "execution_time",
-                        value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(2),
+                        value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(3),
                     },
                     ...Object.entries(worldState.entities).map(([entityName, entity], i) => ({
                         label: `${entityName} (s)`,
                         stroke: ENTITY_COLOR_MAP[i].primary,
                         scale: "execution_time",
-                        value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(2),
+                        value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(3),
                     }))
                 ],
                 axes: [
