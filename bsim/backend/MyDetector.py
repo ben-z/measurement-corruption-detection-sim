@@ -220,13 +220,15 @@ class MyDetector:
         attack_vector = (Y - np.matmul(Phi, x0_hat.value)).reshape((self.model.noutputs, self.N), order='F')
         attack_vector_norms = norm(attack_vector, axis=1)
         print(f"attack vector norms (l2 norm, all time steps): {attack_vector_norms}")
-        # print(f"attack vector norms threshold: {De}")
+        De = 1 # arbitrary threshold
+        print(f"attack vector norms threshold: {De}")
         mean_attack_vector = np.mean(attack_vector, axis=1)
-        # sensors_under_attack = attack_vector_norms > De
-        # num_sensors_under_attack = np.sum(sensors_under_attack)
+        sensors_under_attack = attack_vector_norms > De
+        sensor_validity_map = np.logical_not(sensors_under_attack)
+        num_sensors_under_attack = np.sum(sensors_under_attack)
         print("mean attack vector:", mean_attack_vector)
-        # print("Sensors under attack:", sensors_under_attack)
-        # print("Number of sensors under attack:", num_sensors_under_attack)
+        print("Sensors under attack:", sensors_under_attack)
+        print("Number of sensors under attack:", num_sensors_under_attack)
         print("=================================")
 
         return sensor_validity_map
