@@ -6,6 +6,7 @@ import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
 import time
 from typing import Dict, Any
+from functools import cached_property
 
 def closest_point_on_line_segment(p, a, b):
     """
@@ -330,15 +331,46 @@ def get_l1_state_estimation_l2_bound(A: np.ndarray, C: np.ndarray, largest_senso
     return (prob, dx1_l1)
 
 class SegmentInfoItem:
+    # _p0 and _p1 are the endpoints of the segment
+    # they are immutable once set. This is achieved
+    # by using the read-only properties p0 and p1.
+    _p0: np.ndarray
+    _p1: np.ndarray
+    progress: float
+
     def __init__(self, p0, p1, progress=np.nan) -> None:
-        self.p0 = p0
-        self.p1 = p1
-        self.length = np.linalg.norm(p1 - p0)
-        self.heading = np.arctan2(p1[1] - p0[1], p1[0] - p0[0])
+        self._p0 = p0
+        self._p1 = p1
         self.progress = progress
+    
+    def __deepcopy__(self, memo):
+        return SegmentInfoItem(self.p0, self.p1, self.progress)
+    
+    def to_dict(self):
+        return {
+            "p0": self.p0,
+            "p1": self.p1,
+            "progress": self.progress
+        }
     
     def set_progress(self, progress):
         self.progress = progress
+
+    @property
+    def p0(self):
+        return self._p0
+    
+    @property
+    def p1(self):
+        return self._p1
+
+    @cached_property
+    def length(self):
+        return np.linalg.norm(self.p1 - self.p0)
+
+    @cached_property
+    def heading(self):
+        return np.arctan2(self.p1[1] - self.p0[1], self.p1[0] - self.p0[0])
 
     @property
     def distance_travelled(self):

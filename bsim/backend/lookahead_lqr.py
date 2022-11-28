@@ -53,8 +53,8 @@ def lookahead_lqr(ext_state, estimate):
 
     lookahead_path_segment_info, _ = next(move_along_path(deepcopy(segment_info), current_path_segment_idx, LOOKAHEAD_M))
 
-    debug_output['current_path_segment'] = segment_info[current_path_segment_idx].__dict__
-    debug_output['lookahead_path_segment'] = lookahead_path_segment_info.__dict__
+    debug_output['current_path_segment'] = segment_info[current_path_segment_idx].to_dict()
+    debug_output['lookahead_path_segment'] = lookahead_path_segment_info.to_dict()
 
     # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
     linearization_state = np.array(

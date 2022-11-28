@@ -20,11 +20,13 @@ from urllib.parse import parse_qsl
 from utils import JSONNumpyDecoder, ensure_options_are_known
 import websockets
 from typing import Dict, Any
+import time
 
 INITIAL_WORLD_STATE = {
     't': 0,
     'DT': 0.01,
-    'entities': {}
+    'entities': {},
+    'execution_times': {},
 }
 
 world_state = deepcopy(INITIAL_WORLD_STATE)
@@ -81,6 +83,10 @@ def get_entity_handler(entity_id: str):
 
 def world_handler(command: str):
     global world_state
+
+    world_state['execution_times'] = {}
+
+    start_perf_counter = time.perf_counter()
 
     if command == 'terminate':
         sys.exit(0)
@@ -277,11 +283,15 @@ def world_handler(command: str):
     else:
         raise Exception(f"ERROR: Unknown command: {command}")
     
+    world_state['execution_times']['request_handler'] = time.perf_counter() - start_perf_counter
+    
     return world_state
 
 def make_ego_handler(entity_id: str):
     def ego_handler(command: str):
         entity = world_state['entities'][entity_id]
+        entity['execution_times'] = {}
+        start_perf_counter = time.perf_counter()
 
         if command == 'reset':
             entity['state'] = ckb.get_initial_state()
@@ -330,6 +340,8 @@ def make_ego_handler(entity_id: str):
             mergedeep.merge(entity, new_state, strategy=mergedeep.Strategy.TYPESAFE_REPLACE)
         else:
             raise Exception(f"ERROR: Unknown command: {command}")
+        
+        entity['execution_times']['request_handler'] = time.perf_counter() - start_perf_counter
         
         return entity
 

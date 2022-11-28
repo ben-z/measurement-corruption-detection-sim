@@ -3,6 +3,14 @@ import { mySetInterval, matrixMultiply, generateCircleApproximation, approxeq, p
 import uPlot from 'uplot';
 import "uplot/dist/uPlot.min.css";
 
+const ENTITY_COLOR_MAP = [
+    {
+        primary: 'green',
+        secondary: 'blue',
+        error: 'red',
+    },
+]
+
 function ensureSucceeds(res) {
     // Ensures that `res` doesn't have an `error` field
     if (res.error) {
@@ -118,6 +126,10 @@ async function main() {
             
         try {
             const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
+        
+            if (Object.keys(worldState.entities).length > ENTITY_COLOR_MAP.length) {
+                throw new Error("Please update ENTITY_COLOR_MAP to accomodate the additional entities.");
+            }
         
             bsim_js.pushWorldState(worldState);
             drawBEV(bevCanvas, worldState);
@@ -255,6 +267,14 @@ const LATDEV_AXIS = {
     scale: 'latdev',
 }
 
+const EXECUTION_TIME_SCALE = {
+    range: (self, min, max) => [Math.min(0, min), Math.max(0.5, max)],
+}
+
+const EXECUTION_TIME_AXIS = {
+    scale: 'execution_time',
+}
+
 const COMMON_PLOT_SETTINGS = {
     cursor: {
         sync: {
@@ -345,6 +365,56 @@ function sliceToHorizon(arrs, tarr, t, horizon) {
 
 function drawPlots(plots, container, worldState) {
     const t = worldState.t;
+
+    {
+        const plotID = `execution_times`;
+        if (!plots[plotID]) {
+            const plotContainer = document.createElement('div', {id: plotID});
+            container.appendChild(plotContainer);
+            const plot_settings = {
+                ...COMMON_PLOT_SETTINGS,
+                title: `Execution Times`,
+                scales: {
+                    x: TIME_SCALE,
+                    execution_time: EXECUTION_TIME_SCALE,
+                },
+                series: [
+                    {
+                        label: 'time (s)',
+                        value: (self, rawValue) => rawValue.toFixed(2),
+                    }, 
+                    {
+                        label: 'World (s)',
+                        stroke: "blue",
+                        scale: "execution_time",
+                        value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(2),
+                    },
+                    ...Object.entries(worldState.entities).map(([entityName, entity], i) => ({
+                        label: `${entityName} (s)`,
+                        stroke: ENTITY_COLOR_MAP[i].primary,
+                        scale: "execution_time",
+                        value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(2),
+                    }))
+                ],
+                axes: [
+                    {},
+                    EXECUTION_TIME_AXIS,
+                ]
+            }
+            plots[plotID] = {
+                plot: new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), plotContainer),
+                data: Array(plot_settings.series.length).fill([]),
+            };
+        }
+        const plotObj = plots[plotID];
+        plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
+        plotObj.data[0].push(t);
+        plotObj.data[1].push(worldState.execution_times.request_handler);
+        for (const [[entityName, entity], i] of Object.entries(worldState.entities).map((e,i)=>[e, i+2])) {
+            plotObj.data[i].push(entity.execution_times.request_handler);
+        }
+        plotObj.plot.setData(plotObj.data);
+    }
 
     for (const [entityName, entity] of Object.entries(worldState.entities)) {
         if (entityName === 'ego1') {
