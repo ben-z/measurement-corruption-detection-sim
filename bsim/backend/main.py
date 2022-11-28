@@ -7,7 +7,7 @@ import continuous_kinematic_bicycle as ckb
 import json
 import lookahead_lqr
 import mergedeep
-from MyEstimator import MyEstimator
+from MyDetector import MyDetector
 import numpy as np
 import path_following_kmpc as pfkmpc
 import re
@@ -121,8 +121,8 @@ def world_handler(command: str):
                 'global_ref_path': np.array([ [-10,3], [12,-5], [10,-5], [7, -8], [0,-10], [-10,-3] ]),
                 'target_speed': 1., # m/s
                 'sensor': 'model_output_with_corruption',
-                'estimator': 'l1_optimizer',
-                # 'estimator': 'first_n',
+                'detector': 'l1_optimizer',
+                # 'detector': 'first_n',
                 # 'planner': 'static_slice',
                 # 'planner': 'subdivision',
                 'planner': 'lateral_profile',
@@ -183,28 +183,28 @@ def world_handler(command: str):
             else:
                 raise Exception(f"ERROR: unknown sensor: '{options['sensor']}'")
 
-            # Estimator
-            if options['estimator'] == 'first_n':
-                estimator_state = {
-                    'estimator': 'sensor',
-                    '_estimator_fn': lambda est_state, measurement, prev_inputs, _true_state: (measurement[0:plant_model.nstates], est_state, {}),
-                    '_estimator_state': None,
-                    'estimator_debug_output': {},
+            # Detector
+            if options['detector'] == 'first_n':
+                detector_state = {
+                    'detector': 'sensor',
+                    '_detector_fn': lambda est_state, measurement, prev_inputs, _true_state: (measurement[0:plant_model.nstates], est_state, {}),
+                    '_detector_state': None,
+                    'detector_debug_output': {},
                 }
-            elif options['estimator'] == 'l1_optimizer':
-                estimator = MyEstimator(options['L'], world_state['DT'])
-                estimator_state = {
-                    'estimator': 'l1_optimizer',
-                    '_estimator_fn': estimator.tick,
-                    '_estimator_state': {
+            elif options['detector'] == 'l1_optimizer':
+                detector = MyDetector(options['L'], world_state['DT'])
+                detector_state = {
+                    'detector': 'l1_optimizer',
+                    '_detector_fn': detector.tick,
+                    '_detector_state': {
                         'target_speed': options['target_speed'], # m/s
                         # TODO: this should be coming from the planner
                         # 'target_path': options['target_path'],
                     },
-                    'estimator_debug_output': {},
+                    'detector_debug_output': {},
                 }
             else:
-                raise Exception(f"ERROR: unknown estimator: '{options['estimator']}'")
+                raise Exception(f"ERROR: unknown detector: '{options['detector']}'")
 
             # Planner
             if options['planner'] == 'static_slice':
@@ -274,7 +274,7 @@ def world_handler(command: str):
                 '_model': plant_model,
                 '_model_state_normalizer': plant_state_normalizer,
                 **sensor_state,
-                **estimator_state,
+                **detector_state,
                 **planner_state,
                 **controller_state,
             }
@@ -306,16 +306,16 @@ def make_ego_handler(entity_id: str):
             # sensor
             entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
                 entity['_sensor_fn'](entity['_sensor_state'], entity['state'], entity['action'])
-            # estimator
-            entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
-                entity['_estimator_fn'](entity['_estimator_state'], entity['measurement'], entity['action'], entity['state'])
+            # detector
+            entity['estimate'], entity['_detector_state'], entity['detector_debug_output'] = \
+                entity['_detector_fn'](entity['_detector_state'], entity['measurement'], entity['action'], entity['state'])
             # planner
             entity['_planner_state']['t'] = world_state['t']
             entity['planner_output'], entity['_planner_state'], entity['planner_debug_output'] = \
                 entity['_planner_fn'](entity['_planner_state'], entity['estimate'], entity['action'])
 
             entity['_controller_state']['target_path'] = entity['planner_output']['target_path']
-            entity['_estimator_state']['target_path'] = entity['planner_output']['target_path']
+            entity['_detector_state']['target_path'] = entity['planner_output']['target_path']
 
             model = entity['_model']
             # model = control.sample_system(entity['_model'], world_state['DT'])

@@ -475,14 +475,14 @@ function drawPlots(plots, container, worldState) {
                 plotObj.plot.setData(plotObj.data);
             }
             {
-                const plotID = `${entityName}_estimator`;
+                const plotID = `${entityName}_detector`;
                 if (!plots[plotID]) {
                     const plotContainer = document.createElement('div', {id: plotID});
                     container.appendChild(plotContainer);
                     plots[plotID] = {
                         plot: new uPlot({
                             ...COMMON_PLOT_SETTINGS,
-                            title: `${entityName} Estimator Debug`,
+                            title: `${entityName} Detector Debug`,
                             scales: {
                                 x: TIME_SCALE,
                                 idx: {
@@ -544,9 +544,9 @@ function drawPlots(plots, container, worldState) {
                 const plotObj = plots[plotID];
                 plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
                 plotObj.data[0].push(t);
-                plotObj.data[1].push(entity.estimator_debug_output.path_memory_segment_idx);
-                plotObj.data[2].push(entity.estimator_debug_output.state_estimation_l2_error_x0);
-                plotObj.data[3].push(entity.estimator_debug_output.state_estimation_l2_error_xf);
+                plotObj.data[1].push(entity.detector_debug_output.path_memory_segment_idx);
+                plotObj.data[2].push(entity.detector_debug_output.state_estimation_l2_error_x0);
+                plotObj.data[3].push(entity.detector_debug_output.state_estimation_l2_error_xf);
                 plotObj.plot.setData(plotObj.data);
             }
             {
@@ -657,7 +657,7 @@ function drawVehicle(ctx, vehicleName, vehicle) {
     }
 
     // draw path memory
-    const path_memory = vehicle.estimator_debug_output.path_memory;
+    const path_memory = vehicle.detector_debug_output.path_memory;
     if (path_memory && getOrCreateBEVToggleState(`${vehicleName}-detector_path_memory`, `${vehicleName} detector path memory`, true)) {
         ctx.save()
         ctx.beginPath()
@@ -773,9 +773,9 @@ function drawVehicle(ctx, vehicleName, vehicle) {
         ctx.restore();
     }
 
-    // draw true states of the vehicle used in the estimator
-    if (vehicle.estimator_debug_output.true_states) {
-        const true_vehicle_states = vehicle.estimator_debug_output.true_states.map(decodeVehicleState);
+    // draw true states of the vehicle used in the detector
+    if (vehicle.detector_debug_output.true_states) {
+        const true_vehicle_states = vehicle.detector_debug_output.true_states.map(decodeVehicleState);
 
         ctx.save();
         ctx.beginPath();

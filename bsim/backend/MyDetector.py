@@ -38,7 +38,7 @@ def calc_desired_state_trajectory_on_a_line(linearization_state, N, dt):
     return desired_trajectory
 
 
-class MyEstimator:
+class MyDetector:
     def __init__(self, L, dt, N=10, min_ticks_per_solve=50):
         """
         N: time horizon, the number of time steps
