@@ -513,3 +513,50 @@ def ensure_options_are_known(options: Dict[str, Any], known_options: Dict[str, A
     unknown_options = set(options) - set(known_options)
     if unknown_options:
         raise ValueError(f"Unknown {f'{name} ' if name else ''}options: {unknown_options}")
+
+class PerfCounter:
+    """
+    A simple performance counter that can be used to measure the time spent in
+    a block of code. Example usage:
+    ```python
+    with PerfCounter() as pc:
+        # do something
+    print(pc.elapsed_)
+    ```
+    """
+    def __init__(self):
+        self.start_time = None
+        self.end_time = None
+
+    def __enter__(self):
+        self.start_time = time.perf_counter()
+        return self
+
+    def __exit__(self, *args):
+        self.end_time = time.perf_counter()
+
+    @property
+    def elapsed_s(self):
+        assert self.start_time is not None
+        assert self.end_time is not None
+        return (self.end_time - self.start_time)
+
+class AutoPerfCounter(PerfCounter):
+    """
+    A performance counter that automatically stores the elapsed time in a
+    provided dictionary.
+    ```python
+    execution_times = {}
+    with AutoPerfCounter(execution_times, "my_block"):
+        # do something
+    print(f"my_block took {execution_times['my_block']}s")
+    ```
+    """
+    def __init__(self, execution_times: Dict[str, float], name: str):
+        super().__init__()
+        self.execution_times = execution_times
+        self.name = name
+
+    def __exit__(self, *args):
+        super().__exit__(*args)
+        self.execution_times[self.name] = self.elapsed_s

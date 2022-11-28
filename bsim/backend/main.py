@@ -17,7 +17,7 @@ from static_slice_planner import StaticSlicePlanner
 from subdivision_planner import SubdivisionPlanner
 from lateral_profile_planner import LateralProfilePlanner
 from urllib.parse import parse_qsl
-from utils import JSONNumpyDecoder, ensure_options_are_known
+from utils import JSONNumpyDecoder, ensure_options_are_known, AutoPerfCounter
 import websockets
 from typing import Dict, Any
 import time
@@ -343,21 +343,25 @@ def make_ego_handler(entity_id: str):
             pass # noop, just return the current state
         elif command == '_tick':
             # sensor
-            entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
-                entity['_sensor_fn'](entity['_sensor_state'], entity['state'], entity['action'])
-            entity['measurement'].setflags(write=False)
+            with AutoPerfCounter(entity['execution_times'], 'sensor'):
+                entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
+                    entity['_sensor_fn'](entity['_sensor_state'], entity['state'], entity['action'])
+                entity['measurement'].setflags(write=False)
             # detector
-            entity['valid_measurement'], entity['_detector_state'], entity['detector_debug_output'] = \
-                entity['_detector_fn'](entity['_detector_state'], entity['measurement'], entity['action'], entity['state'])
-            entity['valid_measurement'].setflags(write=False)
+            with AutoPerfCounter(entity['execution_times'], 'detector'):
+                entity['valid_measurement'], entity['_detector_state'], entity['detector_debug_output'] = \
+                    entity['_detector_fn'](entity['_detector_state'], entity['measurement'], entity['action'], entity['state'])
+                entity['valid_measurement'].setflags(write=False)
             # estimator
-            entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
-                entity['_estimator_fn'](entity['_estimator_state'], entity['valid_measurement'], entity['action'], entity['state'])
-            entity['estimate'].setflags(write=False)
+            with AutoPerfCounter(entity['execution_times'], 'estimator'):
+                entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
+                    entity['_estimator_fn'](entity['_estimator_state'], entity['valid_measurement'], entity['action'], entity['state'])
+                entity['estimate'].setflags(write=False)
             # planner
-            entity['_planner_state']['t'] = world_state['t']
-            entity['planner_output'], entity['_planner_state'], entity['planner_debug_output'] = \
-                entity['_planner_fn'](entity['_planner_state'], entity['estimate'], entity['action'])
+            with AutoPerfCounter(entity['execution_times'], 'planner'):
+                entity['_planner_state']['t'] = world_state['t']
+                entity['planner_output'], entity['_planner_state'], entity['planner_debug_output'] = \
+                    entity['_planner_fn'](entity['_planner_state'], entity['estimate'], entity['action'])
 
             entity['_controller_state']['target_path'] = entity['planner_output']['target_path']
             entity['_detector_state']['target_path'] = entity['planner_output']['target_path']
@@ -368,16 +372,18 @@ def make_ego_handler(entity_id: str):
             #     [0.0, 0.0, 0.7853981633974483, 5.0, 0.0], [0,0]), world_state['DT'])
             # model = control.sample_system(entity['_model'].linearize([0,0,entity['state'][2],5,0], [0, 0]), world_state['DT'])
 
-            # calculate control action
-            entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
-                entity['_controller_fn'](entity['_controller_state'], entity['estimate'])
+            # controller
+            with AutoPerfCounter(entity['execution_times'], 'controller'):
+                entity['action'], entity['_controller_state'], entity['controller_debug_output'] = \
+                    entity['_controller_fn'](entity['_controller_state'], entity['estimate'])
 
             # calculate new plant state
-            if model.isdtime():
-                entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']))
-            else:
-                # forward euler
-                entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']) * world_state['DT'] + entity['state'])
+            with AutoPerfCounter(entity['execution_times'], 'plant'):
+                if model.isdtime():
+                    entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']))
+                else:
+                    # forward euler
+                    entity['state'] = entity['_model_state_normalizer'](model.dynamics(0, entity['state'], entity['action']) * world_state['DT'] + entity['state'])
 
         elif ENTITY_UPDATE_STATE_REGEX.match(command):
             new_state = json.loads(ENTITY_UPDATE_STATE_REGEX.match(

@@ -8,6 +8,17 @@ const ENTITY_COLOR_MAP = [
         primary: 'green',
         secondary: 'blue',
         error: 'red',
+        palette: [
+            // from dark to light
+            // https://www.vecteezy.com/vector-art/2681487-green-color-palette-with-hex
+            '#3A6324',
+            '#267D39',
+            '#329542',
+            '#63A355',
+            '#B7D2B6',
+            '#CDE0CD',
+            '#E1EDE0',
+        ]
     },
 ]
 
@@ -363,6 +374,16 @@ function sliceToHorizon(arrs, tarr, t, horizon) {
     return res_arrs
 }
 
+const EXECUTION_TIME_FIELDS = [
+    { 'name': 'total', 'field': 'request_handler' },
+    // { 'name': 'sensor', 'field': 'sensor' },
+    { 'name': 'detector', 'field': 'detector' },
+    // { 'name': 'estimator', 'field': 'estimator' },
+    { 'name': 'planner', 'field': 'planner' },
+    { 'name': 'controller', 'field': 'controller' },
+    // { 'name': 'plant', 'field': 'plant' },
+]
+
 function drawPlots(plots, container, worldState) {
     const t = worldState.t;
 
@@ -389,12 +410,14 @@ function drawPlots(plots, container, worldState) {
                         scale: "execution_time",
                         value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(3),
                     },
-                    ...Object.entries(worldState.entities).map(([entityName, entity], i) => ({
-                        label: `${entityName} (s)`,
-                        stroke: ENTITY_COLOR_MAP[i].primary,
-                        scale: "execution_time",
-                        value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(3),
-                    }))
+                    ...Object.entries(worldState.entities).map(([entityName, entity], i) =>
+                        EXECUTION_TIME_FIELDS.map(({name, _field}, j) => ({
+                            label: `${entityName} ${name} (s)`,
+                            stroke: ENTITY_COLOR_MAP[i].palette[j],
+                            scale: "execution_time",
+                            value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(3),
+                        }))
+                    ).flat()
                 ],
                 axes: [
                     {},
@@ -410,8 +433,11 @@ function drawPlots(plots, container, worldState) {
         plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
         plotObj.data[0].push(t);
         plotObj.data[1].push(worldState.execution_times.request_handler);
-        for (const [[entityName, entity], i] of Object.entries(worldState.entities).map((e,i)=>[e, i+2])) {
-            plotObj.data[i].push(entity.execution_times.request_handler);
+        const entityStartIdx = 2;
+        for (const [[_entityName, entity], i] of Object.entries(worldState.entities).map((e,i)=>[e, i+entityStartIdx])) {
+            for (const [{_name, field}, j] of EXECUTION_TIME_FIELDS.map((e,j) => [e, j])) {
+                plotObj.data[entityStartIdx + (i-entityStartIdx) * EXECUTION_TIME_FIELDS.length + j].push(entity.execution_times[field]);
+            }
         }
         plotObj.plot.setData(plotObj.data);
     }
