@@ -52,7 +52,7 @@ def round_floats(o, decimals=6):
         return {k: round_floats(v) for k, v in o.items()}
     if isinstance(o, (list, tuple)):
         return type(o)(round_floats(x) for x in o)
-    if isinstance(o, np.ndarray):
+    if isinstance(o, np.ndarray) and o.dtype in (np.float32, np.float64):
         return o.round(decimals)
     return o
 
@@ -122,7 +122,7 @@ def world_handler(command: str):
                 'target_speed': 1., # m/s
                 'sensor': 'model_output_with_corruption',
                 'detector': 'l1_optimizer',
-                # 'detector': 'first_n',
+                'estimator': 'first_n',
                 # 'planner': 'static_slice',
                 # 'planner': 'subdivision',
                 'planner': 'lateral_profile',
@@ -184,14 +184,7 @@ def world_handler(command: str):
                 raise Exception(f"ERROR: unknown sensor: '{options['sensor']}'")
 
             # Detector
-            if options['detector'] == 'first_n':
-                detector_state = {
-                    'detector': 'sensor',
-                    '_detector_fn': lambda est_state, measurement, prev_inputs, _true_state: (measurement[0:plant_model.nstates], est_state, {}),
-                    '_detector_state': None,
-                    'detector_debug_output': {},
-                }
-            elif options['detector'] == 'l1_optimizer':
+            if options['detector'] == 'l1_optimizer':
                 detector = MyDetector(options['L'], world_state['DT'])
                 detector_state = {
                     'detector': 'l1_optimizer',
@@ -205,6 +198,17 @@ def world_handler(command: str):
                 }
             else:
                 raise Exception(f"ERROR: unknown detector: '{options['detector']}'")
+
+            # Estimator
+            if options['estimator'] == 'first_n':
+                estimator_state = {
+                    'estimator': 'sensor',
+                    '_estimator_fn': lambda est_state, measurement, prev_inputs, _true_state: (measurement[0:plant_model.nstates], est_state, {}),
+                    '_estimator_state': None,
+                    'estimator_debug_output': {},
+                }
+            else:
+                raise Exception(f"ERROR: unknown estimator: '{options['estimator']}'")
 
             # Planner
             if options['planner'] == 'static_slice':
@@ -275,6 +279,7 @@ def world_handler(command: str):
                 '_model_state_normalizer': plant_state_normalizer,
                 **sensor_state,
                 **detector_state,
+                **estimator_state,
                 **planner_state,
                 **controller_state,
             }
@@ -307,8 +312,11 @@ def make_ego_handler(entity_id: str):
             entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
                 entity['_sensor_fn'](entity['_sensor_state'], entity['state'], entity['action'])
             # detector
-            entity['estimate'], entity['_detector_state'], entity['detector_debug_output'] = \
+            entity['valid_measurement'], entity['_detector_state'], entity['detector_debug_output'] = \
                 entity['_detector_fn'](entity['_detector_state'], entity['measurement'], entity['action'], entity['state'])
+            # estimator
+            entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
+                entity['_estimator_fn'](entity['_estimator_state'], entity['valid_measurement'], entity['action'], entity['state'])
             # planner
             entity['_planner_state']['t'] = world_state['t']
             entity['planner_output'], entity['_planner_state'], entity['planner_debug_output'] = \

@@ -49,7 +49,8 @@ class MyDetector:
         self.min_ticks_per_solve = min_ticks_per_solve
         self.L = L
         self.model = ckb.make_continuous_kinematic_bicycle_model(L)
-        self._last_solve_tick = -min_ticks_per_solve
+        self._prev_solve_tick = -min_ticks_per_solve
+        self._sensor_validity_map = np.ones(self.model.noutputs, dtype=bool)
         self._tick_count = 0
         self._path_points: np.ndarray = np.array([]) # keep a running list of historical path points so that we can look back
         self._clear_data()
@@ -67,10 +68,11 @@ class MyDetector:
 
     def _solve(self, ext_state, debug_output, segment_info, current_path_segment_idx):
         # solve the estimation problem
+        # returns the sensor validity map
+
         print('solving estimation problem')
 
-        # TODO: This is currently passing through the first set of sensors. Use the estimate from the actual estimator instead.
-        estimate = self._measurements[0:self.model.nstates, -1]
+        sensor_validity_map = np.ones(self.model.noutputs, dtype=bool)
 
         # for type checking
         assert self.model.nstates is not None
@@ -127,9 +129,9 @@ class MyDetector:
         # if len(time_varying_model_signature) > 1:
         #     print(f"There are more than one model used in the estimation problem (signature {time_varying_model_signature})."
         #             " This is not supported yet. Deferring to a future time step.")
-        #     return estimate
+        #     return sensor_validity_map
 
-        self._last_solve_tick = self._tick_count
+        self._prev_solve_tick = self._tick_count
 
         evolution_matrix = np.zeros((self.model.nstates*self.N, self.model.nstates))
         evolution_matrix[0:self.model.nstates, :] = np.eye(self.model.nstates)
@@ -227,7 +229,7 @@ class MyDetector:
         # print("Number of sensors under attack:", num_sensors_under_attack)
         print("=================================")
 
-        return estimate
+        return sensor_validity_map
 
     def tick(self, ext_state, measurement, prev_inputs, true_state=None):
         """
@@ -238,8 +240,6 @@ class MyDetector:
         """
         self._tick_count += 1
 
-        # TODO: This is currently passing through the first set of sensors. Use the estimate from the actual estimator instead.
-        estimate = measurement[0:self.model.nstates]
         debug_output = {}
 
         # TODO: use measurement instead of true_state. However, we don't know what the
@@ -251,7 +251,7 @@ class MyDetector:
         # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
         target_path = ext_state.get('target_path')
         if target_path is None:
-            return estimate, ext_state, debug_output
+            return measurement, ext_state, debug_output
 
         # This is used to infer the nominal trajectory and linearization
         # TODO: use estimated x and y instead of true x and y
@@ -295,12 +295,19 @@ class MyDetector:
 
         debug_output["num_data_points"] = self._num_data_points
 
-        if self._num_data_points >= self.N and self._tick_count - self._last_solve_tick >= self.min_ticks_per_solve:
-            estimate = self._solve(
+        if self._num_data_points >= self.N and self._tick_count - self._prev_solve_tick >= self.min_ticks_per_solve:
+            new_sensor_validity_map = self._solve(
                 ext_state, debug_output, path_memory_segment_info, path_memory_current_segment_idx)
+            
+            # TODO: compare new_sensor_validity_map with the previous one
+            if not np.array_equal(new_sensor_validity_map, self._sensor_validity_map):
+                print(f"sensor_validity_map changed from {self._sensor_validity_map} to {new_sensor_validity_map}!")
+            
+            self._sensor_validity_map = new_sensor_validity_map
 
         debug_output["tick_count"] = self._tick_count
-        debug_output["last_solve_tick"] = self._last_solve_tick
+        debug_output["prev_solve_tick"] = self._prev_solve_tick
+        debug_output["sensor_validity_map"] = self._sensor_validity_map
 
         # evict old path memory (arbitrarily set to be a multiplier on the number of states needed for the solver)
         lookbehind_m = ext_state["target_speed"] * self.N * self.dt * PATH_MEMORY_EVICT_MULTIPLIER
@@ -311,4 +318,8 @@ class MyDetector:
         self._path_points = self._path_points[eviction_threshold_segment_idx:]
         debug_output["eviction_threshold_segment_idx"] = int(eviction_threshold_segment_idx)
 
-        return estimate, ext_state, debug_output
+        # overwrite invalid sensors
+        valid_measurement = measurement
+        valid_measurement[np.invert(self._sensor_validity_map)] = np.nan
+
+        return valid_measurement, ext_state, debug_output
