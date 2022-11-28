@@ -277,8 +277,15 @@ class MyDetector:
             # To handle different path lengths, we need to find the segment on the target path that's just after the current segment in the path memory.
             path_memory_current_segment_dist_remaining = path_memory_segment_info[path_memory_current_segment_idx].distance_remaining
             target_path_segment_idx_at_the_end_of_path_memory_segment = next(move_along_path(deepcopy(target_path_segment_info), target_path_current_segment_idx, path_memory_current_segment_dist_remaining))[1]
+            # append the target path starting from the second point of the next segment
+            # this prevents sharp changes in heading in the resulting path.
+            target_path_starting_idx = target_path_segment_idx_at_the_end_of_path_memory_segment+2
+            # use the path memory up to and including the current segment
             self._path_points = np.concatenate(
-                (self._path_points[:path_memory_current_segment_idx+2], target_path[target_path_segment_idx_at_the_end_of_path_memory_segment+1:]), axis=0)
+                (self._path_points[:path_memory_current_segment_idx+2], target_path[target_path_starting_idx:]), axis=0)
+
+            # assertion to make sure there are no duplicate path points. This is slow so we comment it out
+            # assert all(np.sum(np.diff(self._path_points, axis=0), axis=1) != 0)
 
         debug_output["target_path_current_segment_idx"] = int(target_path_current_segment_idx)
         debug_output["path_memory"] = self._path_points

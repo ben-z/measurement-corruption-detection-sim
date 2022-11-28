@@ -576,6 +576,61 @@ function drawPlots(plots, container, worldState) {
                 plotObj.plot.setData(plotObj.data);
             }
             {
+                const plotID = `${entityName}_detector_2`;
+                if (!plots[plotID]) {
+                    const plotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(plotContainer);
+                    plots[plotID] = { plotContainer }
+                }
+                if (!plots[plotID].plot && entity.detector_debug_output.sensor_validity_map) {
+                    const { plotContainer } = plots[plotID];
+
+                    const plot_settings = {
+                        ...COMMON_PLOT_SETTINGS,
+                        title: `${entityName} Detector Debug 2`,
+                        scales: {
+                            x: TIME_SCALE,
+                            true_false: {
+                                range: (self, min, max) => [Math.min(0,min), Math.max(1, max)],
+                            },
+                        },
+                        series: [
+                            {
+                                label: 'time (s)',
+                                value: (self, rawValue) => rawValue.toFixed(2),
+                            },
+                            ...entity.detector_debug_output.sensor_validity_map.map(
+                                (sensor_validity, sensor_idx) => ({
+                                    label: `Sensor ${sensor_idx} Validity`,
+                                    scale: 'true_false',
+                                    stroke: 'blue',
+                                })
+                            ).flat()
+                        ],
+                        axes: [
+                            {},
+                            {
+                                scale: 'true_false',
+                            },
+                        ]
+                    }
+                    plots[plotID].plot = new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), plotContainer);
+                    plots[plotID].data = Array(plot_settings.series.length).fill([]);
+                }
+                if (plots[plotID].plot) {
+                    const plotObj = plots[plotID];
+                    plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
+
+                    plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
+                    plotObj.data[0].push(t);
+                    const sensorStartIdx = 1;
+                    entity.detector_debug_output.sensor_validity_map.forEach((sensor_validity, sensor_idx) => {
+                        plotObj.data[sensorStartIdx + sensor_idx].push(sensor_validity);
+                    });
+                    plotObj.plot.setData(plotObj.data);
+                }
+            }
+            {
                 const plotID = `${entityName}_planner`;
                 if (!plots[plotID]) {
                     const plotContainer = document.createElement('div', {id: plotID});
