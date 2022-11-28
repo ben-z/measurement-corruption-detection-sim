@@ -63,6 +63,17 @@ def strip_internal_vars(o):
         return type(o)(strip_internal_vars(x) for x in o)
     return o
 
+def strip_nans(o):
+    if isinstance(o, dict):
+        return {k: strip_nans(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return type(o)(strip_nans(x) for x in o)
+    if isinstance(o, float) and np.isnan(o):
+        return None
+    if isinstance(o, np.ndarray) and o.dtype in (np.float32, np.float64):
+        return strip_nans(o.tolist())
+    return o
+
 def get_handler(path: str):
     if path == '/world':
         return world_handler
@@ -123,6 +134,7 @@ def world_handler(command: str):
                 'sensor': 'model_output_with_corruption',
                 'detector': 'l1_optimizer',
                 'estimator': 'first_n',
+                'estimator': 'average_valid',
                 # 'planner': 'static_slice',
                 # 'planner': 'subdivision',
                 'planner': 'lateral_profile',
@@ -201,9 +213,31 @@ def world_handler(command: str):
 
             # Estimator
             if options['estimator'] == 'first_n':
+                def first_n_estimator_fn(estimator_state, measurement, _prev_inputs, _true_state):
+                    estimate = measurement[0:plant_model.nstates]
+                    if np.nan in estimate:
+                        raise Exception(f"ERROR: this estimator cannot handle NaN's: {estimate}")
+                    return estimate, estimator_state, {}
+
                 estimator_state = {
-                    'estimator': 'sensor',
-                    '_estimator_fn': lambda est_state, measurement, prev_inputs, _true_state: (measurement[0:plant_model.nstates], est_state, {}),
+                    'estimator': 'first_n',
+                    '_estimator_fn': first_n_estimator_fn,
+                    '_estimator_state': None,
+                    'estimator_debug_output': {},
+                }
+            elif options["estimator"] == "average_valid":
+                # average the valid (non-NaN) measurements
+                def average_valid_estimator_fn(estimator_state, measurement, _prev_inputs, _true_state):
+                    estimate = np.zeros(plant_model.nstates)
+
+                    for i in range(plant_model.nstates):
+                        estimate[i] = np.nanmean(measurement[ckb.OUTPUT_TO_STATE_MAP == i])
+
+                    return estimate, estimator_state, {}
+
+                estimator_state = {
+                    'estimator': 'average_valid',
+                    '_estimator_fn': average_valid_estimator_fn,
                     '_estimator_state': None,
                     'estimator_debug_output': {},
                 }
@@ -311,12 +345,15 @@ def make_ego_handler(entity_id: str):
             # sensor
             entity['measurement'], entity['_sensor_state'], entity['sensor_debug_output'] = \
                 entity['_sensor_fn'](entity['_sensor_state'], entity['state'], entity['action'])
+            entity['measurement'].setflags(write=False)
             # detector
             entity['valid_measurement'], entity['_detector_state'], entity['detector_debug_output'] = \
                 entity['_detector_fn'](entity['_detector_state'], entity['measurement'], entity['action'], entity['state'])
+            entity['valid_measurement'].setflags(write=False)
             # estimator
             entity['estimate'], entity['_estimator_state'], entity['estimator_debug_output'] = \
                 entity['_estimator_fn'](entity['_estimator_state'], entity['valid_measurement'], entity['action'], entity['state'])
+            entity['estimate'].setflags(write=False)
             # planner
             entity['_planner_state']['t'] = world_state['t']
             entity['planner_output'], entity['_planner_state'], entity['planner_debug_output'] = \
@@ -388,8 +425,7 @@ async def new_connection(websocket, path: str):
             traceback.print_exc()
             response = {'id': request_id, 'error': traceback.format_exc()}
 
-        serialized_response = json.dumps(
-            round_floats(strip_internal_vars(response)), cls=MyEncoder)
+        serialized_response = json.dumps(strip_nans(round_floats(strip_internal_vars(response))), allow_nan=False, cls=MyEncoder)
 
         await websocket.send(serialized_response)
         # print(f"[{request_id}] > {path}: {serialized_response}")

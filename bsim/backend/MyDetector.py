@@ -299,7 +299,6 @@ class MyDetector:
             new_sensor_validity_map = self._solve(
                 ext_state, debug_output, path_memory_segment_info, path_memory_current_segment_idx)
             
-            # TODO: compare new_sensor_validity_map with the previous one
             if not np.array_equal(new_sensor_validity_map, self._sensor_validity_map):
                 print(f"sensor_validity_map changed from {self._sensor_validity_map} to {new_sensor_validity_map}!")
             
@@ -319,7 +318,7 @@ class MyDetector:
         debug_output["eviction_threshold_segment_idx"] = int(eviction_threshold_segment_idx)
 
         # overwrite invalid sensors
-        valid_measurement = measurement
+        valid_measurement = measurement.copy()
         valid_measurement[np.invert(self._sensor_validity_map)] = np.nan
 
         return valid_measurement, ext_state, debug_output

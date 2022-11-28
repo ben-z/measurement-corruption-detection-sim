@@ -2,6 +2,7 @@ import control
 import math
 import numpy as np
 from utils import wrap_to_pi
+import re
 
 
 _INITIAL_STATE = np.array([0, 0, 0, 0.0001, 0])
@@ -100,9 +101,26 @@ def _get_C():
     return C
 
 _C = _get_C()
+_C.setflags(write=False)
 
 def get_C():
-    return _C.copy()
+    return _C
+
+def _make_output_to_state_map():
+    """
+    Returns a map from output indices to state indices.
+    This assumes that each output corresponds to a state.
+    """
+
+    state_regexes = [re.compile(f"^{state}\\d*$") for state in STATES]
+
+    output_to_state_map = np.zeros(len(OUTPUTS), dtype=int)
+    for i, output_name in enumerate(OUTPUTS):
+        output_to_state_map[i] = next(j for j, r in enumerate(state_regexes) if r.match(output_name))
+    return output_to_state_map
+
+OUTPUT_TO_STATE_MAP = _make_output_to_state_map()
+OUTPUT_TO_STATE_MAP.setflags(write=False)
 
 def get_linear_model_straight_line_ref(x,y,theta,v,delta,a,delta_dot,L):
     A = np.array([
