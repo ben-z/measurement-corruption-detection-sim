@@ -20,6 +20,22 @@ const ENTITY_COLOR_MAP = [
             '#E1EDE0',
         ]
     },
+    {
+        primary: 'blue',
+        secondary: 'green',
+        error: 'red',
+        palette: [
+            // from dark to light
+            // https://www.vecteezy.com/vector-art/2681487-green-color-palette-with-hex
+            '#3A6324',
+            '#267D39',
+            '#329542',
+            '#63A355',
+            '#B7D2B6',
+            '#CDE0CD',
+            '#E1EDE0',
+        ]
+    },
 ]
 
 function ensureSucceeds(res) {
@@ -33,6 +49,120 @@ function ensureSucceeds(res) {
 
 const egos = {
     ego1: {},
+    ego2: {},
+}
+
+function initializeEgoConfig() {
+    const BASIC_TARGET_SPEED = 5; // m/s
+    const REF_SQUARE = {
+        global_ref_path: [[20, 20], [20, -20], [-20, -20], [-20, 20]],
+        get_initial_state: (target_speed) => [0, 0, 0, target_speed, 0],
+    };
+    const REF_SQUARE_WITH_CUT_CONERS = {
+        global_ref_path: [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]],
+        get_initial_state: (target_speed) => [18,0,-1.5708, target_speed,0],
+    };
+    const REF_STRAIGHT_LINE = {
+        global_ref_path: [[-20, 0], [20, 0], [20, 5]],
+        get_initial_state: (target_speed) => [0,0,0, target_speed,0],
+    };
+    const REF_DIAGONAL_LINE = {
+        global_ref_path: [[-20, -20], [20, 20], [-20,30]],
+        get_initial_state: (target_speed) => [0,0,0, target_speed,0],
+    };
+    const REF_CIRCLE_32_DIV = {
+        global_ref_path: generateCircleApproximation([0,0], 20, 32).reverse(),
+        get_initial_state: (target_speed) => [20,0,-1.5708, target_speed,-0.145],
+    };
+    const REF_FRENET_GENERATD_STRAIGHT_LINE = (() => {
+        const slist = [...Array(100).keys()].map(i => i);
+        const dlist = new Array(slist.length).fill(0);
+
+        return {
+            global_ref_path: frenet2global_path([[-20, 0], [20, 0], [20, 5]], slist, dlist),
+            get_initial_state: (target_speed) => [0,0,0, target_speed,0],
+        };
+    })();
+    const REF_FRENET_GENERATD_CIRCLE = (() => {
+        const slist = [...Array(100).keys()].map(i => i);   
+        const dlist = new Array(slist.length).fill(0);
+
+        return {
+            global_ref_path: frenet2global_path(generateCircleApproximation([0,0], 20, 32).reverse(), slist, dlist),
+            get_initial_state: (target_speed) => [20,0,-1.5708, target_speed,-0.145],
+        };
+    })();
+    const REF_NOT_SURE = {
+        global_ref_path: [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]],
+        get_initial_state: (target_speed) => [0,0,0, target_speed,0],
+    }
+
+    const BASIC_CONTROLLER_CONFIG = {
+        controller: 'lookahead_lqr',
+        controller_options: {
+            Q: [
+                [1., 0., 0., 0., 0.],
+                [0., 1., 0., 0., 0.],
+                [0., 0., 1., 0., 0.],
+                [0., 0., 0., 10000., 0.],
+                [0., 0., 0., 0., 1.],
+            ]
+        }
+    }
+    const BASIC_PLANNER_CONFIG = {
+        planner: 'lateral_profile',
+        planner_options: {
+            lateral_deviation_profile: {
+                'interpolation': 'linear',
+                'periodic': true,
+                'points': [
+                    { 't': 0, 'lateral_deviation': 0 },
+                    { 't': 5, 'lateral_deviation': 0 },
+                    { 't': 10, 'lateral_deviation': 3 },
+                    { 't': 20, 'lateral_deviation': 3 },
+                    { 't': 30, 'lateral_deviation': 0 },
+                    { 't': 35, 'lateral_deviation': 0 },
+                    { 't': 40, 'lateral_deviation': -3 },
+                    { 't': 50, 'lateral_deviation': -3 },
+                    { 't': 60, 'lateral_deviation': 0 },
+                ],
+            }
+        }
+    };
+
+    { // ego1
+        const ego = egos.ego1;
+        const ref = REF_CIRCLE_32_DIV;
+        const target_speed = BASIC_TARGET_SPEED;
+
+        ego.controller = BASIC_CONTROLLER_CONFIG.controller;
+        ego.controller_options = BASIC_CONTROLLER_CONFIG.controller_options;
+        ego.global_ref_path = ref.global_ref_path;
+        ego.plant_options = {
+            initial_state: ref.get_initial_state(target_speed),
+        };
+        ego.target_speed = target_speed;
+        ego.planner = BASIC_PLANNER_CONFIG.planner;
+        ego.planner_options = BASIC_PLANNER_CONFIG.planner_options;
+        ego.detector = 'l1_optimizer';
+    }
+
+    { // ego2
+        const ego = egos.ego2;
+        const ref = REF_CIRCLE_32_DIV;
+        const target_speed = BASIC_TARGET_SPEED; // m/s
+
+        ego.controller = BASIC_CONTROLLER_CONFIG.controller;
+        ego.controller_options = BASIC_CONTROLLER_CONFIG.controller_options;
+        ego.global_ref_path = ref.global_ref_path;
+        ego.plant_options = {
+            initial_state: ref.get_initial_state(target_speed),
+        };
+        ego.target_speed = target_speed;
+        ego.planner = BASIC_PLANNER_CONFIG.planner;
+        ego.planner_options = BASIC_PLANNER_CONFIG.planner_options;
+        ego.detector = 'none';
+    }
 }
 
 // Variable used to expose an API
@@ -47,7 +177,6 @@ const WEBSOCKET_OPTIONS = {
 
 function entityToPlotContainerID(entityName) {
     // Converts an entity name to a plot container ID
-
     switch (entityName) {
         case 'ego1':
             return 'plotContainer1';
@@ -64,74 +193,13 @@ async function main() {
     await worldSocket.open();
     console.log("World socket opened: ", worldSocket);
     ensureSucceeds(await worldSocket.sendRequest({command: 'reset'}));
-    for (const ego in egos) {
-        // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=manual`}));
-        // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=path_following_kmpc`}));
-        // ensureSucceeds(await worldSocket.sendRequest({command: `create_entity: ego ${ego} controller=lookahead_lqr`}));
-        const target_speed = 5; // m/s
-        // const global_ref_path = [[-10,3], [10,5], [13,-8], [7, -15], [0,-15], [-10,-3]];
-        // const global_ref_path = [[20, 20], [20, -20], [-20, -20], [-20, 20]]; // square
-        // const global_ref_path = [[15, 20], [20, 15], [20, -15], [15, -20], [-15, -20], [-20, -15], [-20, 15], [-15, 20]]; const initial_state = [18,0,-1.5708,target_speed,0]; // square with cut corners
-        // const global_ref_path = [[-20, 0], [20, 0], [20, 5]]; const initial_state = [0,0,0,0.001,0]; // straight line
-        // const global_ref_path = [[-20, -20], [20, 20], [-20,30]]; const initial_state = [0,0,0,target_speed,0]; // diagonal line
-        const global_ref_path = generateCircleApproximation([0,0], 20, 32).reverse(); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
-        // const slist = [...Array(100).keys()].map(i => i);
-        // const dlist = new Array(slist.length).fill(0);
-        // const global_ref_path = frenet2global_path([[-20, 0], [20, 0], [20, 5]], slist, dlist); const initial_state = [0,0,0,0.001,0]; // straight line
-        // const global_ref_path = frenet2global_path(generateCircleApproximation([0,0], 20, 32).reverse(), slist, dlist); const initial_state = [20,0,-1.5708,target_speed,-0.145]; // circle
-        const plant_options = {
-            initial_state: initial_state,
-        }
-        // const controller = 'manual';
-        // const controller_options = {};
-        const controller = 'lookahead_lqr';
-        const controller_options = {
-            Q: [
-                [1., 0., 0., 0., 0.],
-                [0., 1., 0., 0., 0.],
-                [0., 0., 1., 0., 0.],
-                [0., 0., 0., 10000., 0.],
-                [0., 0., 0., 0., 1.],
-            ]
-        };
-        const planner = 'lateral_profile';
-        const planner_options = {
-            lateral_deviation_profile: {
-                'interpolation': 'linear',
-                'periodic': true,
-                'points': [
-                    { 't': 0, 'lateral_deviation': 0 },
-                    { 't': 5, 'lateral_deviation': 0 },
-                    { 't': 10, 'lateral_deviation': 3 },
-                    { 't': 20, 'lateral_deviation': 3 },
-                    { 't': 30, 'lateral_deviation': 0 },
-                    { 't': 35, 'lateral_deviation': 0 },
-                    { 't': 40, 'lateral_deviation': -3 },
-                    { 't': 50, 'lateral_deviation': -3 },
-                    { 't': 60, 'lateral_deviation': 0 },
-                ],
-            }
-        };
+    initializeEgoConfig();
+    for (const [egoName, egoConfig] of Object.entries(egos)) {
         ensureSucceeds(await worldSocket.sendRequest({
-            command: `create_entity: ego ${ego}`
-                  + ` controller=${controller}`
-                  + `,global_ref_path=${encodeURIComponent(JSON.stringify(global_ref_path))}`
-                  + `,controller_options=${encodeURIComponent(JSON.stringify(controller_options))}`
-                  + `,plant_options=${encodeURIComponent(JSON.stringify(plant_options))}`
-                  + `,target_speed=${target_speed}`
-                  + `,planner=${planner},planner_options=${encodeURIComponent(JSON.stringify(planner_options))}`
+            command: `create_entity: ego ${egoName} ${encodeURIComponent(JSON.stringify(egoConfig))}`
         }));
-        egos[ego]._socket = new WebSocketAsPromised(`ws://localhost:8765/entities/${ego}`, WEBSOCKET_OPTIONS);
-        ensureSucceeds(await egos[ego]._socket.open());
-        // testing additive corruption
-        // setTimeout(async () => {
-        //     const new_state = {
-        //         _sensor_state: {
-        //             additive_corruption: [0,0,0,-6,0]
-        //         }
-        //     }
-        //     ensureSucceeds(await egos[ego]._socket.sendRequest({command: `update_state: ${JSON.stringify(new_state)}`}));
-        // }, 3000)
+        egos[egoName]._socket = new WebSocketAsPromised(`ws://localhost:8765/entities/${egoName}`, WEBSOCKET_OPTIONS);
+        ensureSucceeds(await egos[egoName]._socket.open());
     }
 
     const bevCanvas = document.getElementById('bevCanvas');
@@ -462,7 +530,7 @@ function drawPlots(plots, containers, worldState) {
 
     for (const [entityName, entity] of Object.entries(worldState.entities)) {
         const container = containers[entityToPlotContainerID(entityName)]
-        if (entityName === 'ego1') {
+        if (entityName.match('^ego\\d+$')) {
             { // Plots of basic ego state
                 const plotID = `${entityName}_basics`;
                 if (!plots[plotID]) {

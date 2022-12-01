@@ -475,7 +475,10 @@ class JSONNumpyDecoder(json.JSONDecoder):
         return self._decode(data)
 
     def _decode(self, data):
-        if isinstance(data, (int, float, str)):
+        if isinstance(data, int):
+            # There are no `int`s in JavaScript: https://stackoverflow.com/a/16662153/4527337
+            return float(data)
+        if isinstance(data, (float, str)):
             return data
         elif isinstance(data, dict):
             return {self._decode(key): self._decode(value) for key, value in data.items()}

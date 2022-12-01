@@ -21,6 +21,7 @@ from utils import JSONNumpyDecoder, ensure_options_are_known, AutoPerfCounter
 import websockets
 from typing import Dict, Any
 import time
+import urllib
 
 INITIAL_WORLD_STATE = {
     't': 0,
@@ -32,7 +33,7 @@ INITIAL_WORLD_STATE = {
 world_state = deepcopy(INITIAL_WORLD_STATE)
 
 ENTITY_PATH_REGEX = re.compile(r'^/entities/(?P<entity_id>\w+)$')
-CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>[\w=%,-\.]+))?$')
+CREATE_ENTITY_REGEX = re.compile(r'^create_entity: (?P<entity_type>\w+)(?: (?P<entity_id>\w+))?(?: (?P<entity_options>[^ ]+))?$')
 ENTITY_UPDATE_STATE_REGEX = re.compile(r'^update_state: (?P<new_state>.+)$')
 
 
@@ -122,7 +123,7 @@ def world_handler(command: str):
         if entity_id in world_state['entities']:
             raise Exception(f"ERROR: entity with ID '{entity_id}' already exists")
 
-        user_options: Dict[str, Any] = dict(parse_qsl(entity_options, separator=",", strict_parsing=True)) if entity_options else {}
+        user_options: Dict[str, Any] = json.loads(urllib.parse.unquote(entity_options), cls=JSONNumpyDecoder) if entity_options else {}
 
         if entity_type == 'ego':
             default_options = {
@@ -146,18 +147,6 @@ def world_handler(command: str):
 
             # check for invalid options
             ensure_options_are_known(user_options, default_options, entity_id)
-
-            # unpack user options that are stringified in transit
-            if isinstance(user_options.get('global_ref_path'), str):
-                user_options['global_ref_path'] = np.array(json.loads(user_options['global_ref_path']))
-            if isinstance(user_options.get('target_speed'), str):
-                user_options['target_speed'] = float(user_options['target_speed'])
-            if isinstance(user_options.get('plant_options'), str):
-                user_options['plant_options'] = json.loads(user_options['plant_options'], cls=JSONNumpyDecoder)
-            if isinstance(user_options.get('controller_options'), str):
-                user_options['controller_options'] = json.loads(user_options['controller_options'], cls=JSONNumpyDecoder)
-            if isinstance(user_options.get('planner_options'), str):
-                user_options['planner_options'] = json.loads(user_options['planner_options'], cls=JSONNumpyDecoder)
 
             # merge the user options with the default options
             options = mergedeep.merge({}, default_options, user_options, strategy=mergedeep.Strategy.TYPESAFE_REPLACE)
@@ -196,7 +185,15 @@ def world_handler(command: str):
                 raise Exception(f"ERROR: unknown sensor: '{options['sensor']}'")
 
             # Detector
-            if options['detector'] == 'l1_optimizer':
+            if options['detector'] == 'none':
+                # simply pass through the sensor output
+                detector_state = {
+                    'detector': 'none',
+                    '_detector_fn': lambda det_state, measurement, _prev_inputs, _true_state=None: (measurement, det_state, {}),
+                    '_detector_state': {},
+                    'detector_debug_output': {},
+                }
+            elif options['detector'] == 'l1_optimizer':
                 detector = MyDetector(options['L'], world_state['DT'])
                 detector_state = {
                     'detector': 'l1_optimizer',
