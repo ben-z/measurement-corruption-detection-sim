@@ -45,6 +45,19 @@ const WEBSOCKET_OPTIONS = {
     extractRequestId: data => data && data.id,                                  // read requestId from message `id` field
 }
 
+function entityToPlotContainerID(entityName) {
+    // Converts an entity name to a plot container ID
+
+    switch (entityName) {
+        case 'ego1':
+            return 'plotContainer1';
+        case 'ego2':
+            return 'plotContainer2';
+        default:
+            return 'plotContainerGlobal';
+    }
+}
+
 async function main() {
     // Initialize world
     const worldSocket = new WebSocketAsPromised('ws://localhost:8765/world', WEBSOCKET_OPTIONS);
@@ -124,7 +137,12 @@ async function main() {
     const bevCanvas = document.getElementById('bevCanvas');
     bevCanvas.getContext('2d').translate(bevCanvas.width/2, bevCanvas.height/2)
     const rawDebugContainer = document.getElementById('rawDebugContainer');
-    const plotContainer = document.getElementById('plotContainer');
+    const plotContainers = {
+        plotContainerGlobal: document.getElementById('plotContainerGlobal'),
+        plotContainer1: document.getElementById('plotContainer1'),
+        plotContainer2: document.getElementById('plotContainer2'),
+    }
+
     const plots = {};
 
     let paused = false;
@@ -145,8 +163,7 @@ async function main() {
             bsim_js.pushWorldState(worldState);
             drawBEV(bevCanvas, worldState);
             drawDebugDashboard(rawDebugContainer, worldState);
-            drawPlots(plots, plotContainer, worldState);
-
+            drawPlots(plots, plotContainers, worldState);
         } catch (e) {
             console.error(e);
             displayError(rawDebugContainer, e);
@@ -384,14 +401,15 @@ const EXECUTION_TIME_FIELDS = [
     // { 'name': 'plant', 'field': 'plant' },
 ]
 
-function drawPlots(plots, container, worldState) {
+function drawPlots(plots, containers, worldState) {
     const t = worldState.t;
 
     {
+        const container = containers[entityToPlotContainerID('global')]
         const plotID = `execution_time`;
         if (!plots[plotID]) {
-            const plotContainer = document.createElement('div', {id: plotID});
-            container.appendChild(plotContainer);
+            const onePlotContainer = document.createElement('div', {id: plotID});
+            container.appendChild(onePlotContainer);
             const plot_settings = {
                 ...COMMON_PLOT_SETTINGS,
                 title: `Execution Time (s)`,
@@ -425,7 +443,7 @@ function drawPlots(plots, container, worldState) {
                 ]
             }
             plots[plotID] = {
-                plot: new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), plotContainer),
+                plot: new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), onePlotContainer),
                 data: Array(plot_settings.series.length).fill([]),
             };
         }
@@ -443,12 +461,13 @@ function drawPlots(plots, container, worldState) {
     }
 
     for (const [entityName, entity] of Object.entries(worldState.entities)) {
+        const container = containers[entityToPlotContainerID(entityName)]
         if (entityName === 'ego1') {
             { // Plots of basic ego state
                 const plotID = `${entityName}_basics`;
                 if (!plots[plotID]) {
-                    const plotContainer = document.createElement('div', {id: plotID});
-                    container.appendChild(plotContainer);
+                    const onePlotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(onePlotContainer);
                     plots[plotID] = {
                         plot: new uPlot({
                             ...COMMON_PLOT_SETTINGS,
@@ -487,7 +506,7 @@ function drawPlots(plots, container, worldState) {
                                 MPS_AXIS,
                                 {...RAD_AXIS, side: 1, grid: {show: false}},
                             ]
-                        }, [[], [], [], []], plotContainer),
+                        }, [[], [], [], []], onePlotContainer),
                         data: [[], [], [], []],
                     };
                 }
@@ -503,8 +522,8 @@ function drawPlots(plots, container, worldState) {
             {
                 const plotID = `${entityName}_detector`;
                 if (!plots[plotID]) {
-                    const plotContainer = document.createElement('div', {id: plotID});
-                    container.appendChild(plotContainer);
+                    const onePlotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(onePlotContainer);
                     plots[plotID] = {
                         plot: new uPlot({
                             ...COMMON_PLOT_SETTINGS,
@@ -563,7 +582,7 @@ function drawPlots(plots, container, worldState) {
                                     side: 1,
                                 }
                             ]
-                        }, [[], [], [], []], plotContainer),
+                        }, [[], [], [], []], onePlotContainer),
                         data: [[], [], [], []],
                     };
                 }
@@ -578,12 +597,12 @@ function drawPlots(plots, container, worldState) {
             {
                 const plotID = `${entityName}_detector_2`;
                 if (!plots[plotID]) {
-                    const plotContainer = document.createElement('div', {id: plotID});
-                    container.appendChild(plotContainer);
-                    plots[plotID] = { plotContainer }
+                    const onePlotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(onePlotContainer);
+                    plots[plotID] = { onePlotContainer }
                 }
                 if (!plots[plotID].plot && entity.detector_debug_output.sensor_validity_map) {
-                    const { plotContainer } = plots[plotID];
+                    const { onePlotContainer } = plots[plotID];
 
                     const plot_settings = {
                         ...COMMON_PLOT_SETTINGS,
@@ -614,7 +633,7 @@ function drawPlots(plots, container, worldState) {
                             },
                         ]
                     }
-                    plots[plotID].plot = new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), plotContainer);
+                    plots[plotID].plot = new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), onePlotContainer);
                     plots[plotID].data = Array(plot_settings.series.length).fill([]);
                 }
                 if (plots[plotID].plot) {
@@ -633,8 +652,8 @@ function drawPlots(plots, container, worldState) {
             {
                 const plotID = `${entityName}_planner`;
                 if (!plots[plotID]) {
-                    const plotContainer = document.createElement('div', {id: plotID});
-                    container.appendChild(plotContainer);
+                    const onePlotContainer = document.createElement('div', {id: plotID});
+                    container.appendChild(onePlotContainer);
                     const plot_settings = {
                         ...COMMON_PLOT_SETTINGS,
                         title: `${entityName} Planner Debug`,
@@ -660,7 +679,7 @@ function drawPlots(plots, container, worldState) {
                         ]
                     }
                     plots[plotID] = {
-                        plot: new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), plotContainer),
+                        plot: new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), onePlotContainer),
                         data: Array(plot_settings.series.length).fill([]),
                     };
                 }
