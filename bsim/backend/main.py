@@ -433,7 +433,7 @@ async def new_connection(websocket, path: str):
         await websocket.send(serialized_response)
         # print(f"[{request_id}] > {path}: {serialized_response}")
 
-start_server = websockets.serve(new_connection, "localhost", 8765)
+start_server = websockets.serve(new_connection, host="0.0.0.0", port=8765)
 
 asyncio.get_event_loop().run_until_complete(start_server)
 print("Starting backend event loop...")

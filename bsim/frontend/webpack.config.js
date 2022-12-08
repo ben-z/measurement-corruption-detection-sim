@@ -2,10 +2,15 @@
 
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const { DefinePlugin } = require("webpack");
 
 const isProduction = process.env.NODE_ENV == "production";
 
 const stylesHandler = "style-loader";
+
+const DEVSERVER_PORT=9092
+const BACKEND_SOCKET_PORT=8765
+const BACKEND_SOCKET_URL= process.env.CODESPACES ? `wss://${process.env.CODESPACE_NAME}-${BACKEND_SOCKET_PORT}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` : `ws://localhost:${BACKEND_SOCKET_PORT}`;
 
 const config = {
   entry: "./src/index.js",
@@ -13,9 +18,15 @@ const config = {
     path: path.resolve(__dirname, "dist"),
   },
   devServer: {
+    client: {
+      webSocketURL: {
+        port: process.env.CODESPACES ? 443 : DEVSERVER_PORT,
+      }
+    },
     open: false,
-    port: 9091,
-    host: "localhost",
+    host: '0.0.0.0',
+    port: DEVSERVER_PORT,
+    allowedHosts: ['localhost', `.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`],
   },
   plugins: [
     new HtmlWebpackPlugin({
@@ -24,6 +35,9 @@ const config = {
 
     // Add your plugins here
     // Learn more about plugins from https://webpack.js.org/configuration/plugins/
+    new DefinePlugin({
+      "webpack_env.BACKEND_SOCKET_URL": JSON.stringify(BACKEND_SOCKET_URL),
+    }),
   ],
   module: {
     rules: [

@@ -187,9 +187,11 @@ function entityToPlotContainerID(entityName) {
     }
 }
 
+const BACKEND_SOCKET_URL = webpack_env.BACKEND_SOCKET_URL;
+
 async function main() {
     // Initialize world
-    const worldSocket = new WebSocketAsPromised('ws://localhost:8765/world', WEBSOCKET_OPTIONS);
+    const worldSocket = new WebSocketAsPromised(`${BACKEND_SOCKET_URL}/world`, WEBSOCKET_OPTIONS);
     await worldSocket.open();
     console.log("World socket opened: ", worldSocket);
     ensureSucceeds(await worldSocket.sendRequest({command: 'reset'}));
@@ -198,7 +200,7 @@ async function main() {
         ensureSucceeds(await worldSocket.sendRequest({
             command: `create_entity: ego ${egoName} ${encodeURIComponent(JSON.stringify(egoConfig))}`
         }));
-        egos[egoName]._socket = new WebSocketAsPromised(`ws://localhost:8765/entities/${egoName}`, WEBSOCKET_OPTIONS);
+        egos[egoName]._socket = new WebSocketAsPromised(`${BACKEND_SOCKET_URL}/${egoName}`, WEBSOCKET_OPTIONS);
         ensureSucceeds(await egos[egoName]._socket.open());
     }
 
