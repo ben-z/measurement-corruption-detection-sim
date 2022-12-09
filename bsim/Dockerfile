@@ -18,6 +18,3 @@ RUN cd /opt \
 RUN cd /opt/shell-conf \
     && ls -alh  \
     && dot-conf .conf.yaml
-
-COPY bsim/backend/requirements.txt /tmp
-RUN pip install -r /tmp/requirements.txt
