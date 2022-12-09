@@ -10,8 +10,11 @@ export DEBIAN_FRONTEND=noninteractive
 
 pushd ${SCRIPT_DIR}/backend
 apt-get update && apt-get install -y gcc cmake gfortran libopenblas-dev
-python3 -m venv .venv
+if [ ! -d .venv ]; then
+    python3 -m venv .venv
+fi
 source .venv/bin/activate
+pip install wheel setuptools
 pip install -r requirements.txt
 popd
 
