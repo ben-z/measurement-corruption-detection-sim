@@ -115,7 +115,7 @@ def world_handler(command: str):
         entity_type = CREATE_ENTITY_REGEX.match(command).group('entity_type')
         entity_id = CREATE_ENTITY_REGEX.match(command).group('entity_id')
         entity_options = CREATE_ENTITY_REGEX.match(command).group('entity_options')
-        print(entity_options)
+        print(f"Creating entity {entity_id} of type {entity_type}")
 
         if not entity_id:
             entity_id = f"{entity_type}_{secrets.token_urlsafe(8)}"

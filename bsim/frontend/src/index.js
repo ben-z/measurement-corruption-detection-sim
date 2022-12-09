@@ -200,7 +200,7 @@ async function main() {
         ensureSucceeds(await worldSocket.sendRequest({
             command: `create_entity: ego ${egoName} ${encodeURIComponent(JSON.stringify(egoConfig))}`
         }));
-        egos[egoName]._socket = new WebSocketAsPromised(`${BACKEND_SOCKET_URL}/${egoName}`, WEBSOCKET_OPTIONS);
+        egos[egoName]._socket = new WebSocketAsPromised(`${BACKEND_SOCKET_URL}/entities/${egoName}`, WEBSOCKET_OPTIONS);
         ensureSucceeds(await egos[egoName]._socket.open());
     }
 
