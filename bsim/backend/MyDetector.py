@@ -12,7 +12,8 @@ from utils import calc_input_effects_on_output, optimize_l1, \
     get_error_estimation_l2_bounds, \
     does_l1_state_estimation_error_analytical_bound_hypothesis_hold_for_K, \
     is_l1_state_estimation_error_bounded, get_l1_state_estimation_l2_bound, \
-    closest_point_on_line, generate_segment_info, move_along_path, EndOfPathError
+    closest_point_on_line, generate_segment_info, move_along_path, EndOfPathError, \
+    get_output_matrix
 
 np.set_printoptions(suppress=True, precision=4)
 
@@ -135,11 +136,6 @@ class MyDetector:
 
         self._prev_solve_tick = self._tick_count
 
-        evolution_matrix = np.zeros((self.model.nstates*self.N, self.model.nstates))
-        evolution_matrix[0:self.model.nstates, :] = np.eye(self.model.nstates)
-        for k in range(1, self.N):
-            evolution_matrix[k*self.model.nstates:(k+1)*self.model.nstates, :] = linear_models[k-1].A @ evolution_matrix[(k-1)*self.model.nstates:k*self.model.nstates, :]
-        
         input_effect_matrix_As = block_diag(*[np.eye(self.model.nstates) for _ in range(self.N)])
         for k in range(1, self.N):
             for j in range(k):
@@ -148,7 +144,7 @@ class MyDetector:
         
         input_effect_matrix_Bs = block_diag(*[linear_models[k].B for k in range(self.N)])
         
-        Phi = block_diag(*[ckb.get_C()]*self.N) @ evolution_matrix
+        Phi = get_output_matrix([m.A for m in linear_models[:-1]], [m.C for m in linear_models])
 
         input_effects = (block_diag(*[ckb.get_C()]*self.N) @ input_effect_matrix_As @ input_effect_matrix_Bs @ self._inputs.reshape((self.model.ninputs*self.N,1), order='F')).reshape((self.model.noutputs, self.N), order='F')
         desired_trajectory = ckb.get_C() @ desired_state_trajectory

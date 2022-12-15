@@ -564,7 +564,7 @@ class AutoPerfCounter(PerfCounter):
         super().__exit__(*args)
         self.execution_times[self.name] = self.elapsed_s
 
-def get_evolution_matrix(As, Cs):
+def get_output_matrix(As, Cs):
     """
     Inputs:
     As: Discrete-time A matrices
