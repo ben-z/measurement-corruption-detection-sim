@@ -563,3 +563,41 @@ class AutoPerfCounter(PerfCounter):
     def __exit__(self, *args):
         super().__exit__(*args)
         self.execution_times[self.name] = self.elapsed_s
+
+def get_evolution_matrix(As, Cs):
+    """
+    Inputs:
+    As: Discrete-time A matrices
+    Cs: Discrete-time C matrices
+
+    Returns a matrix O that has the following shape:
+    O = [
+        Cs[0],
+        Cs[1]*As[0],
+        Cs[2]*As[1],
+        ...
+    ]
+    In this way O*x0 will return a vector that contains all measurements
+    defined by the measurement matrices in Cs.
+
+    Restrictions:
+    1. len(As) == len(Cs) - 1
+    2. elements of As and Cs are of the correct dimensions
+       (e.g A has (n x n) elements, C[k] has (q_k x n) elements).
+    """
+
+    assert len(As) == len(Cs) - 1
+    assert len(As) > 0
+
+    n = As[0].shape[0]
+
+    state_evolution_matrices = [np.eye(n)]
+    for A_k in As:
+        prev_matrix = state_evolution_matrices[-1]
+        state_evolution_matrices.append(A_k@prev_matrix)
+
+    output_matrices = [C_k @ m for m, C_k in zip(state_evolution_matrices, Cs)]
+
+    O = np.concatenate(output_matrices)
+
+    return O
