@@ -145,9 +145,6 @@ function initializeEgoConfig() {
         ego.planner = BASIC_PLANNER_CONFIG.planner;
         ego.planner_options = BASIC_PLANNER_CONFIG.planner_options;
         ego.detector = 'l1_optimizer';
-        ego.detector_options = {
-            use_true_state: true
-        }
     }
 
     { // ego2
@@ -164,8 +161,7 @@ function initializeEgoConfig() {
         ego.target_speed = target_speed;
         ego.planner = BASIC_PLANNER_CONFIG.planner;
         ego.planner_options = BASIC_PLANNER_CONFIG.planner_options;
-        // ego.detector = 'none';
-        ego.detector = 'l1_optimizer';
+        ego.detector = 'none';
     }
 }
 
