@@ -189,7 +189,7 @@ def world_handler(command: str):
                 # simply pass through the sensor output
                 detector_state = {
                     'detector': 'none',
-                    '_detector_fn': lambda det_state, measurement, _prev_inputs, _true_state=None: (measurement, det_state, {}),
+                    '_detector_fn': lambda det_state, measurement, *args, **kwargs: (measurement, det_state, {}),
                     '_detector_state': {},
                     'detector_debug_output': {},
                 }
@@ -347,7 +347,13 @@ def make_ego_handler(entity_id: str):
             # detector
             with AutoPerfCounter(entity['execution_times'], 'detector'):
                 entity['valid_measurement'], entity['_detector_state'], entity['detector_debug_output'] = \
-                    entity['_detector_fn'](entity['_detector_state'], entity['measurement'], entity['action'], entity['state'])
+                    entity['_detector_fn'](
+                        entity['_detector_state'],
+                        entity['measurement'],
+                        prev_input=entity['action'],
+                        prev_estimate=entity.get('estimate'),
+                        true_state=entity['state'],
+                    )
                 entity['valid_measurement'].setflags(write=False)
             # estimator
             with AutoPerfCounter(entity['execution_times'], 'estimator'):

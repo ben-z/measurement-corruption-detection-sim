@@ -233,11 +233,12 @@ class MyDetector:
 
         return sensor_validity_map
 
-    def tick(self, ext_state, measurement, prev_inputs, true_state=None):
+    def tick(self, ext_state, measurement, prev_input, prev_estimate, true_state=None):
         """
         ext_state: state managed by the client. This usually stores values that change during runtime.
         measurement: the measurement from the sensors.
-        prev_inputs: the inputs from the previous time step.
+        prev_input: the plant input from the previous time step.
+        prev_estimate: the plant state estimate from the previous time step.
         true_state: the true state, used for debugging (e.g. evaluating estimation error).
         """
         self._tick_count += 1
@@ -252,13 +253,25 @@ class MyDetector:
         # the controller)?
         # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
         target_path = ext_state.get('target_path')
-        if target_path is None:
+        if target_path is None or prev_estimate is None:
             return measurement, ext_state, debug_output
 
         # This is used to infer the nominal trajectory and linearization
         # TODO: use estimated x and y instead of true x and y
         x = true_state[0]
         y = true_state[1]
+
+        # Project the previous estimate forward one time step
+        # 1. find the closest point on the line to the previous estimate
+        # 2. linearize about that point
+        # 3. use the linear system to project the previous estimate forward one time step
+        # or, just use the nonlinear model to project the previous estimate forward one time step
+        # proj_estimate = self.model.evolve(prev_estimate, prev_input)
+        # TODO: add a flag to toggle between using estimate and true state
+        # assert not self.model.isdtime()
+        # proj_estimate = ckb.normalize_state(self.model.dynamics(0, prev_estimate, prev_input) * self.dt + prev_estimate)
+        # x = proj_estimate[0]
+        # y = proj_estimate[1]
 
         pos = np.array([x,y])
         target_path_segment_info = generate_segment_info(pos, target_path, wrap=False)
@@ -297,7 +310,7 @@ class MyDetector:
         self._measurements = np.roll(self._measurements, -1, axis=1)
         self._measurements[:,-1] = measurement
         self._inputs = np.roll(self._inputs, -1, axis=1)
-        self._inputs[:,-1] = prev_inputs
+        self._inputs[:,-1] = prev_input
         self._true_states = np.roll(self._true_states, -1, axis=1)
         self._true_states[:,-1] = true_state
         self._num_data_points += 1
