@@ -39,7 +39,7 @@ def calc_desired_state_trajectory_on_a_line(linearization_state, N, dt):
 
 
 class MyDetector:
-    def __init__(self, L, dt, N=10, min_ticks_per_solve=50):
+    def __init__(self, L, dt, N=10, min_ticks_per_solve=50, use_true_state=False):
         """
         N: time horizon, the number of time steps
         min_ticks_per_solve: minimum number of ticks between solver invocations
@@ -47,6 +47,7 @@ class MyDetector:
         self.N = N
         self.dt = dt
         self.min_ticks_per_solve = min_ticks_per_solve
+        self.use_true_state = use_true_state
         self.L = L
         self.model = ckb.make_continuous_kinematic_bicycle_model(L)
         self._prev_solve_tick = -min_ticks_per_solve
@@ -96,6 +97,7 @@ class MyDetector:
             desired_state_trajectory[3, k] = ext_state['target_speed']
             desired_state_trajectory[4, k] = 0
 
+        # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
         continuous_linear_models = []
         linear_models = []
         for k in range(self.N):
@@ -245,33 +247,24 @@ class MyDetector:
 
         debug_output = {}
 
-        # TODO: use measurement instead of true_state. However, we don't know what the
-        # true state is without first solving the estimation problem. This seems like a
-        # chicken and egg problem.
-        # TODO: use something other than the true state as the initial guess, perhaps the previous estimate
-        # projected forward in time or the target state along the path (the latter requires a feedback from
-        # the controller)?
-        # Linearize, assuming the reference is a line. (See 2022-09-15 and 2022-09-22 notes for derivations)
+        # target_path is used to linearize our model
         target_path = ext_state.get('target_path')
         if target_path is None or prev_estimate is None:
             return measurement, ext_state, debug_output
 
-        # This is used to infer the nominal trajectory and linearization
-        # TODO: use estimated x and y instead of true x and y
-        x = true_state[0]
-        y = true_state[1]
+        # Find the current position. This is used to infer the nominal trajectory and linearization
+        debug_output["use_true_state"] = self.use_true_state
+        if self.use_true_state:
+            x = true_state[0]
+            y = true_state[1]
+        else:
+            # Use the nonlinear model to project the previous estimate forward one step to find the current estimated state
+            assert not self.model.isdtime()
+            proj_estimate = ckb.normalize_state(self.model.dynamics(0, prev_estimate, prev_input) * self.dt + prev_estimate)
+            x = proj_estimate[0]
+            y = proj_estimate[1]
+            debug_output["estimated_current_state"] = proj_estimate
 
-        # Project the previous estimate forward one time step
-        # 1. find the closest point on the line to the previous estimate
-        # 2. linearize about that point
-        # 3. use the linear system to project the previous estimate forward one time step
-        # or, just use the nonlinear model to project the previous estimate forward one time step
-        # proj_estimate = self.model.evolve(prev_estimate, prev_input)
-        # TODO: add a flag to toggle between using estimate and true state
-        # assert not self.model.isdtime()
-        # proj_estimate = ckb.normalize_state(self.model.dynamics(0, prev_estimate, prev_input) * self.dt + prev_estimate)
-        # x = proj_estimate[0]
-        # y = proj_estimate[1]
 
         pos = np.array([x,y])
         target_path_segment_info = generate_segment_info(pos, target_path, wrap=False)

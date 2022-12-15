@@ -143,6 +143,7 @@ def world_handler(command: str):
                 'plant_options': {},
                 'controller_options': {},
                 'planner_options': {},
+                'detector_options': {},
             }
 
             # check for invalid options
@@ -194,7 +195,7 @@ def world_handler(command: str):
                     'detector_debug_output': {},
                 }
             elif options['detector'] == 'l1_optimizer':
-                detector = MyDetector(options['L'], world_state['DT'])
+                detector = MyDetector(options['L'], world_state['DT'], **options["detector_options"])
                 detector_state = {
                     'detector': 'l1_optimizer',
                     '_detector_fn': detector.tick,
