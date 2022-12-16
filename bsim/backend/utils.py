@@ -6,7 +6,7 @@ import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
 import time
 from typing import Dict, Any
-from functools import cached_property
+from functools import cached_property, lru_cache
 
 def closest_point_on_line_segment(p, a, b):
     """
@@ -564,20 +564,28 @@ class AutoPerfCounter(PerfCounter):
         super().__exit__(*args)
         self.execution_times[self.name] = self.elapsed_s
 
-def get_output_matrix(As, Cs):
+def get_evolution_matrices(As, Cs):
     """
     Inputs:
     As: Discrete-time A matrices
     Cs: Discrete-time C matrices
 
-    Returns a matrix O that has the following shape:
-    O = [
-        Cs[0],
-        Cs[1]*As[0],
-        Cs[2]*As[1],
+    Returns:
+    state_evolution_matrix = [
+        I,
+        As[0],
+        As[1]@As[0],
         ...
     ]
-    In this way O*x0 will return a vector that contains all measurements
+    output_evolution_matrix = [
+        Cs[0],
+        Cs[1]@As[0],
+        Cs[2]@As[1]@As[0],
+        ...
+    ]
+    In this way,
+    state_evolution_matrix@x0 will return a vector that contains all states over time.
+    output_evolution_matrix@x0 will return a vector that contains all measurements
     defined by the measurement matrices in Cs.
 
     Restrictions:
@@ -590,14 +598,11 @@ def get_output_matrix(As, Cs):
     assert len(As) > 0
 
     n = As[0].shape[0]
-
-    state_evolution_matrices = [np.eye(n)]
+    state_evolution_matrix_list = [np.eye(n)]
     for A_k in As:
-        prev_matrix = state_evolution_matrices[-1]
-        state_evolution_matrices.append(A_k@prev_matrix)
+        prev_matrix = state_evolution_matrix_list[-1]
+        state_evolution_matrix_list.append(A_k@prev_matrix)
 
-    output_matrices = [C_k @ m for m, C_k in zip(state_evolution_matrices, Cs)]
+    output_evolution_matrix_list = [C_k @ m for m, C_k in zip(state_evolution_matrix_list, Cs)]
 
-    O = np.concatenate(output_matrices)
-
-    return O
+    return np.concatenate(state_evolution_matrix_list), np.concatenate(output_evolution_matrix_list)

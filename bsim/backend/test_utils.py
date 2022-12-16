@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import sin, cos, tan
 
-from utils import s_sparse_observability, get_output_matrix
+from utils import s_sparse_observability, get_evolution_matrices
 
 def test_s_sparse_observability():
     # A 4x4 system
@@ -112,8 +112,17 @@ def test_s_sparse_observability():
     ])
     assert s_sparse_observability(A, C) == 4
 
-def test_get_evolution_matrix():
-    assert np.array_equal(get_output_matrix([np.eye(3)]*4, [np.eye(3)]*5), np.concatenate([np.eye(3)]*5))
+def test_get_evolution_matrices():
+    assert all(
+        np.array_equal(a1, a2) for a1, a2 in zip(
+            get_evolution_matrices([np.eye(3)]*4, [np.eye(3)]*5),
+            (
+                np.concatenate([np.eye(3)]*5),
+                np.concatenate([np.eye(3)]*5)
+            )
+        )
+    )
+
     A = np.array([
         [1,2,3],
         [4,5,6],
@@ -123,17 +132,26 @@ def test_get_evolution_matrix():
         [1,0,0],
         [0,1,0],
     ])
-    assert np.array_equal(
-        get_output_matrix([A]*2, [C]*3),
-        np.concatenate([
-            C,
-            C@A,
-            C@A@A
-        ])
+    assert all(
+        np.array_equal(a1, a2) for a1, a2 in zip(
+            get_evolution_matrices([A]*2, [C]*3),
+            (
+                np.concatenate([
+                    np.eye(A.shape[0]),
+                    A,
+                    A@A
+                ]),
+                np.concatenate([
+                    C,
+                    C@A,
+                    C@A@A
+                ])
+            )
+        )
     )
 
 if __name__ == '__main__':
     test_s_sparse_observability()
-    test_get_evolution_matrix()
+    test_get_evolution_matrices()
 
     print("Tests passed!")
