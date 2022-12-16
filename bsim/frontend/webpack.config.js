@@ -8,9 +8,10 @@ const isProduction = process.env.NODE_ENV == "production";
 
 const stylesHandler = "style-loader";
 
+const IS_CODESPACES = false; // process.env.CODESPACES;
 const DEVSERVER_PORT=9091
 const BACKEND_SOCKET_PORT=8765
-const BACKEND_SOCKET_URL= process.env.CODESPACES ? `wss://${process.env.CODESPACE_NAME}-${BACKEND_SOCKET_PORT}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` : `ws://localhost:${BACKEND_SOCKET_PORT}`;
+const BACKEND_SOCKET_URL= IS_CODESPACES ? `wss://${process.env.CODESPACE_NAME}-${BACKEND_SOCKET_PORT}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` : `ws://localhost:${BACKEND_SOCKET_PORT}`;
 
 const config = {
   entry: "./src/index.js",
@@ -20,7 +21,7 @@ const config = {
   devServer: {
     client: {
       webSocketURL: {
-        port: process.env.CODESPACES ? 443 : DEVSERVER_PORT,
+        port: IS_CODESPACES ? 443 : DEVSERVER_PORT,
       }
     },
     open: false,
