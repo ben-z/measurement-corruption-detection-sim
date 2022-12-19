@@ -10,7 +10,8 @@ export DEBIAN_FRONTEND=noninteractive
 
 pushd ${SCRIPT_DIR}/backend
 /opt/miniconda/bin/conda env create --file environment.yml
-/opt/miniconda/bin/conda activate bsim-backend
+source /opt/miniconda/etc/profile.d/conda.sh
+conda activate bsim-backend
 pip install -r requirements.txt
 popd
 
