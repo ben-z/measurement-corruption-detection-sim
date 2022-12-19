@@ -185,8 +185,9 @@ class Semaphore {
         this._max = max;
     }
 
-    decrement() {
+    decrement(atomic_op = () => {}) {
         if (this._count > 0) {
+            atomic_op();
             if (this._resolve.length) {
                 assert(this._count == this._max, "Semaphore count is not at max but there are waiting promises");
                 this._resolve.shift()();
@@ -196,13 +197,14 @@ class Semaphore {
             return Promise.resolve();
         } else {
             return new Promise((resolve) => {
-                this._resolve.push(resolve);
+                this._resolve.push(() => { atomic_op(); resolve(); });
             });
         }
     }
 
-    increment() {
+    increment(atomic_op = () => {}) {
         if (this._count < this._max) {
+            atomic_op();
             if (this._resolve.length) {
                 assert(this._count == 0, "Semaphore count is not zero but there are waiting promises")
                 this._resolve.shift()();
@@ -212,7 +214,7 @@ class Semaphore {
             return Promise.resolve();
         } else {
             return new Promise((resolve) => {
-                this._resolve.push(resolve);
+                this._resolve.push(() => { atomic_op(); resolve(); });
             });
         }
     }
@@ -222,7 +224,6 @@ class Semaphore {
     }
 }
 module.exports.Semaphore = Semaphore;
-
 
 class PromiseBuffer {
     /* 
@@ -240,16 +241,21 @@ class PromiseBuffer {
     }
 
     async push(item) {
-        await this._queue_length_semaphore.increment();
-        this._queue.push(item);
+        await this._queue_length_semaphore.increment(() => {
+            this._queue.push(item);
+        });
     }
 
     async pop() {
-        await this._queue_length_semaphore.decrement();
-        return this._queue.shift();
+        let ret;
+        await this._queue_length_semaphore.decrement(() => {
+            ret = this._queue.shift();
+        });
+        return ret;
     }
 
     get length() {
+        assert(this._queue.length == this._queue_length_semaphore.count, `Queue length (${this._queue.length}) does not match semaphore count (${this._queue_length_semaphore.count})`);
         return this._queue.length;
     }
 
