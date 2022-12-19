@@ -3,7 +3,7 @@ FROM ubuntu:focal
 RUN apt-get update && apt-get install -y \
     git curl \
     python3 python3-pip python3-venv python3-wheel python3-setuptools \
-    ripgrep htop
+    ripgrep htop vim
 
 RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash \
     && apt-get install -y nodejs
