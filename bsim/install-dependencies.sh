@@ -15,7 +15,7 @@ if [ ! -d .venv ]; then
 fi
 source .venv/bin/activate
 pip install wheel setuptools
-pip install -r requirements.txt
+#pip install -r requirements.txt
 popd
 
 pushd ${SCRIPT_DIR}/frontend
