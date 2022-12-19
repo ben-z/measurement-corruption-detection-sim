@@ -14,9 +14,6 @@ RUN curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-py39_4.12.0-Linux-
     && bash /tmp/miniconda.sh -b -p /opt/miniconda \
     && rm /tmp/miniconda.sh
 
-# FIXME: use conda environment.yml instead
-RUN conda install -c conda-forge slycot
-
 # custom dotfiles
 ARG GITHUB_READONLY_TOKEN
 ARG GITHUB_USER

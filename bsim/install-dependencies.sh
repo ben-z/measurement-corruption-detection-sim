@@ -9,12 +9,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 export DEBIAN_FRONTEND=noninteractive
 
 pushd ${SCRIPT_DIR}/backend
-apt-get update && apt-get install -y gcc cmake gfortran libopenblas-dev
-if [ ! -d .venv ]; then
-    python3 -m venv .venv
-fi
-source .venv/bin/activate
-pip install wheel setuptools
+/opt/miniconda3/bin/conda env update --file environment.yml
 pip install -r requirements.txt
 popd
 

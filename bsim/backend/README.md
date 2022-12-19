@@ -2,18 +2,29 @@
 
 ## Getting started
 
-Install dependencies (one-time):
+Create the conda environment
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+conda env create -f environment.yml
 pip install -r requirements.txt
 ```
 
 Start the backend:
 
 ```bash
-source .venv/bin/activate
+conda activate bsim-backend
 python main.py
+```
+
+Update the conda environemnt ([source](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#updating-an-environment)):
+
+```bash
+conda env update --file environment.yml --prune
+```
+
+Write the latest conda config to file:
+
+```bash
+conda env export --from-history | grep -v "^prefix: " > environment.yml
 ```
 
