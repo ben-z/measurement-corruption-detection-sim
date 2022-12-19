@@ -8,6 +8,12 @@ RUN apt-get update && apt-get install -y \
 RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash \
     && apt-get install -y nodejs
 
+# install miniconda
+RUN curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-py39_4.12.0-Linux-x86_64.sh -o /tmp/miniconda.sh \
+    && echo "78f39f9bae971ec1ae7969f0516017f2413f17796670f7040725dd83fcff5689  /tmp/miniconda.sh" | sha256sum -c - \
+    && bash /tmp/miniconda.sh -b -p /opt/miniconda \
+    && rm /tmp/miniconda.sh
+
 # custom dotfiles
 ARG GITHUB_READONLY_TOKEN
 ARG GITHUB_USER
