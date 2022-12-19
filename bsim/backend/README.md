@@ -25,6 +25,6 @@ conda env update --file environment.yml --prune
 Write the latest conda config to file:
 
 ```bash
-conda env export --from-history | grep -v "^prefix: " > environment.yml
+conda env export --no-builds --from-history | grep -v "^prefix: " > environment.yml
 ```
 
