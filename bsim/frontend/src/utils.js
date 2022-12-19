@@ -175,55 +175,34 @@ class Semaphore {
     If the counter is zero, decrement() returns a Promise that resolves
     when the counter is incremented. If the counter is not zero, 
     decrement() returns a Promise that resolves immediately.
-    If the counter is at the maximum, increment() returns a Promise that
-    resolves when the counter is decremented. If the counter is not at
-    the maximum, increment() returns a Promise that resolves immediately.
     */
-    constructor({max = Infinity, initial = 0}) {
+    constructor({initial = 0}) {
         this._count = initial;
         this._resolve = [];
-        this._max = max;
-        this._uncommitted_count = 0;
     }
 
-    decrement(atomic_op = () => {}) {
+    decrement() {
         if (this._count > 0) {
-            atomic_op();
-            if (this._resolve.length) {
-                assert(this._count == this._max, "Semaphore count is not at max but there are waiting promises");
-                setTimeout(this._resolve.shift(), 0);
-                this._uncommitted_count++;
-            } else {
-                this._count--;
-            }
+            this._count--;
             return Promise.resolve();
         } else {
             return new Promise((resolve) => {
-                this._resolve.push(() => { this._uncommitted_count++; atomic_op(); resolve(); });
+                this._resolve.push(resolve);
             });
         }
     }
 
-    increment(atomic_op = () => {}) {
-        if (this._count < this._max) {
-            atomic_op();
-            if (this._resolve.length) {
-                assert(this._count == 0, "Semaphore count is not zero but there are waiting promises")
-                setTimeout(this._resolve.shift(), 0);
-                this._uncommitted_count--;
-            } else {
-                this._count++;
-            }
-            return Promise.resolve();
+    increment() {
+        if (this._resolve.length) {
+            assert(this._count == 0, "Semaphore count is not zero but there are waiting promises")
+            setTimeout(this._resolve.shift(), 0);
         } else {
-            return new Promise((resolve) => {
-                this._resolve.push(() => { this._uncommitted_count--; atomic_op(); resolve(); });
-            });
+            this._count++;
         }
     }
 
     get count() {
-        return this._count - this._uncommitted_count;
+        return this._count;
     }
 }
 module.exports.Semaphore = Semaphore;
@@ -240,30 +219,30 @@ class PromiseBuffer {
     */
     constructor(capacity = Infinity) {
         this._queue = [];
-        this._queue_length_semaphore = new Semaphore({max: capacity, initial: 0});
+        this._capacity = capacity;
+        this._push_capacity = new Semaphore({initial: capacity});
+        this._pop_capacity = new Semaphore({initial: 0});
     }
 
     async push(item) {
-        await this._queue_length_semaphore.increment(() => {
-        });
-            this._queue.push(item);
+        await this._push_capacity.decrement();
+        this._queue.push(item);
+        this._pop_capacity.increment();
     }
 
     async pop() {
-        let ret;
-        await this._queue_length_semaphore.decrement(() => {
-        });
-            ret = this._queue.shift();
+        await this._pop_capacity.decrement();
+        const ret = this._queue.shift();
+        this._push_capacity.increment();
         return ret;
     }
 
     get length() {
-        assert(this._queue.length == this._queue_length_semaphore.count, `Queue length (${this._queue.length}) does not match semaphore count (${this._queue_length_semaphore.count})`);
         return this._queue.length;
     }
 
     get capacity() {
-        return this._queue_length_semaphore._max;
+        return this._capacity;
     }
 }
 module.exports.PromiseBuffer = PromiseBuffer;
