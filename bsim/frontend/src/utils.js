@@ -183,6 +183,7 @@ class Semaphore {
         this._count = initial;
         this._resolve = [];
         this._max = max;
+        this._uncommitted_count = 0;
     }
 
     decrement(atomic_op = () => {}) {
@@ -190,14 +191,15 @@ class Semaphore {
             atomic_op();
             if (this._resolve.length) {
                 assert(this._count == this._max, "Semaphore count is not at max but there are waiting promises");
-                this._resolve.shift()();
+                setTimeout(this._resolve.shift(), 0);
+                this._uncommitted_count++;
             } else {
                 this._count--;
             }
             return Promise.resolve();
         } else {
             return new Promise((resolve) => {
-                this._resolve.push(() => { atomic_op(); resolve(); });
+                this._resolve.push(() => { this._uncommitted_count++; atomic_op(); resolve(); });
             });
         }
     }
@@ -207,20 +209,21 @@ class Semaphore {
             atomic_op();
             if (this._resolve.length) {
                 assert(this._count == 0, "Semaphore count is not zero but there are waiting promises")
-                this._resolve.shift()();
+                setTimeout(this._resolve.shift(), 0);
+                this._uncommitted_count--;
             } else {
                 this._count++;
             }
             return Promise.resolve();
         } else {
             return new Promise((resolve) => {
-                this._resolve.push(() => { atomic_op(); resolve(); });
+                this._resolve.push(() => { this._uncommitted_count--; atomic_op(); resolve(); });
             });
         }
     }
 
     get count() {
-        return this._count;
+        return this._count - this._uncommitted_count;
     }
 }
 module.exports.Semaphore = Semaphore;
@@ -242,15 +245,15 @@ class PromiseBuffer {
 
     async push(item) {
         await this._queue_length_semaphore.increment(() => {
-            this._queue.push(item);
         });
+            this._queue.push(item);
     }
 
     async pop() {
         let ret;
         await this._queue_length_semaphore.decrement(() => {
-            ret = this._queue.shift();
         });
+            ret = this._queue.shift();
         return ret;
     }
 
