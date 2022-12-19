@@ -162,3 +162,99 @@ function frenet2global_point(frenet, origin, heading) {
     return [x, y];
 }
 module.exports.frenet2global_point = frenet2global_point;
+
+function assert(condition, message) {
+    if (!condition) {
+        throw new Error(message);
+    }
+}
+
+class Semaphore {
+    /* 
+    A semaphore is a counter that can be incremented and decremented.
+    If the counter is zero, decrement() returns a Promise that resolves
+    when the counter is incremented. If the counter is not zero, 
+    decrement() returns a Promise that resolves immediately.
+    If the counter is at the maximum, increment() returns a Promise that
+    resolves when the counter is decremented. If the counter is not at
+    the maximum, increment() returns a Promise that resolves immediately.
+    */
+    constructor({max = Infinity, initial = 0}) {
+        this._count = initial;
+        this._resolve = [];
+        this._max = max;
+    }
+
+    decrement() {
+        if (this._count > 0) {
+            if (this._resolve.length) {
+                assert(this._count == this._max, "Semaphore count is not at max but there are waiting promises");
+                this._resolve.shift()();
+            } else {
+                this._count--;
+            }
+            return Promise.resolve();
+        } else {
+            return new Promise((resolve) => {
+                this._resolve.push(resolve);
+            });
+        }
+    }
+
+    increment() {
+        if (this._count < this._max) {
+            if (this._resolve.length) {
+                assert(this._count == 0, "Semaphore count is not zero but there are waiting promises")
+                this._resolve.shift()();
+            } else {
+                this._count++;
+            }
+            return Promise.resolve();
+        } else {
+            return new Promise((resolve) => {
+                this._resolve.push(resolve);
+            });
+        }
+    }
+
+    get count() {
+        return this._count;
+    }
+}
+module.exports.Semaphore = Semaphore;
+
+
+class PromiseBuffer {
+    /* 
+    A PromiseBuffer is a queue that can be pushed to and popped from.
+    If the buffer is empty, pop() returns a Promise that resolves when
+    the buffer is pushed to. If the buffer is not empty, pop() returns
+    a Promise that resolves immediately.
+    If the buffer is full, push() returns a Promise that resolves when
+    the buffer is popped from. If the buffer is not full, push() returns
+    a Promise that resolves immediately.
+    */
+    constructor(capacity = Infinity) {
+        this._queue = [];
+        this._queue_length_semaphore = new Semaphore({max: capacity, initial: 0});
+    }
+
+    async push(item) {
+        await this._queue_length_semaphore.increment();
+        this._queue.push(item);
+    }
+
+    async pop() {
+        await this._queue_length_semaphore.decrement();
+        return this._queue.shift();
+    }
+
+    get length() {
+        return this._queue.length;
+    }
+
+    get capacity() {
+        return this._queue_length_semaphore._max;
+    }
+}
+module.exports.PromiseBuffer = PromiseBuffer;

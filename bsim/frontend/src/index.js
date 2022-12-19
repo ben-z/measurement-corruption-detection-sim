@@ -1,5 +1,5 @@
 import WebSocketAsPromised from 'websocket-as-promised';
-import { mySetInterval, matrixMultiply, generateCircleApproximation, approxeq, predSlice, frenet2global_path } from './utils';
+import { mySetInterval, matrixMultiply, generateCircleApproximation, approxeq, predSlice, frenet2global_path, PromiseBuffer } from './utils';
 import uPlot from 'uplot';
 import "uplot/dist/uPlot.min.css";
 
@@ -218,32 +218,39 @@ async function main() {
     let paused = false;
     let errorCount = 0;
     const MAX_ERROR_COUNT = 10;
-    const loop = mySetInterval(async () => {
+    const MS_PER_TICK = 10;
+    const tickQueue = new PromiseBuffer(10);
+    const tickLoop = mySetInterval(async () => {
         if (paused) {
             return;
         }
-            
+
+        await tickQueue.push(worldSocket.sendRequest({ command: 'tick' }));
+    }, MS_PER_TICK);
+
+    mySetInterval(async () => {
         try {
-            const worldState = ensureSucceeds(await worldSocket.sendRequest({command: 'tick'})).response;
-        
+            const worldState = ensureSucceeds(await tickQueue.pop()).response;
+
             if (Object.keys(worldState.entities).length > ENTITY_COLOR_MAP.length) {
                 throw new Error("Please update ENTITY_COLOR_MAP to accomodate the additional entities.");
             }
-        
+
             bsim_js.pushWorldState(worldState);
             drawBEV(bevCanvas, worldState);
             drawDebugDashboard(rawDebugContainer, worldState);
-            drawPlots(plots, plotContainers, worldState);
+            drawPlots(plots, plotContainers, worldState, {tickQueue});
+
         } catch (e) {
             console.error(e);
             displayError(rawDebugContainer, e);
             ++errorCount;
             if (errorCount > MAX_ERROR_COUNT) {
                 console.error(`Too many errors, aborting`);
-                loop.cancel();
+                tickLoop.cancel();
             }
         }
-    }, 10);
+    }, 0);
 
     bsim_js.tick = () => worldSocket.sendRequest({command: 'tick'}).then(console.log);
     bsim_js.pause = () => {paused = true};
@@ -471,7 +478,7 @@ const EXECUTION_TIME_FIELDS = [
     // { 'name': 'plant', 'field': 'plant' },
 ]
 
-function drawPlots(plots, containers, worldState) {
+function drawPlots(plots, containers, worldState, {tickQueue}) {
     const t = worldState.t;
 
     {
@@ -527,6 +534,52 @@ function drawPlots(plots, containers, worldState) {
                 plotObj.data[entityStartIdx + (i-entityStartIdx) * EXECUTION_TIME_FIELDS.length + j].push(entity.execution_times[field]);
             }
         }
+        plotObj.plot.setData(plotObj.data);
+    }
+
+    {
+        const container = containers[entityToPlotContainerID('global')]
+        const plotID = `tick_queue_length`;
+        if (!plots[plotID]) {
+            const onePlotContainer = document.createElement('div', {id: plotID});
+            container.appendChild(onePlotContainer);
+            const plot_settings = {
+                ...COMMON_PLOT_SETTINGS,
+                title: `Tick Queue Length`,
+                scales: {
+                    x: TIME_SCALE,
+                    count: {
+                        range: (u, dataMin, dataMax) => [-1, tickQueue.capacity + 1],
+                    }
+                },
+                series: [
+                    {
+                        label: 'time (s)',
+                        value: (self, rawValue) => rawValue.toFixed(2),
+                    }, 
+                    {
+                        label: 'Tick Queue Length',
+                        stroke: "blue",
+                        scale: "count",
+                        value: (self, rawValue) => rawValue == null ? "-" : rawValue.toFixed(0),
+                    },
+                ],
+                axes: [
+                    {},
+                    {
+                        scale: 'count'
+                    },
+                ]
+            }
+            plots[plotID] = {
+                plot: new uPlot(plot_settings, Array(plot_settings.series.length).fill([]), onePlotContainer),
+                data: Array(plot_settings.series.length).fill([]),
+            };
+        }
+        const plotObj = plots[plotID];
+        plotObj.data = sliceToHorizon(plotObj.data, plotObj.data[0], t, bsim_js.get_data_horizon());
+        plotObj.data[0].push(t);
+        plotObj.data[1].push(tickQueue.length);
         plotObj.plot.setData(plotObj.data);
     }
 
