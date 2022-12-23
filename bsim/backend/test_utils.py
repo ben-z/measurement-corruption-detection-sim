@@ -1,7 +1,7 @@
 import numpy as np
 from numpy import sin, cos, tan
 
-from utils import s_sparse_observability, get_evolution_matrices
+from utils import s_sparse_observability, get_evolution_matrices, get_observability_mapping, is_observable, is_attackable
 
 def test_s_sparse_observability():
     # A 4x4 system
@@ -150,8 +150,263 @@ def test_get_evolution_matrices():
         )
     )
 
+def test_get_observability_mapping():
+    C = np.array([
+        [1,0,0],
+        [0,1,0],
+        [0,0,1],
+    ])
+    assert get_observability_mapping(C) == {
+        0: set([(0,)]),
+        1: set([(1,)]),
+        2: set([(2,)]),
+    }
+
+    C = np.array([
+        [1],
+        [1],
+        [1],
+    ])
+    assert get_observability_mapping(C) == {
+        0: {(0,), (1,), (2,)}
+    }
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,0],
+    ])
+    assert get_observability_mapping(C) == {
+        0: set([(0,), (2,)]),
+        1: set([(1,)]),
+    }
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,1],
+    ])
+    assert get_observability_mapping(C) == {
+        0: set([(0,), (1, 2)]),
+        1: set([(1,), (0, 2)]),
+    }
+
+    C = np.array([
+        [1,1],
+        [1,-1],
+    ])
+    assert get_observability_mapping(C) == {
+        0: set([(0, 1)]),
+        1: set([(0, 1)]),
+    }
+    C = np.array([
+        [1,0],
+        [1,1],
+        [1,-1],
+    ])
+    assert get_observability_mapping(C) == {
+        0: set([(0,), (1, 2)]),
+        1: set([(0, 1), (0, 2), (1, 2)]),
+    }
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,1],
+        [1,-1],
+    ])
+    assert get_observability_mapping(C) == {
+        0: set([(0,), (1, 2), (1, 3), (2, 3)]),
+        1: set([(1,), (0, 2), (0, 3), (2, 3)]),
+    }
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,1],
+        [1,-1],
+        [1,2],
+    ])
+    assert get_observability_mapping(C) == {
+        0: set([(0,), (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4)]),
+        1: set([(1,), (0, 2), (0, 3), (0, 4), (2, 3), (2, 4), (3, 4)]),
+    }
+
+def test_is_observable():
+    C = np.array([
+        [1,0,0],
+        [0,1,0],
+        [0,0,1],
+    ])
+    mapping = get_observability_mapping(C)
+    assert is_observable(mapping=mapping, missing_sensors=[]) == True
+    assert is_observable(C=C, missing_sensors=[]) == True
+    assert is_observable(mapping=mapping, missing_sensors=[0]) == False
+    assert is_observable(mapping=mapping, missing_sensors=[1]) == False
+    assert is_observable(mapping=mapping, missing_sensors=[2]) == False
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,1],
+    ])
+    assert is_observable(C=C, missing_sensors=[]) == True
+    assert is_observable(C=C, missing_sensors=[0]) == True
+    assert is_observable(C=C, missing_sensors=[1]) == True
+    assert is_observable(C=C, missing_sensors=[2]) == True
+    assert is_observable(C=C, missing_sensors=[0,1]) == False
+    assert is_observable(C=C, missing_sensors=[0,2]) == False
+    assert is_observable(C=C, missing_sensors=[1,2]) == False
+
+    C = np.array([
+        [1,0],
+        [1,1],
+        [1,-1],
+    ])
+    assert is_observable(C=C, missing_sensors=[]) == True
+    assert is_observable(C=C, missing_sensors=[0]) == True
+    assert is_observable(C=C, missing_sensors=[1]) == True
+    assert is_observable(C=C, missing_sensors=[2]) == True
+    assert is_observable(C=C, missing_sensors=[0,1]) == False
+    assert is_observable(C=C, missing_sensors=[0,2]) == False
+    assert is_observable(C=C, missing_sensors=[1,2]) == False
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,1],
+        [1,-1],
+    ])
+    assert is_observable(C=C, missing_sensors=[]) == True
+    assert is_observable(C=C, missing_sensors=[0]) == True
+    assert is_observable(C=C, missing_sensors=[1]) == True
+    assert is_observable(C=C, missing_sensors=[2]) == True
+    assert is_observable(C=C, missing_sensors=[3]) == True
+    assert is_observable(C=C, missing_sensors=[0,1]) == True
+    assert is_observable(C=C, missing_sensors=[0,2]) == True
+    assert is_observable(C=C, missing_sensors=[0,3]) == True
+    assert is_observable(C=C, missing_sensors=[1,2]) == True
+    assert is_observable(C=C, missing_sensors=[1,3]) == True
+    assert is_observable(C=C, missing_sensors=[2,3]) == True
+    assert is_observable(C=C, missing_sensors=[0,1,2]) == False
+    assert is_observable(C=C, missing_sensors=[0,1,3]) == False
+    assert is_observable(C=C, missing_sensors=[0,2,3]) == False
+    assert is_observable(C=C, missing_sensors=[1,2,3]) == False
+
+def test_is_attackable():
+    C = np.array([
+        [1,0,0],
+        [0,1,0],
+        [0,0,1],
+    ])
+    mapping = get_observability_mapping(C)
+    assert is_attackable(mapping=mapping, attacked_sensors=[]) == True
+    assert is_attackable(C=C, attacked_sensors=[]) == True
+    assert is_attackable(mapping=mapping, attacked_sensors=[0]) == False
+    assert is_attackable(mapping=mapping, attacked_sensors=[1]) == False
+    assert is_attackable(mapping=mapping, attacked_sensors=[2]) == False
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,1],
+    ])
+    assert is_attackable(C=C, attacked_sensors=[]) == True
+    assert is_attackable(C=C, attacked_sensors=[0]) == False
+    assert is_attackable(C=C, attacked_sensors=[1]) == False
+    assert is_attackable(C=C, attacked_sensors=[2]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,1]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,2]) == False
+    assert is_attackable(C=C, attacked_sensors=[1,2]) == False
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,0],
+    ])
+    assert is_attackable(C=C, attacked_sensors=[]) == True
+    assert is_attackable(C=C, attacked_sensors=[0]) == False
+    assert is_attackable(C=C, attacked_sensors=[1]) == False
+    assert is_attackable(C=C, attacked_sensors=[2]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,1]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,2]) == False
+    assert is_attackable(C=C, attacked_sensors=[1,2]) == False
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,0],
+        [1,0],
+    ])
+    assert is_attackable(C=C, attacked_sensors=[]) == True
+    assert is_attackable(C=C, attacked_sensors=[0]) == True
+    assert is_attackable(C=C, attacked_sensors=[1]) == False
+    assert is_attackable(C=C, attacked_sensors=[2]) == True
+    assert is_attackable(C=C, attacked_sensors=[3]) == True
+    assert is_attackable(C=C, attacked_sensors=[0,1]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,2]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,3]) == False
+    assert is_attackable(C=C, attacked_sensors=[1,2]) == False
+    assert is_attackable(C=C, attacked_sensors=[1,3]) == False
+    assert is_attackable(C=C, attacked_sensors=[2,3]) == False
+
+    C = np.array([
+        [1],
+        [1],
+        [1],
+    ])
+    assert is_attackable(C=C, attacked_sensors=[]) == True
+    assert is_attackable(C=C, attacked_sensors=[0]) == True
+    assert is_attackable(C=C, attacked_sensors=[1]) == True
+    assert is_attackable(C=C, attacked_sensors=[2]) == True
+    assert is_attackable(C=C, attacked_sensors=[0, 1]) == False
+    assert is_attackable(C=C, attacked_sensors=[0, 2]) == False
+    assert is_attackable(C=C, attacked_sensors=[1, 2]) == False
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,1],
+        [1,-1],
+    ])
+    assert is_attackable(C=C, attacked_sensors=[]) == True
+    # Attacking sensor 0 makes recovering state 1 ambiguous.
+    # This is a strange dependency
+    assert is_attackable(C=C, attacked_sensors=[0]) == False
+    # Attacking sensor 0 makes recovering state 0 ambiguous.
+    # This is a strange dependency
+    assert is_attackable(C=C, attacked_sensors=[1]) == False
+    assert is_attackable(C=C, attacked_sensors=[2]) == False
+    assert is_attackable(C=C, attacked_sensors=[3]) == False
+
+    C = np.array([
+        [1,0],
+        [0,1],
+        [1,1],
+        [1,-1],
+        [1,2],
+    ])
+    assert is_attackable(C=C, attacked_sensors=[]) == True
+    assert is_attackable(C=C, attacked_sensors=[0]) == True
+    assert is_attackable(C=C, attacked_sensors=[1]) == True
+    assert is_attackable(C=C, attacked_sensors=[2]) == True
+    assert is_attackable(C=C, attacked_sensors=[3]) == True
+    assert is_attackable(C=C, attacked_sensors=[0,1]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,2]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,3]) == False
+    assert is_attackable(C=C, attacked_sensors=[0,4]) == False
+    assert is_attackable(C=C, attacked_sensors=[1,2]) == False
+    assert is_attackable(C=C, attacked_sensors=[1,3]) == False
+    assert is_attackable(C=C, attacked_sensors=[1,4]) == False
+    assert is_attackable(C=C, attacked_sensors=[2,3]) == False
+    assert is_attackable(C=C, attacked_sensors=[2,4]) == False
+    assert is_attackable(C=C, attacked_sensors=[3,4]) == False
+
 if __name__ == '__main__':
     test_s_sparse_observability()
     test_get_evolution_matrices()
+    test_get_observability_mapping()
+    test_is_observable()
+    test_is_attackable()
 
     print("Tests passed!")

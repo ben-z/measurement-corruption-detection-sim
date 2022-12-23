@@ -6,6 +6,7 @@ Create the conda environment
 
 ```bash
 conda env create -f environment.yml
+conda activate bsim-backend
 pip install -r requirements.txt
 ```
 

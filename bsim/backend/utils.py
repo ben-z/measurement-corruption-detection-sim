@@ -606,3 +606,98 @@ def get_evolution_matrices(As, Cs):
     output_evolution_matrix_list = [C_k @ m for m, C_k in zip(state_evolution_matrix_list, Cs)]
 
     return np.concatenate(state_evolution_matrix_list), np.concatenate(output_evolution_matrix_list)
+
+def get_observability_mapping(C, sensor_configurations=None):
+    """
+    This function solves the observability problem for a static system
+    y = Cx.
+    Inputs:
+        C: numpy.ndarray - matrix of size (p,n)
+        sensor_configurations: int[][] - list of sensor configurations. Each
+            configuration is a list of sensor indices. If None, all possible
+            configurations are considered.
+    Outputs:
+        mapping: {int => int[][]} - mapping from state indices to sensor configurations
+            that uniquely recover the state.
+    """
+    p = C.shape[0]
+    if sensor_configurations is None:
+        sensor_configurations = powerset(range(p))
+
+    mapping = {}
+
+    for S in sensor_configurations:
+        if len(S) == 0:
+            continue
+
+        # C matrix with the select sensors
+        C_S = C[S, :]
+
+        # if C_S is not full rank, then we've already seen sets of sensors that union to S
+        if np.linalg.matrix_rank(C_S) != len(S):
+            continue
+
+        # Set of indices indicating non-zero columns of C_s
+        # this is the states that are affected by the sensors in S
+        affected_states = np.asarray(np.any(C_S, axis=0)).nonzero()[0]
+
+        C_S_nonzero = C_S[:, affected_states]
+
+        # if C_S_nonzero has a left inverse, then the states in affected_states
+        # can be uniquely recovered by the sensors in S.
+        if np.linalg.matrix_rank(C_S_nonzero) == len(affected_states):
+            for affected_state in affected_states:
+                # record S if it doesn't already contain a set of sensors that
+                # can recover the affected state
+                if not any(set(s).issubset(set(S)) for s in mapping.get(affected_state, [])):
+                    mapping.setdefault(affected_state, set()).add(S)
+    
+    return mapping
+
+
+def is_observable(mapping=None, C=None, missing_sensors=[]):
+    """
+    This function checks if a static system is observable given a set of missing sensors.
+    Inputs:
+        mapping: {int => int[][]} - mapping from state indices to sensor configurations
+            that uniquely recover the state. If None, this is computed from C.
+        C: numpy.ndarray - matrix of size (p,n). This is only used if mapping is None.
+        missing_sensors: int[] - list of sensor indices that are missing.
+    Outputs:
+        is_observable: bool - True if the system is observable with the missing sensors, False otherwise.
+    """
+
+    if mapping is None:
+        mapping = get_observability_mapping(C)
+    
+    for _state, sensor_configurations in mapping.items():
+        uncompromised_configurations = [S for S in sensor_configurations if not set(S).intersection(missing_sensors)]
+        # if there is no configuration that can uniquely recover the state, then the system is not observable
+        if len(uncompromised_configurations) == 0:
+            return False
+    
+    return True
+
+def is_attackable(mapping=None, C=None, attacked_sensors=[]):
+    """
+    This function checks if a static system is attackable given a set of attacked sensors.
+    Inputs:
+        mapping: {int => int[][]} - mapping from state indices to sensor configurations
+            that uniquely recover the state. If None, this is computed from C.
+        C: numpy.ndarray - matrix of size (p,n). This is only used if mapping is None.
+        attacked_sensors: int[] - list of sensor indices that are attacked.
+    Outputs:
+        is_attackable: bool - True if the system is attackable with the attacked sensors, False otherwise.
+    """
+
+    if mapping is None:
+        mapping = get_observability_mapping(C)
+
+    for _state, sensor_configurations in mapping.items():
+        compromised_configurations = [S for S in sensor_configurations if set(S).intersection(attacked_sensors)]
+        # if at least half of the configurations are compromised, then we cannot recover the state
+        if len(compromised_configurations) >= len(sensor_configurations) / 2:
+            return False
+    
+    return True
+
