@@ -639,7 +639,7 @@ def get_observability_mapping(C, sensor_configurations=None):
 
         # Set of indices indicating non-zero columns of C_s
         # this is the states that are affected by the sensors in S
-        affected_states = np.asarray(np.any(C_S, axis=0)).nonzero()[0]
+        affected_states = np.asarray(np.any(C_S, axis=0)).nonzero()[-1]
 
         C_S_nonzero = C_S[:, affected_states]
 

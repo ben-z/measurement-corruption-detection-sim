@@ -1,3 +1,4 @@
+import control.matlab
 import numpy as np
 from numpy import sin, cos, tan
 
@@ -230,6 +231,32 @@ def test_get_observability_mapping():
     assert get_observability_mapping(C) == {
         0: set([(0,), (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4)]),
         1: set([(1,), (0, 2), (0, 3), (0, 4), (2, 3), (2, 4), (3, 4)]),
+    }
+
+    # spice things up with an discrete LTI system
+    A = np.array([
+        [0,1,0,0],
+        [0,0,1,0],
+        [0,0,0,1],
+        [0,0,0,0],
+    ])
+    B = np.zeros((4,1))
+    C = np.eye(4)
+    D = 0
+    
+    sysd = control.matlab.c2d(control.matlab.ss(A,B,C,D), 0.1)
+
+    assert get_observability_mapping(sysd.C) == {
+        0: set([(0,)]),
+        1: set([(1,)]),
+        2: set([(2,)]),
+        3: set([(3,)]),
+    }
+    assert get_observability_mapping(sysd.C@sysd.A) == {
+        0: set([(0,1,2,3)]),
+        1: set([(1,2,3)]),
+        2: set([(2,3)]),
+        3: set([(3,)]),
     }
 
 def test_is_observable():
