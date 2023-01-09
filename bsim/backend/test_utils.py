@@ -158,9 +158,9 @@ def test_get_observability_mapping():
         [0,0,1],
     ])
     assert get_observability_mapping(C) == {
-        0: set([(0,)]),
-        1: set([(1,)]),
-        2: set([(2,)]),
+        0: [{0}],
+        1: [{1}],
+        2: [{2}],
     }
 
     C = np.array([
@@ -169,7 +169,7 @@ def test_get_observability_mapping():
         [1],
     ])
     assert get_observability_mapping(C) == {
-        0: {(0,), (1,), (2,)}
+        0: [{0}, {1}, {2}]
     }
 
     C = np.array([
@@ -178,8 +178,8 @@ def test_get_observability_mapping():
         [1,0],
     ])
     assert get_observability_mapping(C) == {
-        0: set([(0,), (2,)]),
-        1: set([(1,)]),
+        0: [{0}, {2}],
+        1: [{1}],
     }
 
     C = np.array([
@@ -188,8 +188,8 @@ def test_get_observability_mapping():
         [1,1],
     ])
     assert get_observability_mapping(C) == {
-        0: set([(0,), (1, 2)]),
-        1: set([(1,), (0, 2)]),
+        0: [{0}, {1, 2}],
+        1: [{1}, {0, 2}],
     }
 
     C = np.array([
@@ -197,8 +197,8 @@ def test_get_observability_mapping():
         [1,-1],
     ])
     assert get_observability_mapping(C) == {
-        0: set([(0, 1)]),
-        1: set([(0, 1)]),
+        0: [{0, 1}],
+        1: [{0, 1}],
     }
     C = np.array([
         [1,0],
@@ -206,8 +206,8 @@ def test_get_observability_mapping():
         [1,-1],
     ])
     assert get_observability_mapping(C) == {
-        0: set([(0,), (1, 2)]),
-        1: set([(0, 1), (0, 2), (1, 2)]),
+        0: [{0}, {1, 2}],
+        1: [{0, 1}, {0, 2}, {1, 2}],
     }
 
     C = np.array([
@@ -217,8 +217,8 @@ def test_get_observability_mapping():
         [1,-1],
     ])
     assert get_observability_mapping(C) == {
-        0: set([(0,), (1, 2), (1, 3), (2, 3)]),
-        1: set([(1,), (0, 2), (0, 3), (2, 3)]),
+        0: [{0}, {1, 2}, {1, 3}, {2, 3}],
+        1: [{1}, {0, 2}, {0, 3}, {2, 3}],
     }
 
     C = np.array([
@@ -229,8 +229,8 @@ def test_get_observability_mapping():
         [1,2],
     ])
     assert get_observability_mapping(C) == {
-        0: set([(0,), (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4)]),
-        1: set([(1,), (0, 2), (0, 3), (0, 4), (2, 3), (2, 4), (3, 4)]),
+        0: [{0}, {1, 2}, {1, 3}, {1, 4}, {2, 3}, {2, 4}, {3, 4}],
+        1: [{1}, {0, 2}, {0, 3}, {0, 4}, {2, 3}, {2, 4}, {3, 4}],
     }
 
     # spice things up with an discrete LTI system
@@ -247,16 +247,16 @@ def test_get_observability_mapping():
     sysd = control.matlab.c2d(control.matlab.ss(A,B,C,D), 0.1)
 
     assert get_observability_mapping(sysd.C) == {
-        0: set([(0,)]),
-        1: set([(1,)]),
-        2: set([(2,)]),
-        3: set([(3,)]),
+        0: [{0}],
+        1: [{1}],
+        2: [{2}],
+        3: [{3}],
     }
     assert get_observability_mapping(sysd.C@sysd.A) == {
-        0: set([(0,1,2,3)]),
-        1: set([(1,2,3)]),
-        2: set([(2,3)]),
-        3: set([(3,)]),
+        0: [{0,1,2,3}],
+        1: [{1,2,3}],
+        2: [{2,3}],
+        3: [{3}],
     }
 
 def test_is_observable():
@@ -518,6 +518,7 @@ def test_is_observable_ltv():
     A = sysd.A
     C = sysd.C
 
+    # TODO: use n instead of 3, but n is way too slow at the moment
     assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[]) == True
     assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0]) == True
     assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[1]) == False
@@ -541,5 +542,7 @@ if __name__ == '__main__':
     test_get_observability_mapping()
     test_is_observable()
     test_is_attackable()
+    test_is_observable_ltv()
+    # test_is_attackable_ltv()
 
     print("Tests passed!")

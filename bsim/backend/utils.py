@@ -666,36 +666,48 @@ def get_observability_mapping(C, sensor_configurations=None):
             that uniquely recover the state.
     """
     p = C.shape[0]
+    n = C.shape[1]
     if sensor_configurations is None:
+        using_all_sensor_configurations = True
         sensor_configurations = powerset(range(p))
+    else:
+        using_all_sensor_configurations = False
 
     mapping = {}
 
     for S in sensor_configurations:
         if len(S) == 0:
+            # no sensors selected
+            continue
+
+        if using_all_sensor_configurations and len(S) > n:  
+            # if we are using all sensor configurations, then we don't need to consider
+            # configurations that have more sensors than states, because the rank of
+            # C_S will never be equal to len(S)
             continue
 
         # C matrix with the select sensors
         C_S = C[S, :]
+        C_S_rank = np.linalg.matrix_rank(C_S)
 
-        # if C_S is not full rank, then we've already seen sets of sensors that union to S
-        if np.linalg.matrix_rank(C_S) != len(S):
+        # if C_S is not full rank, then we are already accounting for the information S provides
+        # in other sets of sensors
+        if using_all_sensor_configurations and C_S_rank != len(S):
             continue
 
         # Set of indices indicating non-zero columns of C_s
         # this is the states that are affected by the sensors in S
         affected_states = np.asarray(np.any(C_S, axis=0)).nonzero()[-1]
 
-        C_S_nonzero = C_S[:, affected_states]
-
-        # if C_S_nonzero has a left inverse, then the states in affected_states
+        # if C_S has a left inverse for the affected states, then the states in affected_states
         # can be uniquely recovered by the sensors in S.
-        if np.linalg.matrix_rank(C_S_nonzero) == len(affected_states):
+        if C_S_rank == len(affected_states):
+            S_set = frozenset(S)
             for affected_state in affected_states:
                 # record S if it doesn't already contain a set of sensors that
                 # can recover the affected state
-                if not any(set(s).issubset(set(S)) for s in mapping.get(affected_state, [])):
-                    mapping.setdefault(affected_state, set()).add(S)
+                if not any(s.issubset(S_set) for s in mapping.get(affected_state, [])):
+                    mapping.setdefault(affected_state, []).append(S_set)
     
     return mapping
 
