@@ -607,6 +607,13 @@ def get_evolution_matrices(As, Cs):
 
     return np.concatenate(state_evolution_matrix_list), np.concatenate(output_evolution_matrix_list)
 
+def make_hashable(a):
+    if isinstance(a, np.ndarray):
+        return a.tobytes()
+    elif isinstance(a, list):
+        return tuple(make_hashable(b) for b in a)
+    return a
+
 class HashableIterable:
     """
     A wrapper for an iterable that makes it hashable. Specifically, it converts
@@ -616,7 +623,8 @@ class HashableIterable:
 
     def __init__(self, iterable):
         self.raw = iterable
-        self.hashable = tuple(a.tobytes() if isinstance(a, np.ndarray) else a for a in iterable)
+        self.hashable = tuple(make_hashable(a) for a in iterable)
+    
     
     def __hash__(self):
         return hash(self.hashable)
@@ -675,7 +683,17 @@ def get_observability_mapping(C, sensor_configurations=None):
 
     mapping = {}
 
+    configs = 0
+    small_enough_configs = 0
+    rank_ops = 0
+    redundant_configs = 0
+    new_configs = 0
+    redundant_useful_rank_ops = 0
+    useful_rank_ops = 0
+
     for S in sensor_configurations:
+        configs += 1
+
         if len(S) == 0:
             # no sensors selected
             continue
@@ -685,6 +703,8 @@ def get_observability_mapping(C, sensor_configurations=None):
             # configurations that have more sensors than states, because the rank of
             # C_S will never be equal to len(S)
             continue
+
+        small_enough_configs += 1
 
         # C matrix with the select sensors
         C_S = C[S, :]
@@ -698,22 +718,38 @@ def get_observability_mapping(C, sensor_configurations=None):
             # if len(S) < len(affected_states), then the rank of C_S will never be equal to len(affected_states)
             continue
 
+        rank_ops += 1
         C_S_rank = np.linalg.matrix_rank(C_S)
 
         # if C_S has a left inverse for the affected states, then the states in affected_states
         # can be uniquely recovered by the sensors in S.
         if C_S_rank == len(affected_states):
             S_set = frozenset(S)
+
+            useful_rank_ops += 1
+
+            curr_new_configs = new_configs
+
             for affected_state in affected_states:
                 # record S if it doesn't already contain a set of sensors that
                 # can recover the affected state
                 if not any(s.issubset(S_set) for s in mapping.get(affected_state, [])):
+                    new_configs += 1
                     mapping.setdefault(affected_state, []).append(S_set)
+                else:
+                    redundant_configs += 1
+            
+            if curr_new_configs == new_configs:
+                # redundant matrix rank operation
+                redundant_useful_rank_ops += 1
+
+    # Debug print
+    # print(f"{configs=} {small_enough_configs=} {rank_ops=} {redundant_configs=} {new_configs=} {useful_rank_ops=} {redundant_useful_rank_ops=}")
     
     return mapping
 
 
-def is_observable(mapping=None, C=None, missing_sensors=[]):
+def is_observable(mapping=None, C=None, missing_sensors=[], sensor_configurations=None):
     """
     This function checks if a static system is observable given a set of missing sensors.
     Inputs:
@@ -721,12 +757,14 @@ def is_observable(mapping=None, C=None, missing_sensors=[]):
             that uniquely recover the state. If None, this is computed from C.
         C: numpy.ndarray - matrix of size (p,n). This is only used if mapping is None.
         missing_sensors: int[] - list of sensor indices that are missing.
+        sensor_configurations: int[][] - list of possible sensor configurations. If None,
+            all configurations will be considered.
     Outputs:
         is_observable: bool - True if the system is observable with the missing sensors, False otherwise.
     """
 
     if mapping is None:
-        mapping = get_observability_mapping(C)
+        mapping = get_observability_mapping(C, sensor_configurations)
     
     for _state, sensor_configurations in mapping.items():
         uncompromised_configurations = [S for S in sensor_configurations if not set(S).intersection(missing_sensors)]
@@ -736,7 +774,7 @@ def is_observable(mapping=None, C=None, missing_sensors=[]):
     
     return True
 
-def is_attackable(mapping=None, C=None, attacked_sensors=[]):
+def is_attackable(mapping=None, C=None, attacked_sensors=[], sensor_configurations=None):
     """
     This function checks if a static system is attackable given a set of attacked sensors.
     Inputs:
@@ -744,12 +782,14 @@ def is_attackable(mapping=None, C=None, attacked_sensors=[]):
             that uniquely recover the state. If None, this is computed from C.
         C: numpy.ndarray - matrix of size (p,n). This is only used if mapping is None.
         attacked_sensors: int[] - list of sensor indices that are attacked.
+        sensor_configurations: int[][] - list of possible sensor configurations. If None,
+            all configurations will be considered.
     Outputs:
         is_attackable: bool - True if the system is attackable with the attacked sensors, False otherwise.
     """
 
     if mapping is None:
-        mapping = get_observability_mapping(C)
+        mapping = get_observability_mapping(C, sensor_configurations)
 
     for _state, sensor_configurations in mapping.items():
         compromised_configurations = [S for S in sensor_configurations if set(S).intersection(attacked_sensors)]
@@ -759,7 +799,28 @@ def is_attackable(mapping=None, C=None, attacked_sensors=[]):
     
     return True
 
-def is_observable_ltv(Cs=None, As=None, missing_sensors=[]):
+def expand_sensor_configs_over_time(sensor_configurations, p, N):
+    """
+    This function turns a set of sensor configurations into a set of sensor configurations
+    useful when turning a system into a static problem.
+    sensor_configurations: int[][] - list of sensor configurations
+    p - number of sensors
+    N - number of time steps
+
+    Outputs:
+        expanded_sensor_configurations: int[][] - list of sensor configurations
+    
+    Example:
+        sensor_configurations = [[0,1], [2,3]]
+        p = 4
+        N = 2
+        expanded_sensor_configurations = [[0,1,4,5], [2,3,6,7]]
+    """
+
+    return [scs + tuple(t*p+i for t in range(N) for i in scs) for scs in sensor_configurations]
+    
+
+def is_observable_ltv(Cs=None, As=None, missing_sensors=[], sensor_configurations=None):
     """
     This function checks if a discrete linear time-varying system is observable given a set of missing sensors.
     Continuous time systems need to be discretized before calling this function.
@@ -770,6 +831,8 @@ def is_observable_ltv(Cs=None, As=None, missing_sensors=[]):
         Cs: numpy.ndarray[] - array of matrix of size (p,n). This is only used if mapping is None.
         As: numpy.ndarray[] - array of matrix of size (n,n). This is only used if mapping is None.
         missing_sensors: int[] - list of sensor indices that are missing.
+        sensor_configurations: int[][] - list of possible sensor configurations. If None,
+            all configurations will be considered.
     Outputs:
         is_observable: bool - True if the system is observable with the missing sensors, False otherwise.
     """
@@ -779,15 +842,18 @@ def is_observable_ltv(Cs=None, As=None, missing_sensors=[]):
     assert len(As) == len(Cs) - 1
 
     p = Cs[0].shape[0]
-    T = len(Cs) # the number of time steps
+    N = len(Cs) # the number of time steps
 
     # output_evolution_matrix is a matrix C where Y = C@x_0
     output_evolution_matrix = get_evolution_matrices(Cs=Cs, As=As)[1]
     output_evolution_matrix.setflags(write=False)
 
-    return is_observable(C=output_evolution_matrix, missing_sensors=[t*p+i for t in range(T) for i in missing_sensors])
+    if sensor_configurations is None:
+        sensor_configurations = powerset(range(p))
 
-def is_attackable_ltv(Cs=None, As=None, attacked_sensors=[]):
+    return is_observable(C=output_evolution_matrix, missing_sensors=[t*p+i for t in range(N) for i in missing_sensors], sensor_configurations=expand_sensor_configs_over_time(sensor_configurations, p, N))
+
+def is_attackable_ltv(Cs=None, As=None, attacked_sensors=[], sensor_configurations=None):
     """
     This function checks if a discrete linear time-varying system is attackable given a set of attacked sensors.
     Continuous time systems need to be discretized before calling this function.
@@ -798,6 +864,8 @@ def is_attackable_ltv(Cs=None, As=None, attacked_sensors=[]):
         Cs: numpy.ndarray[] - array of matrix of size (p,n). This is only used if mapping is None.
         As: numpy.ndarray[] - array of matrix of size (n,n). This is only used if mapping is None.
         attacked_sensors: int[] - list of sensor indices that are attacked.
+        sensor_configurations: int[][] - list of possible sensor configurations. If None,
+            all configurations will be considered.
     Outputs:
         is_attackable: bool - True if the system is attackable with the attacked sensors, False otherwise.
     """
@@ -807,11 +875,11 @@ def is_attackable_ltv(Cs=None, As=None, attacked_sensors=[]):
     assert len(As) == len(Cs) - 1
 
     p = Cs[0].shape[0]
-    T = len(Cs) # the number of time steps
+    N = len(Cs) # the number of time steps
 
     # output_evolution_matrix is a matrix C where Y = C@x_0
     output_evolution_matrix = get_evolution_matrices(Cs=Cs, As=As)[1]
 
-    return is_attackable(C=output_evolution_matrix, attacked_sensors=[t*p+i for t in range(T) for i in attacked_sensors])
+    return is_attackable(C=output_evolution_matrix, attacked_sensors=[t*p+i for t in range(N) for i in attacked_sensors], sensor_configurations=expand_sensor_configs_over_time(sensor_configurations, p, N))
 
 # TODO: Check if is_attackable is a generalization of 2s-sparse observability

@@ -518,22 +518,21 @@ def test_is_observable_ltv():
     A = sysd.A
     C = sysd.C
 
-    # TODO: use n instead of 3, but n is way too slow at the moment
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[1]) == False
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[2]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[3]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[4]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[5]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,1]) == False
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,2]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,3]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,4]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,5]) == False
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[2,3]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[2,4]) == True
-    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[3,4]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[0]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[1]) == False
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[2]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[3]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[4]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[5]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[0,1]) == False
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[0,2]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[0,3]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[0,4]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[0,5]) == False
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[2,3]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[2,4]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[3,4]) == True
 
 
 if __name__ == '__main__':
