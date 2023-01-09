@@ -478,15 +478,18 @@ def test_is_observable_ltv():
     A = sysd.A
     C = sysd.C
 
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[]) == True
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[0]) == False
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[1]) == False
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[2]) == True
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[3]) == True
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[4]) == True
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[2,3]) == True
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[2,4]) == False
-    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[3,4]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[0]) == False
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[1]) == False
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[2]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[3]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[4]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[2,3]) == True
+    # TODO investigate why this is false with 2 time steps but true with n time steps
+    # This will give us some intuition into the number of time steps we need to achieve
+    # maximum observability.
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[2,4]) == True
+    assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[3,4]) == True
 
     # Kinematic bicycle
     theta = np.pi / 4
