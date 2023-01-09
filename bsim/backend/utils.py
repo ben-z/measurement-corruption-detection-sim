@@ -6,7 +6,7 @@ import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
 import time
 from typing import Dict, Any
-from functools import cached_property, lru_cache
+from functools import cached_property, lru_cache, wraps, update_wrapper
 
 def closest_point_on_line_segment(p, a, b):
     """
@@ -607,6 +607,51 @@ def get_evolution_matrices(As, Cs):
 
     return np.concatenate(state_evolution_matrix_list), np.concatenate(output_evolution_matrix_list)
 
+class HashableIterable:
+    """
+    A wrapper for an iterable that makes it hashable. Specifically, it converts
+    all numpy arrays to bytes and stores the result as a tuple. This is useful
+    for caching functions that take numpy arrays as arguments.
+    """
+
+    def __init__(self, iterable):
+        self.raw = iterable
+        self.hashable = tuple(a.tobytes() if isinstance(a, np.ndarray) else a for a in iterable)
+    
+    def __hash__(self):
+        return hash(self.hashable)
+    
+    def __eq__(self, other):
+        return self.hashable == other.hashable
+    
+    def __repr__(self):
+        return repr(self.raw)
+    
+    def get_raw(self):
+        return self.raw
+
+def np_cache(*cache_args,**cache_kwargs):
+    """
+    Decorator that caches the result of a function that takes numpy arrays as
+    arguments.
+    """
+    def decorating_function(user_function):
+        @lru_cache(*cache_args,**cache_kwargs)
+        def cached_wrapper(hashable):
+            return user_function(*hashable.get_raw())
+
+        @wraps(user_function)
+        def wrapper(*args):
+            hashable = HashableIterable(args)
+
+            return cached_wrapper(hashable)
+
+        return wrapper
+
+    return decorating_function
+
+
+@np_cache(maxsize=200)
 def get_observability_mapping(C, sensor_configurations=None):
     """
     This function solves the observability problem for a static system
@@ -701,3 +746,59 @@ def is_attackable(mapping=None, C=None, attacked_sensors=[]):
     
     return True
 
+def is_observable_ltv(Cs=None, As=None, missing_sensors=[]):
+    """
+    This function checks if a discrete linear time-varying system is observable given a set of missing sensors.
+    Continuous time systems need to be discretized before calling this function.
+
+    Inputs:
+        mapping: {int => int[][]} - mapping from state indices to sensor configurations
+            that uniquely recover the state. If None, this is computed from C.
+        Cs: numpy.ndarray[] - array of matrix of size (p,n). This is only used if mapping is None.
+        As: numpy.ndarray[] - array of matrix of size (n,n). This is only used if mapping is None.
+        missing_sensors: int[] - list of sensor indices that are missing.
+    Outputs:
+        is_observable: bool - True if the system is observable with the missing sensors, False otherwise.
+    """
+
+    assert Cs is not None
+    assert As is not None
+    assert len(As) == len(Cs) - 1
+
+    p = Cs[0].shape[0]
+    T = len(Cs) # the number of time steps
+
+    # output_evolution_matrix is a matrix C where Y = C@x_0
+    output_evolution_matrix = get_evolution_matrices(Cs=Cs, As=As)[1]
+    output_evolution_matrix.setflags(write=False)
+
+    return is_observable(C=output_evolution_matrix, missing_sensors=[t*p+i for t in range(T) for i in missing_sensors])
+
+def is_attackable_ltv(Cs=None, As=None, attacked_sensors=[]):
+    """
+    This function checks if a discrete linear time-varying system is attackable given a set of attacked sensors.
+    Continuous time systems need to be discretized before calling this function.
+
+    Inputs:
+        mapping: {int => int[][]} - mapping from state indices to sensor configurations
+            that uniquely recover the state. If None, this is computed from C.
+        Cs: numpy.ndarray[] - array of matrix of size (p,n). This is only used if mapping is None.
+        As: numpy.ndarray[] - array of matrix of size (n,n). This is only used if mapping is None.
+        attacked_sensors: int[] - list of sensor indices that are attacked.
+    Outputs:
+        is_attackable: bool - True if the system is attackable with the attacked sensors, False otherwise.
+    """
+
+    assert Cs is not None
+    assert As is not None
+    assert len(As) == len(Cs) - 1
+
+    p = Cs[0].shape[0]
+    T = len(Cs) # the number of time steps
+
+    # output_evolution_matrix is a matrix C where Y = C@x_0
+    output_evolution_matrix = get_evolution_matrices(Cs=Cs, As=As)[1]
+
+    return is_attackable(C=output_evolution_matrix, attacked_sensors=[t*p+i for t in range(T) for i in attacked_sensors])
+
+# TODO: Check if is_attackable is a generalization of 2s-sparse observability

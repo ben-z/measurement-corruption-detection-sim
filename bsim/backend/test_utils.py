@@ -2,7 +2,7 @@ import control.matlab
 import numpy as np
 from numpy import sin, cos, tan
 
-from utils import s_sparse_observability, get_evolution_matrices, get_observability_mapping, is_observable, is_attackable
+from utils import s_sparse_observability, get_evolution_matrices, get_observability_mapping, is_observable, is_attackable, is_observable_ltv, is_attackable_ltv
 
 def test_s_sparse_observability():
     # A 4x4 system
@@ -428,6 +428,112 @@ def test_is_attackable():
     assert is_attackable(C=C, attacked_sensors=[2,3]) == False
     assert is_attackable(C=C, attacked_sensors=[2,4]) == False
     assert is_attackable(C=C, attacked_sensors=[3,4]) == False
+
+def test_is_observable_ltv():
+    # A 4x4 system
+    Ac = np.array([
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+        [0, 0, 0, 0]
+    ])
+    n = Ac.shape[0]
+    Bc = np.zeros((n, 1))
+    Cc = np.eye(n)
+    Dc = 0
+
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[0]) == False
+    # when senor 1 is missing, we can use the change in sensor 0 to recover state 1
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[1]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[2]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[3]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[1,2]) == False
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[1,3]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[2,3]) == True
+
+    # Kinematic bicycle
+    theta = np.pi / 4
+    delta = np.pi / 8
+    L = 2.9
+    v = 5
+
+    Ac = np.array([
+        [0, 0, -v*sin(theta), cos(theta), 0],
+        [0, 0, v*cos(theta), sin(theta), 0],
+        [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0]
+    ])
+    n = Ac.shape[0]
+    Bc = np.zeros((n, 1))
+    Cc = np.eye(n)
+    Dc = 0
+
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[0]) == False
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[1]) == False
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[2]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[3]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[4]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[2,3]) == True
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[2,4]) == False
+    assert is_observable_ltv(Cs=[C,C], As=[A], missing_sensors=[3,4]) == True
+
+    # Kinematic bicycle
+    theta = np.pi / 4
+    delta = np.pi / 8
+    L = 2.9
+    v = 5
+
+    Ac = np.array([
+        [0, 0, -v*sin(theta), cos(theta), 0],
+        [0, 0, v*cos(theta), sin(theta), 0],
+        [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0]
+    ])
+    n = Ac.shape[0]
+    Bc = np.zeros((n, 1))
+    Cc = np.array([
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        # redundancy on the x sensor
+        [1, 0, 0, 0, 0],
+    ])
+    Dc = 0
+
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[1]) == False
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[2]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[3]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[4]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[5]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,1]) == False
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,2]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,3]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,4]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[0,5]) == False
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[2,3]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[2,4]) == True
+    assert is_observable_ltv(Cs=[C]*3, As=[A]*(3-1), missing_sensors=[3,4]) == True
+
 
 if __name__ == '__main__':
     test_s_sparse_observability()
