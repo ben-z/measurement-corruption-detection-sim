@@ -688,16 +688,17 @@ def get_observability_mapping(C, sensor_configurations=None):
 
         # C matrix with the select sensors
         C_S = C[S, :]
-        C_S_rank = np.linalg.matrix_rank(C_S)
-
-        # if C_S is not full rank, then we are already accounting for the information S provides
-        # in other sets of sensors
-        if using_all_sensor_configurations and C_S_rank != len(S):
-            continue
-
+        
         # Set of indices indicating non-zero columns of C_s
         # this is the states that are affected by the sensors in S
         affected_states = np.asarray(np.any(C_S, axis=0)).nonzero()[-1]
+
+        if using_all_sensor_configurations and len(affected_states) != len(S):
+            # if len(S) > len(affected_states), then there are redundant roles in C_S, so S is not minimal
+            # if len(S) < len(affected_states), then the rank of C_S will never be equal to len(affected_states)
+            continue
+
+        C_S_rank = np.linalg.matrix_rank(C_S)
 
         # if C_S has a left inverse for the affected states, then the states in affected_states
         # can be uniquely recovered by the sensors in S.
