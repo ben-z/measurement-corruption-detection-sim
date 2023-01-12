@@ -74,6 +74,14 @@ function initializeEgoConfig() {
         global_ref_path: generateCircleApproximation([0,0], 20, 32).reverse(),
         get_initial_state: (target_speed) => [20,0,-1.5708, target_speed,-0.145],
     };
+    const REF_SMALL_CIRCLE_32_DIV = {
+        global_ref_path: generateCircleApproximation([0,0], 17.5, 32).reverse(),
+        get_initial_state: (target_speed) => [17.5,0,-1.5708, target_speed,-0.145],
+    };
+    const REF_LARGE_CIRCLE_32_DIV = {
+        global_ref_path: generateCircleApproximation([0,0], 22.5, 32).reverse(),
+        get_initial_state: (target_speed) => [22.5,0,-1.5708, target_speed,-0.145],
+    };
     const REF_FRENET_GENERATD_STRAIGHT_LINE = (() => {
         const slist = [...Array(100).keys()].map(i => i);
         const dlist = new Array(slist.length).fill(0);
@@ -111,6 +119,7 @@ function initializeEgoConfig() {
     }
     const BASIC_PLANNER_CONFIG = {
         planner: 'lateral_profile',
+        // planner: 'static_slice',
         planner_options: {
             lateral_deviation_profile: {
                 'interpolation': 'linear',
@@ -132,8 +141,8 @@ function initializeEgoConfig() {
 
     { // ego1
         const ego = egos.ego1;
-        const ref = REF_CIRCLE_32_DIV;
-        const target_speed = BASIC_TARGET_SPEED;
+        const ref = REF_LARGE_CIRCLE_32_DIV;
+        const target_speed = BASIC_TARGET_SPEED + 1.8;
 
         ego.controller = BASIC_CONTROLLER_CONFIG.controller;
         ego.controller_options = BASIC_CONTROLLER_CONFIG.controller_options;
@@ -149,7 +158,7 @@ function initializeEgoConfig() {
 
     { // ego2
         const ego = egos.ego2;
-        const ref = REF_CIRCLE_32_DIV;
+        const ref = REF_SMALL_CIRCLE_32_DIV;
         const target_speed = BASIC_TARGET_SPEED; // m/s
 
         ego.controller = BASIC_CONTROLLER_CONFIG.controller;
@@ -426,7 +435,7 @@ const COMMON_PLOT_SETTINGS = {
             return hoveredIdx;
         }
     },
-    width: 800,
+    width: 600,
     height: 200,
     hooks: {
         'setSelect': [
@@ -960,7 +969,7 @@ function drawVehicle(ctx, vehicleName, vehicle) {
     }
 
     // draw target vehicle trajectory
-    if (vehicle.controller_debug_output.target_x && getOrCreateBEVToggleState(`${vehicleName}-controller_target`, `${vehicleName} controller target`, true)) {
+    if (vehicle.controller_debug_output.target_x && getOrCreateBEVToggleState(`${vehicleName}-controller_target`, `${vehicleName} controller target`, false)) {
         const target_vehicle_states = vehicle.controller_debug_output.target_x.map(decodeVehicleState);
 
         ctx.save();
@@ -975,7 +984,7 @@ function drawVehicle(ctx, vehicleName, vehicle) {
     }
 
     // draw planner lookahead point
-    if (vehicle.planner_debug_output.lookahead_point && getOrCreateBEVToggleState(`${vehicleName}-planner_lookahead_point`, `${vehicleName} planner lookahead point`, true)) {
+    if (vehicle.planner_debug_output.lookahead_point && getOrCreateBEVToggleState(`${vehicleName}-planner_lookahead_point`, `${vehicleName} planner lookahead point`, false)) {
         ctx.save();
         ctx.beginPath();
         ctx.strokeStyle = 'lightgreen';
