@@ -912,6 +912,54 @@ def test_is_attackable_ltv():
     assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[2,4]) == False
     assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[3,4]) == False
 
+    # This test show that with only 1 x,y measurement, we cannot get very good attackability
+    Ccs = [
+        np.array([
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+        ]),
+        *[
+            np.array([
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 0, 1, 0],
+                [0, 0, 0, 0, 1],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 0, 1, 0],
+            ])
+        ]*9,
+    ]
+
+    Cs = []
+    for Cc in Ccs:
+        sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+        Cs.append(sysd.C)
+
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[3]) == True
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[]) == True
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[0]) == False
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[1]) == False
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[2]) == False
+    # We can infer speed from heading and steering??
+    # Guess it's true for non-zero steering. This is probably also related to the theorem
+    # about the condition for the supp of the measurement.
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[3]) == True
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[4]) == False
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[5]) == False
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[6]) == False
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[7]) == False
+    assert is_attackable_ltv(Cs=Cs, As=[A]*(len(Cs)-1), attacked_sensors=[8]) == True
+
 if __name__ == '__main__':
     test_s_sparse_observability()
     test_get_evolution_matrices()
