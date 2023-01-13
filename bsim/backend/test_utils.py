@@ -429,6 +429,61 @@ def test_is_attackable():
     assert is_attackable(C=C, attacked_sensors=[2,4]) == False
     assert is_attackable(C=C, attacked_sensors=[3,4]) == False
 
+
+def test_is_attackable_and_gt2s_sparse_observability_equivalence():
+    """
+    Verifies that our definition of attackable is equivalent to the definition of >2s-sparse observability.
+    """
+    def get_max_number_of_sensors_attackable(C):
+        """
+        Returns the maximum number of attacked sensors that the system can tolerate.
+        """
+        for attacked_sensors in powerset(range(C.shape[0])):
+            if not is_attackable(C=C, attacked_sensors=attacked_sensors):
+                return len(attacked_sensors)-1
+        
+        raise Exception('We should never reach here! A system is always attackable if we remove all sensors')
+
+    Cs = [
+        np.array([
+            [1,0,0],
+            [0,1,0],
+            [0,0,1],
+        ]),
+        np.array([
+            [1,0],
+            [0,1],
+            [1,1],
+        ]),
+        np.array([
+            [1,0],
+            [0,1],
+            [1,0],
+        ]),
+        np.array([
+            [1,0],
+            [0,1],
+            [1,0],
+            [1,0],
+        ]),
+        np.array([
+            [1,0],
+            [0,1],
+            [1,1],
+            [1,-1],
+        ]),
+        np.array([
+            [1,0],
+            [0,1],
+            [1,1],
+            [1,-1],
+            [1,2],
+        ]),
+    ]
+
+    for C in Cs:
+        assert max(0, (s_sparse_observability(np.eye(C.shape[1]), C) - 1) // 2) == get_max_number_of_sensors_attackable(C), f"Test failed for {C=}"
+
 def test_expand_sensor_configs_over_time():
     assert set(expand_sensor_configs_over_time([(0,1)], p=2, N=3)) == set([(0,1),(2,3),(4,5),(0,1,2,3,4,5)])
     assert set(expand_sensor_configs_over_time([(0,1),(2,3)], p=4, N=2)) == set([(0,1),(4,5),(2,3),(6,7),(0,1,4,5),(2,3,6,7)])
@@ -587,7 +642,10 @@ def test_is_observable_ltv():
     assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[3,4]) == True
 
 
-def test_ltv_and_s_sparse_observability_equivalence():
+def test_is_observable_ltv_and_s_sparse_observability_equivalence():
+    """
+    This test checks that the s-sparse observability is equivalent to the LTV observability
+    """
     def get_ltv_s_sparse_observability(As,Cs):
         """
         Given an LTV system, returns the s-sparse observability
@@ -650,9 +708,10 @@ if __name__ == '__main__':
     test_get_observability_mapping()
     test_is_observable()
     test_is_attackable()
+    test_is_attackable_and_gt2s_sparse_observability_equivalence()
     test_expand_sensor_configs_over_time()
     test_is_observable_ltv()
     # test_is_attackable_ltv()
-    test_ltv_and_s_sparse_observability_equivalence()
+    test_is_observable_ltv_and_s_sparse_observability_equivalence()
 
     print("Tests passed!")
