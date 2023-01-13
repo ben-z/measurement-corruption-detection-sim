@@ -2,7 +2,7 @@ import control.matlab
 import numpy as np
 from numpy import sin, cos, tan
 
-from utils import s_sparse_observability, get_evolution_matrices, get_observability_mapping, is_observable, is_attackable, is_observable_ltv, is_attackable_ltv
+from utils import s_sparse_observability, get_evolution_matrices, get_observability_mapping, is_observable, is_attackable, is_observable_ltv, is_attackable_ltv, expand_sensor_configs_over_time, powerset
 
 def test_s_sparse_observability():
     # A 4x4 system
@@ -429,6 +429,58 @@ def test_is_attackable():
     assert is_attackable(C=C, attacked_sensors=[2,4]) == False
     assert is_attackable(C=C, attacked_sensors=[3,4]) == False
 
+def test_expand_sensor_configs_over_time():
+    assert set(expand_sensor_configs_over_time([(0,1)], p=2, N=3)) == set([(0,1),(2,3),(4,5),(0,1,2,3,4,5)])
+    assert set(expand_sensor_configs_over_time([(0,1),(2,3)], p=4, N=2)) == set([(0,1),(4,5),(2,3),(6,7),(0,1,4,5),(2,3,6,7)])
+    assert set(expand_sensor_configs_over_time([(0,1),(2,3)], p=5, N=2)) == set([(0,1),(5,6),(2,3),(7,8),(0,1,5,6),(2,3,7,8)])
+    assert set(expand_sensor_configs_over_time(powerset(range(2)), p=2, N=3)) == set([(),(0,),(1,),(0,1),(2,),(3,),(2,3),(4,),(5,),(4,5),(0,2,4),(1,3,5),(0,1,2,3,4,5)])
+
+    # test that reducing the mapping size using sensor configuration expansion does not change the failure
+    # domain of the mapping. Assuming sensors fail across all time steps.
+    theta = np.pi / 4
+    delta = np.pi / 8
+    L = 2.9
+    v = 5
+
+    Ac = np.array([
+        [0, 0, -v*sin(theta), cos(theta), 0],
+        [0, 0, v*cos(theta), sin(theta), 0],
+        [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0]
+    ])
+    n = Ac.shape[0]
+    Bc = np.zeros((n, 1))
+    Cc = np.eye(n)
+    Dc = 0
+
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+    p = C.shape[0]
+
+    N = 2
+    mapping_full = get_observability_mapping(get_evolution_matrices(Cs=[C]*N, As=[A]*(N-1))[1])
+    mapping_reduced = get_observability_mapping(get_evolution_matrices(Cs=[C]*N, As=[A]*(N-1))[1], expand_sensor_configs_over_time(powerset(range(p)), p, N))
+    # Check to see if the two mappings have equivalent observability properties
+    for missing_sensors in powerset(range(p)):
+        assert is_observable(mapping_full, missing_sensors) == is_observable(mapping_reduced, missing_sensors), "Failed for missing sensors: {}".format(missing_sensors)
+
+    N = 3
+    mapping_full = get_observability_mapping(get_evolution_matrices(Cs=[C]*N, As=[A]*(N-1))[1])
+    mapping_reduced = get_observability_mapping(get_evolution_matrices(Cs=[C]*N, As=[A]*(N-1))[1], expand_sensor_configs_over_time(powerset(range(p)), p, N))
+    # Check to see if the two mappings have equivalent observability properties
+    for missing_sensors in powerset(range(p)):
+        assert is_observable(mapping_full, missing_sensors) == is_observable(mapping_reduced, missing_sensors), "Failed for missing sensors: {}".format(missing_sensors)
+
+    N = 4
+    # WARNING: This line takes a long time
+    mapping_full = get_observability_mapping(get_evolution_matrices(Cs=[C]*N, As=[A]*(N-1))[1])
+    mapping_reduced = get_observability_mapping(get_evolution_matrices(Cs=[C]*N, As=[A]*(N-1))[1], expand_sensor_configs_over_time(powerset(range(p)), p, N))
+    # Check to see if the two mappings have equivalent observability properties
+    for missing_sensors in powerset(range(p)):
+        assert is_observable(mapping_full, missing_sensors) == is_observable(mapping_reduced, missing_sensors), "Failed for missing sensors: {}".format(missing_sensors)
+
 def test_is_observable_ltv():
     # A 4x4 system
     Ac = np.array([
@@ -485,9 +537,6 @@ def test_is_observable_ltv():
     assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[3]) == True
     assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[4]) == True
     assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[2,3]) == True
-    # TODO investigate why this is false with 2 time steps but true with n time steps
-    # This will give us some intuition into the number of time steps we need to achieve
-    # maximum observability.
     assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[2,4]) == True
     assert is_observable_ltv(Cs=[C]*n, As=[A]*(n-1), missing_sensors=[3,4]) == True
 
@@ -544,6 +593,7 @@ if __name__ == '__main__':
     test_get_observability_mapping()
     test_is_observable()
     test_is_attackable()
+    test_expand_sensor_configs_over_time()
     test_is_observable_ltv()
     # test_is_attackable_ltv()
 

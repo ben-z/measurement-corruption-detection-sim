@@ -758,7 +758,7 @@ def is_observable(mapping=None, C=None, missing_sensors=[], sensor_configuration
         C: numpy.ndarray - matrix of size (p,n). This is only used if mapping is None.
         missing_sensors: int[] - list of sensor indices that are missing.
         sensor_configurations: int[][] - list of possible sensor configurations. If None,
-            all configurations will be considered.
+            all configurations will be considered. This is only used when mapping is None.
     Outputs:
         is_observable: bool - True if the system is observable with the missing sensors, False otherwise.
     """
@@ -766,8 +766,8 @@ def is_observable(mapping=None, C=None, missing_sensors=[], sensor_configuration
     if mapping is None:
         mapping = get_observability_mapping(C, sensor_configurations)
     
-    for _state, sensor_configurations in mapping.items():
-        uncompromised_configurations = [S for S in sensor_configurations if not set(S).intersection(missing_sensors)]
+    for _state, cs in mapping.items():
+        uncompromised_configurations = [S for S in cs if not set(S).intersection(missing_sensors)]
         # if there is no configuration that can uniquely recover the state, then the system is not observable
         if len(uncompromised_configurations) == 0:
             return False
@@ -803,21 +803,34 @@ def expand_sensor_configs_over_time(sensor_configurations, p, N):
     """
     This function turns a set of sensor configurations into a set of sensor configurations
     useful when turning a system into a static problem.
-    sensor_configurations: int[][] - list of sensor configurations
+    sensor_configurations: Tuple[int][] - list of sensor configurations
     p - number of sensors
     N - number of time steps
 
     Outputs:
-        expanded_sensor_configurations: int[][] - list of sensor configurations
+        expanded_sensor_configurations: Tuple[int][] - list of sensor configurations
     
     Example:
-        sensor_configurations = [[0,1], [2,3]]
+        sensor_configurations = [(0,1), (2,3)]
         p = 4
         N = 2
-        expanded_sensor_configurations = [[0,1,4,5], [2,3,6,7]]
+        expanded_sensor_configurations = [(0,1),(4,5),(2,3),(6,7),(0,1,4,5),(2,3,6,7)]
     """
+    sensor_configurations = list(sensor_configurations)
 
-    return [scs + tuple(t*p+i for t in range(N) for i in scs) for scs in sensor_configurations]
+    ret = []
+    for sensors in sensor_configurations:
+        new_config = tuple(t*p+s for t in range(N) for s in sensors)
+        if new_config not in ret:
+            ret.append(new_config)
+    
+    for t in range(N):
+        for sensors in sensor_configurations:
+            new_config = tuple(t*p+s for s in sensors)
+            if new_config not in ret:
+                ret.append(new_config)
+
+    return sorted(ret, key=lambda sensors: (len(sensors), sensors))
     
 
 def is_observable_ltv(Cs=None, As=None, missing_sensors=[], sensor_configurations=None):
@@ -849,9 +862,13 @@ def is_observable_ltv(Cs=None, As=None, missing_sensors=[], sensor_configuration
     output_evolution_matrix.setflags(write=False)
 
     if sensor_configurations is None:
-        sensor_configurations = powerset(range(p))
+        # This is a list for easier debugging (reusable), can be changed to a generator if needed
+        sensor_configurations = list(powerset(range(p)))
 
+    # The sensor_configurations parameter is used to reduce the search space
+    # FIXME: Currently not sure if this decreases observability. Analysis needed.
     return is_observable(C=output_evolution_matrix, missing_sensors=[t*p+i for t in range(N) for i in missing_sensors], sensor_configurations=expand_sensor_configs_over_time(sensor_configurations, p, N))
+    # return is_observable(C=output_evolution_matrix, missing_sensors=[t*p+i for t in range(N) for i in missing_sensors])
 
 def is_attackable_ltv(Cs=None, As=None, attacked_sensors=[], sensor_configurations=None):
     """
