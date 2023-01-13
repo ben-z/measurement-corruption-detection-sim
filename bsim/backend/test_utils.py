@@ -702,6 +702,157 @@ def test_is_observable_ltv_and_s_sparse_observability_equivalence():
     C = np.concatenate((np.eye(n), np.eye(n)))
     assert s_sparse_observability(A, C) == get_ltv_s_sparse_observability([A]*(n-1), [C]*n)
 
+def test_is_attackable_ltv():
+    # Kinematic bicycle
+    theta = np.pi / 4
+    delta = np.pi / 8
+    L = 2.9
+    v = 5
+
+    Ac = np.array([
+        [0, 0, -v*sin(theta), cos(theta), 0],
+        [0, 0, v*cos(theta), sin(theta), 0],
+        [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0]
+    ])
+    n = Ac.shape[0]
+    Bc = np.zeros((n, 1))
+    Cc = np.array([
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        # redundancy on the x sensor
+        [1, 0, 0, 0, 0],
+    ])
+    Dc = 0
+
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[0]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[1]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[3]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[4]) == False
+
+    Cc = np.array([
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        # redundancy on the x sensor
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+    ])
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[0]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[1]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[3]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[4]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[5]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[6]) == True
+
+    Cc = np.array([
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        # redundancy on the x sensor
+        [1, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0],
+        # redundancy on the y sensor
+        [0, 1, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+    ])
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[0]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[1]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[3]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[4]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[5]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[6]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[7]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[8]) == True
+
+    # Two of each sensor
+    Cc = np.array([
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+    ])
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[0]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[1]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[3]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[4]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[5]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[6]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[7]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[8]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[9]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2,3]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2,4]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[3,4]) == False
+
+    # 9-sensor simulation setup
+    Cc = np.array([
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+    ])
+    sysd = control.matlab.c2d(control.matlab.ss(Ac, Bc, Cc, Dc), 0.1)
+    A = sysd.A
+    C = sysd.C
+
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[0]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[1]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[3]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[4]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[5]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[6]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[7]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[8]) == True
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2,3]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[2,4]) == False
+    assert is_attackable_ltv(Cs=[C]*n, As=[A]*(n-1), attacked_sensors=[3,4]) == False
+
 if __name__ == '__main__':
     test_s_sparse_observability()
     test_get_evolution_matrices()
@@ -711,7 +862,7 @@ if __name__ == '__main__':
     test_is_attackable_and_gt2s_sparse_observability_equivalence()
     test_expand_sensor_configs_over_time()
     test_is_observable_ltv()
-    # test_is_attackable_ltv()
     test_is_observable_ltv_and_s_sparse_observability_equivalence()
+    test_is_attackable_ltv()
 
     print("Tests passed!")
