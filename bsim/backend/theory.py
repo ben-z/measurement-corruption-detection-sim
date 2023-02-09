@@ -18,7 +18,7 @@ def get_observability_matrix(A, C, N, S):
     Parameters:
         A: state transition matrix
         C: output matrix
-        N: observability index (number of time steps)
+        N: observability index (the number of time steps)
         S: {0,1}^p vector indicating which sensors are available (1 means available, 0 means missing)
     """
 
@@ -40,7 +40,7 @@ def get_s_sparse_observability(A,C,N,P):
     Arguments:
         A: state transition matrix
         C: output matrix
-        N: observability index (number of time steps)
+        N: observability index (the number of time steps)
         P: {0,1}^p vector indicating whether a sensor is protected (1 means protected, 0 means unprotected)
     """
     n = A.shape[0]
