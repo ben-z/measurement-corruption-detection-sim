@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from numpy import sin, cos, tan
 from itertools import combinations
@@ -5,6 +6,9 @@ from utils import \
     powerset \
     , get_observability_matrix as old_get_observability_matrix \
     , s_sparse_observability as old_get_s_sparse_observability
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+
 
 def np_make_mask(n, I):
     """
@@ -25,6 +29,12 @@ def toSet(binVec):
     Converts a binary vector to a set.
     """
     return frozenset(np.where(binVec)[0])
+
+def setToStr(S):
+    """
+    Converts a set S to a string.
+    """
+    return str(list(S))
 
 def get_observability_matrix(A, C, N, S):
     """
@@ -143,6 +153,107 @@ def get_s_sparse_observability2(A,C,N,P):
         unimportant_Ks = np.array([])
     
     return s, important_Ks, unimportant_Ks
+
+def get_s_sparse_observability2_visualization_data(A,C,N,P):
+    """
+    Visualizes the s-sparse observability of a system.
+    Arguments:
+        A: state transition matrix
+        C: output matrix
+        N: observability index (the number of time steps)
+        P: {0,1}^p vector indicating whether a sensor is protected (1 means protected, 0 means unprotected)
+    Note: this is the same as get_s_sparse_observability2, but the code is structured such that
+    it can be used to visualize the entire s-sparse observability of a system.
+    """
+
+    n = A.shape[0]
+    p = C.shape[0]
+
+    unprotected_sensors = np.where(P == 0)[0]
+
+    # Initialize s to an invalid value
+    s = None
+    important_Ks_list = []
+    unimportant_Ks_list = []
+
+    for s_candidate in range(0, len(unprotected_sensors)+1):
+        # all combinations of s_candidate sensors that can go missing
+        Ks = np.array([np_make_mask(p, setK) for setK in combinations(unprotected_sensors, s_candidate)])
+
+        observable_mask = np.array([is_observable(A, C, N, ~K) for K in Ks])
+
+        # sensors that when removed, the system is no longer observable
+        important_Ks_list.append(Ks[~observable_mask])
+        # sensors that when removed, the system is still observable
+        unimportant_Ks_list.append(Ks[observable_mask])
+
+        if np.all(observable_mask):
+            # the system is observable with s_candidate sensors missing
+            s = s_candidate
+        elif s is None:
+            s = s_candidate - 1
+    
+    assert s is not None # make type checker happy
+
+    return s, important_Ks_list, unimportant_Ks_list
+
+def np_is_row(X, row):
+    """
+    Checks if a row exists in a numpy array.
+    """
+    return np.any(np.all(X == row, axis=1))
+
+def visualize_s_sparse_observability(A,C,N,P):
+    s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
+
+    CIRCLE_RADIUS = 0.4
+    ANNOTATION_FONT_SIZE = 6
+
+    p = C.shape[0]
+
+    plot_width = math.comb(p, math.ceil(p/2)) # maximum number of sensor combinations for any s
+
+    fig = plt.figure(figsize=(10,10))
+    ax = fig.add_subplot(111, aspect='equal')
+    ax.set_xlim(-1, plot_width)
+    ax.set_ylim(-1, p+1)
+    ax.set_ylabel('number of sensors removed')
+    ax.invert_yaxis()
+    plt.tick_params(
+        axis='x',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom=False,      # ticks along the bottom edge are off
+        top=False,         # ticks along the top edge are off
+        labelbottom=False) # labels along the bottom edge are off
+    ax.legend(handles=[
+        mpatches.Patch(color='red', label='removing these sensors makes the system unobservable'),
+        mpatches.Patch(color='green', label='removing these sensors does not affect observability'),
+        mpatches.Patch(color='blue', label="impossible scenario (contains protected sensors)"),
+    ], loc="lower right")
+    ax.set_title("The system's tolerance to missing sensors")
+
+    # TODO increase this to all combinations of sensors removed so that we don't have missing bubbles.
+    for s_candidate, (important_Ks, unimportant_Ks) in enumerate(zip(important_Ks_list, unimportant_Ks_list)):
+        Ks = np.array([np_make_mask(p, setK) for setK in combinations(range(p), s_candidate)])
+
+        for i, K in enumerate(Ks):
+            if np_is_row(important_Ks, K):
+                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='r')
+            elif np_is_row(unimportant_Ks, K):
+                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='g')
+            else:
+                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='cornflowerblue')
+            ax.add_patch(circle)
+            ax.annotate(str(setToStr(toSet(K))), (i, s_candidate),
+                        ha='center', va='center', fontsize=ANNOTATION_FONT_SIZE)
+
+    # Draw a line to indicate the s value
+    ax.plot([-1, plot_width], [s+0.5, s+0.5], color='green', linestyle='--')
+    ax.arrow(-0.8, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
+    ax.arrow(plot_width-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
+
+    fig.savefig('plotcircles.png')
+    
 
 def dev_tests():
     # Tests written during development (can be incomplete and messy)
@@ -332,12 +443,40 @@ def test_s_sparse_observability2():
 
     pass
 
+def dev_visualizations():
+    # Kinematic bicycle
+    theta = np.pi / 4
+    delta = np.pi / 8
+    L = 2.9
+    v = 5
+
+    A = np.array([
+        [0, 0, -v*sin(theta), cos(theta), 0],
+        [0, 0, v*cos(theta), sin(theta), 0],
+        [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0]
+    ])
+    # observability index, or the number of time steps
+    N = A.shape[0]
+
+    # Identity matrix
+    C = np.array([
+        [1, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+    ])
+    P = toBinVec({0,1}, C.shape[0])
+    s, important_Ks, unimportant_Ks = get_s_sparse_observability2(A, C, N, P)
+
+    visualize_s_sparse_observability(A, C, N, P)
+
 def main():
     # dev_tests()
-    test_s_sparse_observability2()
-
-
-
+    # test_s_sparse_observability2()
+    dev_visualizations()
 
 if __name__ == "__main__":
     main()
