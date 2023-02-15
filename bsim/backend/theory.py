@@ -9,6 +9,11 @@ from utils import \
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "Helvetica",
+    'text.latex.preamble': r'\usepackage{amsfonts}',
+})
 
 def np_make_mask(n, I):
     """
@@ -176,18 +181,18 @@ def get_s_sparse_observability2_visualization_data(A,C,N,P):
     important_Ks_list = []
     unimportant_Ks_list = []
 
-    for s_candidate in range(0, len(unprotected_sensors)+1):
+    for s_candidate in range(0, p+1):
         # all combinations of s_candidate sensors that can go missing
-        Ks = np.array([np_make_mask(p, setK) for setK in combinations(unprotected_sensors, s_candidate)])
+        Ks = np.array([np_make_mask(p, setK) for setK in combinations(unprotected_sensors, s_candidate)]).reshape(-1, p)
 
-        observable_mask = np.array([is_observable(A, C, N, ~K) for K in Ks])
+        observable_mask = np.array([is_observable(A, C, N, ~K) for K in Ks], dtype=bool)
 
         # sensors that when removed, the system is no longer observable
         important_Ks_list.append(Ks[~observable_mask])
         # sensors that when removed, the system is still observable
         unimportant_Ks_list.append(Ks[observable_mask])
 
-        if np.all(observable_mask):
+        if len(Ks) and np.all(observable_mask):
             # the system is observable with s_candidate sensors missing
             s = s_candidate
         elif s is None:
@@ -206,17 +211,19 @@ def np_is_row(X, row):
 def visualize_s_sparse_observability(A,C,N,P):
     s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
 
-    CIRCLE_RADIUS = 0.4
-    ANNOTATION_FONT_SIZE = 6
+    CIRCLE_RADIUS = 0.3
+    BUBBLE_TEXT_FONT_SIZE = 7
+    ANNOTATION_FONT_SIZE = 10
 
     p = C.shape[0]
 
     plot_width = math.comb(p, math.ceil(p/2)) # maximum number of sensor combinations for any s
 
-    fig = plt.figure(figsize=(10,10))
+    # THe size of the plot is experimentally determined
+    fig = plt.figure(figsize=(math.comb(p, math.ceil(p/2))*2.3,p*2.3))
     ax = fig.add_subplot(111, aspect='equal')
     ax.set_xlim(-1, plot_width)
-    ax.set_ylim(-1, p+1)
+    ax.set_ylim(-0.8, p+0.8)
     ax.set_ylabel('number of sensors removed')
     ax.invert_yaxis()
     plt.tick_params(
@@ -226,11 +233,12 @@ def visualize_s_sparse_observability(A,C,N,P):
         top=False,         # ticks along the top edge are off
         labelbottom=False) # labels along the bottom edge are off
     ax.legend(handles=[
-        mpatches.Patch(color='red', label='removing these sensors makes the system unobservable'),
-        mpatches.Patch(color='green', label='removing these sensors does not affect observability'),
+        mpatches.Patch(color='red', label='removal makes the system unobservable'),
+        mpatches.Patch(color='green', label='removal does not affect observability'),
         mpatches.Patch(color='blue', label="impossible scenario (contains protected sensors)"),
     ], loc="lower right")
-    ax.set_title("The system's tolerance to missing sensors")
+    ax.set_title(
+        f"The system's tolerance to missing sensors ($\\mathbb{{P}}=\\{{{','.join(str(p) for p in toSet(P))}\\}}$)")
 
     # TODO increase this to all combinations of sensors removed so that we don't have missing bubbles.
     for s_candidate, (important_Ks, unimportant_Ks) in enumerate(zip(important_Ks_list, unimportant_Ks_list)):
@@ -245,12 +253,13 @@ def visualize_s_sparse_observability(A,C,N,P):
                 circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='cornflowerblue')
             ax.add_patch(circle)
             ax.annotate(str(setToStr(toSet(K))), (i, s_candidate),
-                        ha='center', va='center', fontsize=ANNOTATION_FONT_SIZE)
+                        ha='center', va='center', fontsize=BUBBLE_TEXT_FONT_SIZE)
 
     # Draw a line to indicate the s value
     ax.plot([-1, plot_width], [s+0.5, s+0.5], color='green', linestyle='--')
     ax.arrow(-0.8, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
     ax.arrow(plot_width-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
+    ax.text(plot_width/2, s+0.5-ANNOTATION_FONT_SIZE/120, f"s = {s} unprotected sensors can be removed while retaining observability", ha='center', va='center', color='g', fontsize=ANNOTATION_FONT_SIZE)
 
     fig.savefig('plotcircles.png')
     
