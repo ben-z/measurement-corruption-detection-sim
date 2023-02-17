@@ -235,7 +235,7 @@ def visualize_s_sparse_observability(A,C,N,P):
     ax.legend(handles=[
         mpatches.Patch(color='red', label='removal makes the system unobservable'),
         mpatches.Patch(color='green', label='removal does not affect observability'),
-        mpatches.Patch(color='blue', label="impossible scenario (contains protected sensors)"),
+        mpatches.Patch(color='cornflowerblue', label="impossible scenario (contains protected sensors)"),
     ], loc="lower right")
     ax.set_title(
         f"The system's tolerance to missing sensors ($\\mathbb{{P}}=\\{{{','.join(str(p) for p in toSet(P))}\\}}$)")
