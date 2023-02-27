@@ -216,7 +216,7 @@ def np_is_row(X, row):
 def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
 
-    GENERIC_ANNOTATION_FONTSIZE = 13
+    GENERIC_ANNOTATION_FONTSIZE = 15
     CIRCLE_RADIUS = 0.3
     CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH = 130
     MAX_CIRCLE_ANNOTATION_FONT_SIZE = CIRCLE_RADIUS / 2 * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH
@@ -233,7 +233,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     ax = fig.add_subplot(111, aspect='equal')
     ax.set_xlim(xlim)
     ax.set_ylim(-0.8, p+0.8)
-    ax.set_ylabel('number of sensors removed')
+    ax.set_ylabel('number of sensors removed', fontsize=GENERIC_ANNOTATION_FONTSIZE)
     ax.invert_yaxis()
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -287,7 +287,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
         legend_handles.append(mpatches.Patch(color='green', label='removal does not affect observability'))
     if has_impossible:
         legend_handles.append(mpatches.Patch(color='cornflowerblue', label="impossible scenario (contains protected sensors)"))
-    ax.legend(handles=legend_handles, loc="lower right")
+    ax.legend(handles=legend_handles, loc="lower right", fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     # Draw a line to indicate the s value
     ax.plot(xlim, [s+0.5, s+0.5], color='green', linestyle='--')
