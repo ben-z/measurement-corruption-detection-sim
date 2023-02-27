@@ -213,6 +213,12 @@ def np_is_row(X, row):
     """
     return np.any(np.all(X == row, axis=1))
 
+def convert_set_indices_for_paper(set_indices):
+    """
+    Converts a set of indices from 0-based to 1-based.
+    """
+    return set([i+1 for i in set_indices])
+
 def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
 
@@ -267,7 +273,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
             ax.add_patch(circle)
             
             # Draw the sensor combination
-            K_set = toSet(K)
+            K_set = convert_set_indices_for_paper(toSet(K))
             K_str = setToStr(K_set, special_empty_set="$\\emptyset$")
             fontsize = clamp(
                 CIRCLE_RADIUS / max(1, len(K_set)) * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH,
@@ -293,7 +299,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     ax.plot(xlim, [s+0.5, s+0.5], color='green', linestyle='--')
     ax.arrow(xlim[0]+0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
     ax.arrow(xlim[1]-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
-    ax.text(xlim_length/2+xlim[0], s+0.5, f"{s} unprotected sensors can be removed while retaining observability", ha='center', va='bottom', color='g', fontsize=GENERIC_ANNOTATION_FONTSIZE)
+    ax.text(xlim_length/2+xlim[0], s+0.5, f"{'no' if s == 0 else s} unprotected sensors can be removed while retaining observability", ha='center', va='bottom', color='g', fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     fig.savefig(output_filename)
     
