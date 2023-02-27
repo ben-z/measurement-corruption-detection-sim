@@ -216,7 +216,7 @@ def np_is_row(X, row):
 def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
 
-    GENERIC_ANNOTATION_FONTSIZE = 10
+    GENERIC_ANNOTATION_FONTSIZE = 13
     CIRCLE_RADIUS = 0.3
     CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH = 130
     MAX_CIRCLE_ANNOTATION_FONT_SIZE = CIRCLE_RADIUS / 2 * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH
@@ -225,11 +225,13 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     p = C.shape[0]
 
     plot_width = math.comb(p, math.ceil(p/2)) # maximum number of sensor combinations for any s
+    xlim = (-1, plot_width)
+    xlim_length = xlim[1] - xlim[0]
 
     # THe size of the plot is experimentally determined
     fig = plt.figure(figsize=(math.comb(p, math.ceil(p/2))*2.3,p*2.3))
     ax = fig.add_subplot(111, aspect='equal')
-    ax.set_xlim(-1, plot_width)
+    ax.set_xlim(xlim)
     ax.set_ylim(-0.8, p+0.8)
     ax.set_ylabel('number of sensors removed')
     ax.invert_yaxis()
@@ -288,10 +290,10 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     ax.legend(handles=legend_handles, loc="lower right")
 
     # Draw a line to indicate the s value
-    ax.plot([-1, plot_width], [s+0.5, s+0.5], color='green', linestyle='--')
-    ax.arrow(-0.8, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
-    ax.arrow(plot_width-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
-    ax.text(plot_width/2, s+0.5-GENERIC_ANNOTATION_FONTSIZE/120, f"{s} unprotected sensors can be removed while retaining observability", ha='center', va='center', color='g', fontsize=GENERIC_ANNOTATION_FONTSIZE)
+    ax.plot(xlim, [s+0.5, s+0.5], color='green', linestyle='--')
+    ax.arrow(xlim[0]+0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
+    ax.arrow(xlim[1]-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
+    ax.text(xlim_length/2+xlim[0], s+0.5, f"{s} unprotected sensors can be removed while retaining observability", ha='center', va='bottom', color='g', fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     fig.savefig(output_filename)
     
