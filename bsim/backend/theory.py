@@ -14,6 +14,7 @@ plt.rcParams.update({
     "text.usetex": True,
     "font.family": "monospace",
     'text.latex.preamble': r'\usepackage{amsfonts}',
+    "figure.autolayout": True,
 })
 
 def np_make_mask(n, I):
@@ -222,9 +223,9 @@ def convert_set_indices_for_paper(set_indices):
 def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
 
-    GENERIC_ANNOTATION_FONTSIZE = 15
+    GENERIC_ANNOTATION_FONTSIZE = 10
     CIRCLE_RADIUS = 0.3
-    CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH = 130
+    CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH = 70
     MAX_CIRCLE_ANNOTATION_FONT_SIZE = CIRCLE_RADIUS / 2 * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH
     MIN_CIRCLE_ANNOTATION_FONT_SIZE = CIRCLE_RADIUS / 5 * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH
 
@@ -235,7 +236,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     xlim_length = xlim[1] - xlim[0]
 
     # THe size of the plot is experimentally determined
-    fig = plt.figure(figsize=(math.comb(p, math.ceil(p/2))*2.3,p*2.3))
+    fig = plt.figure()
     ax = fig.add_subplot(111, aspect='equal')
     ax.set_xlim(xlim)
     ax.set_ylim(-0.8, p+0.8)
@@ -301,7 +302,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     ax.arrow(xlim[1]-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
     ax.text(xlim_length/2+xlim[0], s+0.5, f"{'no' if s == 0 else s} unprotected sensors can be removed while retaining observability", ha='center', va='bottom', color='g', fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
-    fig.savefig(output_filename)
+    fig.savefig(output_filename, dpi=300)
     
 
 def dev_tests():
