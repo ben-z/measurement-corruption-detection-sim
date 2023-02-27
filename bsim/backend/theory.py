@@ -5,13 +5,14 @@ from itertools import combinations
 from utils import \
     powerset \
     , get_observability_matrix as old_get_observability_matrix \
-    , s_sparse_observability as old_get_s_sparse_observability
+    , s_sparse_observability as old_get_s_sparse_observability \
+    , clamp
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 plt.rcParams.update({
     "text.usetex": True,
-    "font.family": "Helvetica",
+    "font.family": "monospace",
     'text.latex.preamble': r'\usepackage{amsfonts}',
 })
 
@@ -35,11 +36,15 @@ def toSet(binVec):
     """
     return frozenset(np.where(binVec)[0])
 
-def setToStr(S):
+def setToStr(S, special_empty_set=None):
     """
     Converts a set S to a string.
     """
-    return str(list(S))
+    if special_empty_set and len(S) == 0:
+        return special_empty_set
+
+    inner = ",".join(str(s) for s in S)
+    return f"$\\{{{inner}\\}}$"
 
 def get_observability_matrix(A, C, N, S):
     """
@@ -208,12 +213,14 @@ def np_is_row(X, row):
     """
     return np.any(np.all(X == row, axis=1))
 
-def visualize_s_sparse_observability(A,C,N,P,output_filename):
+def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
 
+    GENERIC_ANNOTATION_FONTSIZE = 10
     CIRCLE_RADIUS = 0.3
-    BUBBLE_TEXT_FONT_SIZE = 7
-    ANNOTATION_FONT_SIZE = 10
+    CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH = 130
+    MAX_CIRCLE_ANNOTATION_FONT_SIZE = CIRCLE_RADIUS / 2 * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH
+    MIN_CIRCLE_ANNOTATION_FONT_SIZE = CIRCLE_RADIUS / 5 * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH
 
     p = C.shape[0]
 
@@ -232,33 +239,59 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename):
         bottom=False,      # ticks along the bottom edge are off
         top=False,         # ticks along the top edge are off
         labelbottom=False) # labels along the bottom edge are off
-    ax.legend(handles=[
-        mpatches.Patch(color='red', label='removal makes the system unobservable'),
-        mpatches.Patch(color='green', label='removal does not affect observability'),
-        mpatches.Patch(color='cornflowerblue', label="impossible scenario (contains protected sensors)"),
-    ], loc="lower right")
-    ax.set_title(
-        f"The system's tolerance to missing sensors ($\\mathbb{{P}}=\\{{{','.join(str(p) for p in toSet(P))}\\}}$)")
+    if show_title:
+        ax.set_title(f"The system's tolerance to missing sensors ($\\mathbb{{P}}=\\{{{','.join(str(p) for p in toSet(P))}\\}}$)")
+
+    has_important = False
+    has_unimportant = False
+    has_impossible = False
 
     for s_candidate, (important_Ks, unimportant_Ks) in enumerate(zip(important_Ks_list, unimportant_Ks_list)):
         Ks = np.array([np_make_mask(p, setK) for setK in combinations(range(p), s_candidate)])
 
         for i, K in enumerate(Ks):
             if np_is_row(important_Ks, K):
+                # this sensor combination is important
                 circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='r')
+                has_important = True
             elif np_is_row(unimportant_Ks, K):
+                # this sensor combination is unimportant
                 circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='g')
+                has_unimportant = True
             else:
+                # this sensor combination is impossible
                 circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='cornflowerblue')
+                has_impossible = True
             ax.add_patch(circle)
-            ax.annotate(str(setToStr(toSet(K))), (i, s_candidate),
-                        ha='center', va='center', fontsize=BUBBLE_TEXT_FONT_SIZE)
+            
+            # Draw the sensor combination
+            K_set = toSet(K)
+            K_str = setToStr(K_set, special_empty_set="$\\emptyset$")
+            fontsize = clamp(
+                CIRCLE_RADIUS / max(1, len(K_set)) * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH,
+                MIN_CIRCLE_ANNOTATION_FONT_SIZE,
+                MAX_CIRCLE_ANNOTATION_FONT_SIZE
+            )
+            ax.annotate(K_str, (i, s_candidate),
+                        ha='center', va='center',
+                        fontsize=fontsize)
+            pass
+
+    # Draw legend
+    legend_handles = []
+    if has_important:
+        legend_handles.append(mpatches.Patch(color='red', label='removal makes the system unobservable'))
+    if has_unimportant:
+        legend_handles.append(mpatches.Patch(color='green', label='removal does not affect observability'))
+    if has_impossible:
+        legend_handles.append(mpatches.Patch(color='cornflowerblue', label="impossible scenario (contains protected sensors)"))
+    ax.legend(handles=legend_handles, loc="lower right")
 
     # Draw a line to indicate the s value
     ax.plot([-1, plot_width], [s+0.5, s+0.5], color='green', linestyle='--')
     ax.arrow(-0.8, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
     ax.arrow(plot_width-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
-    ax.text(plot_width/2, s+0.5-ANNOTATION_FONT_SIZE/120, f"s = {s} unprotected sensors can be removed while retaining observability", ha='center', va='center', color='g', fontsize=ANNOTATION_FONT_SIZE)
+    ax.text(plot_width/2, s+0.5-GENERIC_ANNOTATION_FONTSIZE/120, f"{s} unprotected sensors can be removed while retaining observability", ha='center', va='center', color='g', fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     fig.savefig(output_filename)
     
@@ -452,79 +485,94 @@ def test_s_sparse_observability2():
     pass
 
 def dev_visualizations():
-    # Kinematic bicycle
-    theta = np.pi / 4
-    delta = np.pi / 8
-    L = 2.9
-    v = 5
+    # # Kinematic bicycle
+    # theta = np.pi / 4
+    # delta = np.pi / 8
+    # L = 2.9
+    # v = 5
 
+    # A = np.array([
+    #     [0, 0, -v*sin(theta), cos(theta), 0],
+    #     [0, 0, v*cos(theta), sin(theta), 0],
+    #     [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+    #     [0, 0, 0, 0, 0],
+    #     [0, 0, 0, 0, 0]
+    # ])
+    # # observability index, or the number of time steps
+    # N = A.shape[0]
+
+    # # Identity matrix
+    # C = np.array([
+    #     [1, 0, 0, 0, 0],
+    #     [0, 1, 0, 0, 0],
+    #     [0, 0, 1, 0, 0],
+    #     [0, 0, 0, 1, 0],
+    #     [0, 0, 0, 0, 1],
+    # ])
+    # P = toBinVec({}, C.shape[0])
+    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-no-protection.png")
+    # P = toBinVec({0}, C.shape[0])
+    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_0.png")
+    # P = toBinVec({1}, C.shape[0])
+    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_1.png")
+    # P = toBinVec({0,1}, C.shape[0])
+    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_0_1.png")
+
+
+    # # Kinematic bicycle
+    # theta = np.pi / 4
+    # delta = np.pi / 8
+    # L = 2.9
+    # v = 5
+
+    # A = np.array([
+    #     [0, 0, -v*sin(theta), cos(theta), 0],
+    #     [0, 0, v*cos(theta), sin(theta), 0],
+    #     [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+    #     [0, 0, 0, 0, 0],
+    #     [0, 0, 0, 0, 0]
+    # ])
+    # # observability index, or the number of time steps
+    # N = A.shape[0]
+
+    # # Identity matrix
+    # C = np.array([
+    #     [1, 0, 0, 0, 0],
+    #     [0, 1, 0, 0, 0],
+    #     [0, 0, 1, 0, 0],
+    #     [0, 0, 0, 1, 0],
+    #     [0, 0, 0, 0, 1],
+    #     [1, 0, 0, 0, 0],
+    #     [0, 1, 0, 0, 0],
+    # ])
+    # P = toBinVec({}, C.shape[0])
+    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-no-protection.png")
+    # P = toBinVec({0}, C.shape[0])
+    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_0.png")
+    # P = toBinVec({1}, C.shape[0])
+    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_1.png")
+    # P = toBinVec({0,1}, C.shape[0])
+    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_0_1.png")
+
+    # academic example
     A = np.array([
-        [0, 0, -v*sin(theta), cos(theta), 0],
-        [0, 0, v*cos(theta), sin(theta), 0],
-        [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0]
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1],
+        [0, 0, 0, 0],
     ])
-    # observability index, or the number of time steps
-    N = A.shape[0]
+    C = np.eye(A.shape[0])
 
-    # Identity matrix
-    C = np.array([
-        [1, 0, 0, 0, 0],
-        [0, 1, 0, 0, 0],
-        [0, 0, 1, 0, 0],
-        [0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 1],
-    ])
     P = toBinVec({}, C.shape[0])
-    visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-no-protection.png")
+    visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-no-protection.png", show_title=False)
     P = toBinVec({0}, C.shape[0])
-    visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_0.png")
-    P = toBinVec({1}, C.shape[0])
-    visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_1.png")
-    P = toBinVec({0,1}, C.shape[0])
-    visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_0_1.png")
+    visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-protection_on_0.png", show_title=False)
 
-
-    # Kinematic bicycle
-    theta = np.pi / 4
-    delta = np.pi / 8
-    L = 2.9
-    v = 5
-
-    A = np.array([
-        [0, 0, -v*sin(theta), cos(theta), 0],
-        [0, 0, v*cos(theta), sin(theta), 0],
-        [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0]
-    ])
-    # observability index, or the number of time steps
-    N = A.shape[0]
-
-    # Identity matrix
-    C = np.array([
-        [1, 0, 0, 0, 0],
-        [0, 1, 0, 0, 0],
-        [0, 0, 1, 0, 0],
-        [0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 1],
-        [1, 0, 0, 0, 0],
-        [0, 1, 0, 0, 0],
-    ])
-    P = toBinVec({}, C.shape[0])
-    visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-no-protection.png")
-    P = toBinVec({0}, C.shape[0])
-    visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_0.png")
-    P = toBinVec({1}, C.shape[0])
-    visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_1.png")
-    P = toBinVec({0,1}, C.shape[0])
-    visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_0_1.png")
 
 
 def main():
-    # dev_tests()
-    # test_s_sparse_observability2()
+    dev_tests()
+    test_s_sparse_observability2()
     dev_visualizations()
 
 if __name__ == "__main__":

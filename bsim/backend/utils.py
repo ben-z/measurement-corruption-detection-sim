@@ -903,3 +903,6 @@ def is_attackable_ltv(Cs=None, As=None, attacked_sensors=[], sensor_configuratio
     return is_attackable(C=output_evolution_matrix, attacked_sensors=[t*p+i for t in range(N) for i in attacked_sensors], sensor_configurations=expand_sensor_configs_over_time(sensor_configurations, p, N))
 
 # TODO: Check if is_attackable is a generalization of 2s-sparse observability
+
+def clamp(x, lower, upper):
+    return max(lower, min(x, upper))
