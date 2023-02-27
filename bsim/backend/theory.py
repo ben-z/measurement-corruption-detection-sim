@@ -14,7 +14,9 @@ plt.rcParams.update({
     "text.usetex": True,
     "font.family": "monospace",
     'text.latex.preamble': r'\usepackage{amsfonts}',
-    "figure.autolayout": True,
+    # autolayout and constrained_layout seem to be similar
+    # "figure.autolayout": True,
+    "figure.constrained_layout.use": True,
 })
 
 def np_make_mask(n, I):
@@ -223,9 +225,9 @@ def convert_set_indices_for_paper(set_indices):
 def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
 
-    GENERIC_ANNOTATION_FONTSIZE = 10
+    GENERIC_ANNOTATION_FONTSIZE = 12
     CIRCLE_RADIUS = 0.3
-    CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH = 70
+    CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH = 100 # hand-tuned
     MAX_CIRCLE_ANNOTATION_FONT_SIZE = CIRCLE_RADIUS / 2 * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH
     MIN_CIRCLE_ANNOTATION_FONT_SIZE = CIRCLE_RADIUS / 5 * CIRCLE_ANNOTATION_FONT_SIZE_UNITS_PER_INCH
 
@@ -234,12 +236,14 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     plot_width = math.comb(p, math.ceil(p/2)) # maximum number of sensor combinations for any s
     xlim = (-1, plot_width)
     xlim_length = xlim[1] - xlim[0]
+    ylim = (-0.8, p+0.8)
+    ylim_length = ylim[1] - ylim[0]
 
     # THe size of the plot is experimentally determined
-    fig = plt.figure()
+    fig = plt.figure(figsize=(xlim_length, ylim_length))
     ax = fig.add_subplot(111, aspect='equal')
-    ax.set_xlim(xlim)
-    ax.set_ylim(-0.8, p+0.8)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
     ax.set_ylabel('number of sensors removed', fontsize=GENERIC_ANNOTATION_FONTSIZE)
     ax.invert_yaxis()
     plt.tick_params(
