@@ -19,6 +19,13 @@ plt.rcParams.update({
     "figure.constrained_layout.use": True,
 })
 
+
+RED = "tomato"
+GREEN = "green"
+LIGHT_GREEN = "limegreen"
+BLUE = "cornflowerblue"
+BLACK = "black"
+
 def np_make_mask(n, I):
     """
     Creates a mask of size n with 1s at the positions in I.
@@ -265,15 +272,15 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
         for i, K in enumerate(Ks):
             if np_is_row(important_Ks, K):
                 # this sensor combination is important
-                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='r')
+                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color=RED)
                 has_important = True
             elif np_is_row(unimportant_Ks, K):
                 # this sensor combination is unimportant
-                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='g')
+                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color=LIGHT_GREEN)
                 has_unimportant = True
             else:
                 # this sensor combination is impossible
-                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color='cornflowerblue')
+                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color=BLUE)
                 has_impossible = True
             ax.add_patch(circle)
             
@@ -293,18 +300,18 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     # Draw legend
     legend_handles = []
     if has_important:
-        legend_handles.append(mpatches.Patch(color='red', label='removal makes the system unobservable'))
+        legend_handles.append(mpatches.Patch(color=RED, label='removal makes the system unobservable'))
     if has_unimportant:
-        legend_handles.append(mpatches.Patch(color='green', label='removal does not affect observability'))
+        legend_handles.append(mpatches.Patch(color=LIGHT_GREEN, label='removal does not affect observability'))
     if has_impossible:
-        legend_handles.append(mpatches.Patch(color='cornflowerblue', label="impossible scenario (contains protected sensors)"))
+        legend_handles.append(mpatches.Patch(color=BLUE, label="impossible scenario (contains protected sensors)"))
     ax.legend(handles=legend_handles, loc="lower right", fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     # Draw a line to indicate the s value
-    ax.plot(xlim, [s+0.5, s+0.5], color='green', linestyle='--')
-    ax.arrow(xlim[0]+0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
-    ax.arrow(xlim[1]-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor='g', edgecolor='g')
-    ax.text(xlim_length/2+xlim[0], s+0.5, f"{'no' if s == 0 else s} unprotected sensors can be removed while retaining observability", ha='center', va='bottom', color='g', fontsize=GENERIC_ANNOTATION_FONTSIZE)
+    ax.plot(xlim, [s+0.5, s+0.5], color=BLACK, linestyle='--')
+    ax.arrow(xlim[0]+0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor=BLACK, edgecolor=BLACK)
+    ax.arrow(xlim[1]-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor=BLACK, edgecolor=BLACK)
+    ax.text(xlim_length/2+xlim[0], s+0.5, f"{'no' if s == 0 else s} unprotected sensors can be removed while retaining observability", ha='center', va='bottom', color=BLACK, fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     fig.savefig(output_filename, dpi=300)
     
