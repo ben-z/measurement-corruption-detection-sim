@@ -311,7 +311,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     ax.plot(xlim, [s+0.5, s+0.5], color=BLACK, linestyle='--')
     ax.arrow(xlim[0]+0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor=BLACK, edgecolor=BLACK)
     ax.arrow(xlim[1]-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor=BLACK, edgecolor=BLACK)
-    ax.text(xlim_length/2+xlim[0], s+0.5, f"{'no' if s == 0 else s} unprotected sensors can be removed while retaining observability", ha='center', va='bottom', color=BLACK, fontsize=GENERIC_ANNOTATION_FONTSIZE)
+    ax.text(xlim_length/2+xlim[0], s+0.5, f"{'no' if s == 0 else s} unprotected sensor{'' if s == 1 else 's'} can be removed while retaining observability", ha='center', va='bottom', color=BLACK, fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     fig.savefig(output_filename, dpi=300)
     
