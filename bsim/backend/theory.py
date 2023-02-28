@@ -505,88 +505,95 @@ def test_s_sparse_observability2():
     pass
 
 def dev_visualizations():
-    # # Kinematic bicycle
-    # theta = np.pi / 4
-    # delta = np.pi / 8
-    # L = 2.9
-    # v = 5
+    def kinematic_bicycle():
+        # Kinematic bicycle
+        theta = np.pi / 4
+        delta = np.pi / 8
+        L = 2.9
+        v = 5
 
-    # A = np.array([
-    #     [0, 0, -v*sin(theta), cos(theta), 0],
-    #     [0, 0, v*cos(theta), sin(theta), 0],
-    #     [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
-    #     [0, 0, 0, 0, 0],
-    #     [0, 0, 0, 0, 0]
-    # ])
-    # # observability index, or the number of time steps
-    # N = A.shape[0]
+        A = np.array([
+            [0, 0, -v*sin(theta), cos(theta), 0],
+            [0, 0, v*cos(theta), sin(theta), 0],
+            [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0]
+        ])
+        # observability index, or the number of time steps
+        N = A.shape[0]
 
-    # # Identity matrix
-    # C = np.array([
-    #     [1, 0, 0, 0, 0],
-    #     [0, 1, 0, 0, 0],
-    #     [0, 0, 1, 0, 0],
-    #     [0, 0, 0, 1, 0],
-    #     [0, 0, 0, 0, 1],
-    # ])
-    # P = toBinVec({}, C.shape[0])
-    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-no-protection.png")
-    # P = toBinVec({0}, C.shape[0])
-    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_0.png")
-    # P = toBinVec({1}, C.shape[0])
-    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_1.png")
-    # P = toBinVec({0,1}, C.shape[0])
-    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_0_1.png")
+        # Identity matrix
+        C = np.array([
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 1],
+        ])
+        P = toBinVec({}, C.shape[0])
+        visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-no-protection.png")
+        P = toBinVec({0}, C.shape[0])
+        visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_0.png")
+        P = toBinVec({1}, C.shape[0])
+        visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_1.png")
+        P = toBinVec({0,1}, C.shape[0])
+        visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta-protection_on_0_1.png")
 
 
-    # # Kinematic bicycle
-    # theta = np.pi / 4
-    # delta = np.pi / 8
-    # L = 2.9
-    # v = 5
+    def kinematic_bicycle_with_redundant_x_y():
+        # Kinematic bicycle
+        theta = np.pi / 4
+        delta = np.pi / 8
+        L = 2.9
+        v = 5
 
-    # A = np.array([
-    #     [0, 0, -v*sin(theta), cos(theta), 0],
-    #     [0, 0, v*cos(theta), sin(theta), 0],
-    #     [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
-    #     [0, 0, 0, 0, 0],
-    #     [0, 0, 0, 0, 0]
-    # ])
-    # # observability index, or the number of time steps
-    # N = A.shape[0]
+        A = np.array([
+            [0, 0, -v*sin(theta), cos(theta), 0],
+            [0, 0, v*cos(theta), sin(theta), 0],
+            [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0]
+        ])
+        # observability index, or the number of time steps
+        N = A.shape[0]
 
-    # # Identity matrix
-    # C = np.array([
-    #     [1, 0, 0, 0, 0],
-    #     [0, 1, 0, 0, 0],
-    #     [0, 0, 1, 0, 0],
-    #     [0, 0, 0, 1, 0],
-    #     [0, 0, 0, 0, 1],
-    #     [1, 0, 0, 0, 0],
-    #     [0, 1, 0, 0, 0],
-    # ])
-    # P = toBinVec({}, C.shape[0])
-    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-no-protection.png")
-    # P = toBinVec({0}, C.shape[0])
-    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_0.png")
-    # P = toBinVec({1}, C.shape[0])
-    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_1.png")
-    # P = toBinVec({0,1}, C.shape[0])
-    # visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_0_1.png")
+        # Identity matrix
+        C = np.array([
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+        ])
+        P = toBinVec({}, C.shape[0])
+        visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-no-protection.png")
+        P = toBinVec({0}, C.shape[0])
+        visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_0.png")
+        P = toBinVec({1}, C.shape[0])
+        visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_1.png")
+        P = toBinVec({0,1}, C.shape[0])
+        visualize_s_sparse_observability(A, C, N, P, "x_y_theta_v_delta_x_y-protection_on_0_1.png")
 
-    # academic example
-    A = np.array([
-        [0, 1, 0, 0],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1],
-        [0, 0, 0, 0],
-    ])
-    C = np.eye(A.shape[0])
+    def academic_example():
+        # academic example
+        A = np.array([
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0],
+        ])
+        C = np.eye(A.shape[0])
 
-    P = toBinVec({}, C.shape[0])
-    visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-no-protection.png", show_title=False)
-    P = toBinVec({0}, C.shape[0])
-    visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-protection_on_0.png", show_title=False)
+        P = toBinVec({}, C.shape[0])
+        visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-no-protection.png", show_title=False)
+        P = toBinVec({0}, C.shape[0])
+        visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-protection_on_0.png", show_title=False)
+    
+    kinematic_bicycle()
+    kinematic_bicycle_with_redundant_x_y()
+    academic_example()
 
 
 
