@@ -591,15 +591,50 @@ def dev_visualizations():
         P = toBinVec({0}, C.shape[0])
         visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-protection_on_0.png", show_title=False)
     
-    kinematic_bicycle()
-    kinematic_bicycle_with_redundant_x_y()
-    academic_example()
+    def experiment_example():
+        # Differential drive robot with states (x, y, theta, v, omega)
+        # and inputs (a, d_omega)
+
+        # linearization point
+        v = 0.5
+        theta = np.pi / 4
+
+        A = np.array([
+            [0, 0, -v*np.sin(theta), np.cos(theta), 0],
+            [0, 0, v*np.cos(theta), np.sin(theta), 0],
+            [0, 0, 0, 0, 1],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0]
+        ])
+        B = np.array([
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [1, 0],
+            [0, 1]
+        ])
+        C = np.array([
+            [1, 0, 0, 0, 0], # Global pose
+            [0, 1, 0, 0, 0], # Global pose
+            [0, 0, 1, 0, 0], # Global pose
+            [0, 0, 0, 1, 0], # Wheel odometry
+            [0, 0, 0, 0, 1], # Wheel odometry
+            [0, 0, 0, 0, 1], # IMU
+        ])
+        P = toBinVec({}, C.shape[0])
+        visualize_s_sparse_observability(A, C, A.shape[0], P, "experiment-system-no-protection.png", show_title=True)
+    
+    # kinematic_bicycle()
+    # kinematic_bicycle_with_redundant_x_y()
+    # academic_example()
+    experiment_example()
+
 
 
 
 def main():
-    dev_tests()
-    test_s_sparse_observability2()
+    # dev_tests()
+    # test_s_sparse_observability2()
     dev_visualizations()
 
 if __name__ == "__main__":
