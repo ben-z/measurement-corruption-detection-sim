@@ -15,7 +15,7 @@ from utils import calc_input_effects_on_output, optimize_l1, \
     closest_point_on_line, generate_segment_info, move_along_path, EndOfPathError, \
     get_evolution_matrices
 
-np.set_printoptions(suppress=True, precision=4)
+np.set_printoptions(suppress=True, precision=4, linewidth=200)
 
 PATH_MEMORY_EVICT_MULTIPLIER = 10
 

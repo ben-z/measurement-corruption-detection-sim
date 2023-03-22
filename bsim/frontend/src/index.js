@@ -199,6 +199,8 @@ function entityToPlotContainerID(entityName) {
 const BACKEND_SOCKET_URL = webpack_env.BACKEND_SOCKET_URL;
 
 async function main() {
+    console.log("Initializing...")
+    console.log(BACKEND_SOCKET_URL)
     // Initialize world
     const worldSocket = new WebSocketAsPromised(`${BACKEND_SOCKET_URL}/world`, WEBSOCKET_OPTIONS);
     await worldSocket.open();

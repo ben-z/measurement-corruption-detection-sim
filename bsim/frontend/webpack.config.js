@@ -10,7 +10,7 @@ const stylesHandler = "style-loader";
 
 const IS_CODESPACES = false; // process.env.CODESPACES;
 const DEVSERVER_PORT=9091
-const BACKEND_SOCKET_PORT=8765
+const BACKEND_SOCKET_PORT=8766
 const BACKEND_SOCKET_URL= IS_CODESPACES ? `wss://${process.env.CODESPACE_NAME}-${BACKEND_SOCKET_PORT}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` : `ws://localhost:${BACKEND_SOCKET_PORT}`;
 
 const config = {
