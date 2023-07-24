@@ -7,6 +7,7 @@ from multiprocessing.pool import ThreadPool as Pool
 import time
 from typing import Dict, Any
 from functools import cached_property, lru_cache, wraps, update_wrapper
+import math
 
 def closest_point_on_line_segment(p, a, b):
     """
@@ -906,3 +907,11 @@ def is_attackable_ltv(Cs=None, As=None, attacked_sensors=[], sensor_configuratio
 
 def clamp(x, lower, upper):
     return max(lower, min(x, upper))
+
+def max_binomial_coeff(n):
+    # For even n, max value is at r = n/2
+    if n % 2 == 0:
+        return math.comb(n, n//2)
+    # For odd n, max value is at r = (n−1)/2 or (n+1)/2
+    else:
+        return max(math.comb(n, (n-1)//2), math.comb(n, (n+1)//2))

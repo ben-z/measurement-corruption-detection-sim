@@ -6,7 +6,7 @@ from utils import \
     powerset \
     , get_observability_matrix as old_get_observability_matrix \
     , s_sparse_observability as old_get_s_sparse_observability \
-    , clamp
+    , clamp, max_binomial_coeff
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -243,7 +243,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     plot_width = math.comb(p, math.ceil(p/2)) # maximum number of sensor combinations for any s
     xlim = (-1, plot_width)
     xlim_length = xlim[1] - xlim[0]
-    ylim = (-0.8, p+0.8)
+    ylim = (-0.8, p+0.8+0.3) # +0.3 to account for the legend
     ylim_length = ylim[1] - ylim[0]
 
     # THe size of the plot is experimentally determined
@@ -251,7 +251,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     ax = fig.add_subplot(111, aspect='equal')
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
-    ax.set_ylabel('number of sensors removed', fontsize=GENERIC_ANNOTATION_FONTSIZE)
+    ax.set_ylabel('number of missing sensors', fontsize=GENERIC_ANNOTATION_FONTSIZE)
     ax.invert_yaxis()
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -266,22 +266,30 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     has_unimportant = False
     has_impossible = False
 
+    # Can also calculate this using max_r(nCr) where n is the number of sensors and r is in {0, ..., n}
+    # max_num_cases = max(len(iK) + len(uK) for iK,uK in zip(important_Ks_list, unimportant_Ks_list))
+    max_num_cases = max_binomial_coeff(p)
+
     for s_candidate, (important_Ks, unimportant_Ks) in enumerate(zip(important_Ks_list, unimportant_Ks_list)):
         Ks = np.array([np_make_mask(p, setK) for setK in combinations(range(p), s_candidate)])
+        num_cases = len(Ks)
+        left_offset = (max_num_cases - num_cases) / 2
 
         for i, K in enumerate(Ks):
+            circle_color = None
             if np_is_row(important_Ks, K):
                 # this sensor combination is important
-                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color=RED)
+                circle_color = RED
                 has_important = True
             elif np_is_row(unimportant_Ks, K):
                 # this sensor combination is unimportant
-                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color=LIGHT_GREEN)
+                circle_color = LIGHT_GREEN
                 has_unimportant = True
             else:
                 # this sensor combination is impossible
-                circle = mpatches.Circle((i, s_candidate), CIRCLE_RADIUS, color=BLUE)
+                circle_color = BLUE
                 has_impossible = True
+            circle = mpatches.Circle((i+left_offset, s_candidate), CIRCLE_RADIUS, color=circle_color)
             ax.add_patch(circle)
             
             # Draw the sensor combination
@@ -292,17 +300,17 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
                 MIN_CIRCLE_ANNOTATION_FONT_SIZE,
                 MAX_CIRCLE_ANNOTATION_FONT_SIZE
             )
-            ax.annotate(K_str, (i, s_candidate),
+            ax.annotate(K_str, (i+left_offset, s_candidate),
                         ha='center', va='center',
                         fontsize=fontsize)
             pass
 
     # Draw legend
     legend_handles = []
-    if has_important:
-        legend_handles.append(mpatches.Patch(color=RED, label='removal makes the system unobservable'))
     if has_unimportant:
         legend_handles.append(mpatches.Patch(color=LIGHT_GREEN, label='removal does not affect observability'))
+    if has_important:
+        legend_handles.append(mpatches.Patch(color=RED, label='removal makes the system unobservable'))
     if has_impossible:
         legend_handles.append(mpatches.Patch(color=BLUE, label="impossible scenario (contains protected sensors)"))
     ax.legend(handles=legend_handles, loc="lower right", fontsize=GENERIC_ANNOTATION_FONTSIZE)
@@ -311,7 +319,7 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     ax.plot(xlim, [s+0.5, s+0.5], color=BLACK, linestyle='--')
     ax.arrow(xlim[0]+0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor=BLACK, edgecolor=BLACK)
     ax.arrow(xlim[1]-0.2, s+0.5, 0, -0.5, head_width=0.1, head_length=0.1, facecolor=BLACK, edgecolor=BLACK)
-    ax.text(xlim_length/2+xlim[0], s+0.5, f"{'no' if s == 0 else s} unprotected sensor{'' if s == 1 else 's'} can be removed while retaining observability", ha='center', va='bottom', color=BLACK, fontsize=GENERIC_ANNOTATION_FONTSIZE)
+    ax.text(xlim_length/2+xlim[0], s+0.5, f"the system is maximally {s}-sparse observable", ha='center', va='bottom', color=BLACK, fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     fig.savefig(output_filename, dpi=300)
     
@@ -626,8 +634,8 @@ def dev_visualizations():
     
     # kinematic_bicycle()
     # kinematic_bicycle_with_redundant_x_y()
-    # academic_example()
-    experiment_example()
+    academic_example()
+    # experiment_example()
 
 
 
