@@ -245,12 +245,14 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     xlim_length = xlim[1] - xlim[0]
     ylim = (-0.8, p+0.8+0.3) # +0.3 to account for the legend
     ylim_length = ylim[1] - ylim[0]
+    yticks = np.arange(0, p+1)
 
     # THe size of the plot is experimentally determined
     fig = plt.figure(figsize=(xlim_length, ylim_length))
     ax = fig.add_subplot(111, aspect='equal')
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
+    ax.set_yticks(yticks)
     ax.set_ylabel('number of missing sensors', fontsize=GENERIC_ANNOTATION_FONTSIZE)
     ax.invert_yaxis()
     plt.tick_params(
@@ -631,6 +633,8 @@ def dev_visualizations():
         ])
         P = toBinVec({}, C.shape[0])
         visualize_s_sparse_observability(A, C, A.shape[0], P, "experiment-system-no-protection.png", show_title=True)
+        P = toBinVec({0}, C.shape[0])
+        visualize_s_sparse_observability(A, C, A.shape[0], P, "experiment-system-protection_on_0.png", show_title=True)
     
     # kinematic_bicycle()
     # kinematic_bicycle_with_redundant_x_y()
