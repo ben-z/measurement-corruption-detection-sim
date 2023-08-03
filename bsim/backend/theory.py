@@ -6,7 +6,7 @@ from utils import \
     powerset \
     , get_observability_matrix as old_get_observability_matrix \
     , s_sparse_observability as old_get_s_sparse_observability \
-    , clamp, max_binomial_coeff
+    , clamp, max_binomial_coeff, flatten
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -187,7 +187,7 @@ def get_s_sparse_observability2_visualization_data(A,C,N,P):
     """
 
     n = A.shape[0]
-    p = C.shape[0]
+    q = C.shape[0]
 
     unprotected_sensors = np.where(P == 0)[0]
 
@@ -195,10 +195,11 @@ def get_s_sparse_observability2_visualization_data(A,C,N,P):
     s = None
     important_Ks_list = []
     unimportant_Ks_list = []
+    importance_scores = np.zeros(q)
 
-    for s_candidate in range(0, p+1):
+    for s_candidate in range(0, q+1):
         # all combinations of s_candidate sensors that can go missing
-        Ks = np.array([np_make_mask(p, setK) for setK in combinations(unprotected_sensors, s_candidate)]).reshape(-1, p)
+        Ks = np.array([np_make_mask(q, setK) for setK in combinations(unprotected_sensors, s_candidate)]).reshape(-1, q)
 
         observable_mask = np.array([is_observable(A, C, N, ~K) for K in Ks], dtype=bool)
 
@@ -213,9 +214,17 @@ def get_s_sparse_observability2_visualization_data(A,C,N,P):
         elif s is None:
             s = s_candidate - 1
     
-    assert s is not None, "This scenario is impossible when p > 0" # make type checker happy
+    assert s is not None, "This scenario is impossible when q > 0" # make type checker happy
 
-    return s, important_Ks_list, unimportant_Ks_list
+    for important_K in flatten(important_Ks_list):
+        if len(important_K) == 0:
+            continue
+
+        assert len(important_K) == q, "important_K must have length 0 or q"
+
+        importance_scores += important_K
+
+    return s, important_Ks_list, unimportant_Ks_list, importance_scores
 
 def np_is_row(X, row):
     """
@@ -230,7 +239,8 @@ def convert_set_indices_for_paper(set_indices):
     return set([i+1 for i in set_indices])
 
 def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
-    s, important_Ks_list, unimportant_Ks_list = get_s_sparse_observability2_visualization_data(A,C,N,P)
+    visualization_data = get_s_sparse_observability2_visualization_data(A,C,N,P)
+    s, important_Ks_list, unimportant_Ks_list, importance_scores = visualization_data
 
     GENERIC_ANNOTATION_FONTSIZE = 12
     CIRCLE_RADIUS = 0.3
@@ -324,6 +334,8 @@ def visualize_s_sparse_observability(A,C,N,P,output_filename,show_title=True):
     ax.text(xlim_length/2+xlim[0], s+0.5, f"the system is maximally {s}-sparse observable", ha='center', va='bottom', color=BLACK, fontsize=GENERIC_ANNOTATION_FONTSIZE)
 
     fig.savefig(output_filename, dpi=300)
+
+    return visualization_data
     
 
 def dev_tests():
@@ -597,9 +609,40 @@ def dev_visualizations():
         C = np.eye(A.shape[0])
 
         P = toBinVec({}, C.shape[0])
-        visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-no-protection.png", show_title=False)
+        visualization_data = visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-no-protection.png", show_title=False)
+        print("Importance scores:")
+        print(visualization_data[3])
+
         P = toBinVec({0}, C.shape[0])
-        visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-protection_on_0.png", show_title=False)
+        visualization_data = visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-protection_on_0.png", show_title=False)
+        print("Importance scores:")
+        print(visualization_data[3])
+    
+    def academic_example_2():
+        # academic example
+        A = np.array([
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0],
+        ])
+        C = np.array([
+            [1,0,0,0],
+            [1,0,0,0],
+            [0,1,0,0],
+            [0,0,1,0],
+            [0,0,0,1],
+        ])
+
+        P = toBinVec({}, C.shape[0])
+        visualization_data = visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-2-no-protection.png", show_title=False)
+        print("Importance scores:")
+        print(visualization_data[3])
+
+        P = toBinVec({0}, C.shape[0])
+        visualization_data = visualize_s_sparse_observability(A, C, A.shape[0], P, "academic-example-2-protection_on_0.png", show_title=False)
+        print("Importance scores:")
+        print(visualization_data[3])
     
     def experiment_example():
         # Differential drive robot with states (x, y, theta, v, omega)
@@ -632,14 +675,20 @@ def dev_visualizations():
             [0, 0, 0, 0, 1], # IMU
         ])
         P = toBinVec({}, C.shape[0])
-        visualize_s_sparse_observability(A, C, A.shape[0], P, "experiment-system-no-protection.png", show_title=True)
+        visualization_data = visualize_s_sparse_observability(A, C, A.shape[0], P, "experiment-system-no-protection.png", show_title=True)
+        print("Importance scores:")
+        print(visualization_data[3])
+
         P = toBinVec({0}, C.shape[0])
-        visualize_s_sparse_observability(A, C, A.shape[0], P, "experiment-system-protection_on_0.png", show_title=True)
+        visualization_data = visualize_s_sparse_observability(A, C, A.shape[0], P, "experiment-system-protection_on_0.png", show_title=True)
+        print("Importance scores:")
+        print(visualization_data[3])
     
     # kinematic_bicycle()
     # kinematic_bicycle_with_redundant_x_y()
-    academic_example()
-    # experiment_example()
+    # academic_example()
+    # academic_example_2()
+    experiment_example()
 
 
 

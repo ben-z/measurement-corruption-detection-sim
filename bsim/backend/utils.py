@@ -9,6 +9,8 @@ from typing import Dict, Any
 from functools import cached_property, lru_cache, wraps, update_wrapper
 import math
 
+flatten = chain.from_iterable
+
 def closest_point_on_line_segment(p, a, b):
     """
     Find the closest point on the line segment defined by a and b to the point p.
