@@ -28,7 +28,7 @@ from utils import (
     PIDController,
     closest_point_idx,
     closest_point_idx_local,
-    walk_path,
+    get_lookahead_idx,
     wrap_to_pi,
     clamp,
 )
@@ -140,6 +140,9 @@ for i in range(num_steps):
     if i * model_params['dt'] > 5:
         output[3] += 5
 
+    # fault-tolerant estimator
+
+
     # estimates
     x_hat = output[0]
     y_hat = output[1]
@@ -158,7 +161,7 @@ for i in range(num_steps):
     prev_closest_idx = closest_idx
 
     lookahead_distance = get_lookahead_distance(v_hat)
-    target_idx = walk_path(path_points, closest_idx, lookahead_distance)
+    target_idx = get_lookahead_idx(path_points, closest_idx, lookahead_distance)
 
     target_point = path_points[target_idx]
     target_heading = path_headings[target_idx]

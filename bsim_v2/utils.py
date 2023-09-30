@@ -175,7 +175,7 @@ def closest_point_idx_local(points, x, y, prev_idx):
 def wrap_to_pi(x):
     return (x + np.pi) % (2 * np.pi) - np.pi
 
-def walk_path(path_points, starting_idx, dist):
+def get_lookahead_idx(path_points, starting_idx, dist):
     remaining_dist = dist
     idx = starting_idx
     while remaining_dist > 0:
@@ -188,3 +188,20 @@ def walk_path(path_points, starting_idx, dist):
 
 def clamp(x, lower, upper):
     return np.maximum(lower, np.minimum(x, upper))
+
+def walk_trajectory_by_duration(path_points, velocities, starting_idx, duration):
+    assert duration >= 0, "Duration must be non-negative"
+    remaining_duration = duration
+    idx = starting_idx
+    while remaining_duration > 0:
+        candidate_dist = velocities[idx]*remaining_duration
+        segment_dist = sqrt((path_points[(idx+1)%len(path_points)][0] - path_points[idx][0])**2 + (path_points[(idx+1)%len(path_points)][1] - path_points[idx][1])**2)
+        if candidate_dist > segment_dist:
+            # going onto the next segment
+            segment_duration = segment_dist / velocities[idx]
+            remaining_duration -= segment_duration
+            idx = (idx+1)%len(path_points)
+        else:
+            # we are done
+            break
+    return idx

@@ -9,8 +9,9 @@ from utils import (
     closest_point_idx,
     closest_point_idx_local,
     wrap_to_pi,
-    walk_path,
-    clamp
+    get_lookahead_idx,
+    clamp,
+    walk_trajectory_by_duration,
 )
 
 class TestKinematicBicycleModel(unittest.TestCase):
@@ -95,12 +96,12 @@ class TestWrapToPi(unittest.TestCase):
         expected_wrapped_x = -pi
         self.assertAlmostEqual(wrapped_x, expected_wrapped_x)
 
-class TestWalkPath(unittest.TestCase):
-    def test_walk_path(self):
+class TestGetLookaheadIdx(unittest.TestCase):
+    def test_get_lookahead_idx(self):
         path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
         starting_idx = 0
         dist = 1.5
-        new_idx = walk_path(path_points, starting_idx, dist)
+        new_idx = get_lookahead_idx(path_points, starting_idx, dist)
         expected_idx = 2
         self.assertEqual(new_idx, expected_idx)
 
@@ -112,6 +113,29 @@ class TestClamp(unittest.TestCase):
         clamped_x = clamp(x, lower, upper)
         expected_clamped_x = 3
         self.assertEqual(clamped_x, expected_clamped_x)
+
+class TestWalkTrajectoryByDuration(unittest.TestCase):
+    def test_staying_on_the_same_segment(self):
+        path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
+        velocities = [1, 1, 1, 1]
+        starting_idx = 0
+        duration = 0.5
+        new_idx = walk_trajectory_by_duration(path_points, velocities, starting_idx, duration)
+        self.assertEqual(new_idx, 0)
+    def test_crossing_1_segment(self):
+        path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
+        velocities = [1, 1, 1, 1]
+        starting_idx = 0
+        duration = 1.5
+        new_idx = walk_trajectory_by_duration(path_points, velocities, starting_idx, duration)
+        self.assertEqual(new_idx, 1)
+    def test_crossing_2_segments(self):
+        path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
+        velocities = [1, 1, 1, 1]
+        starting_idx = 0
+        duration = 2.5
+        new_idx = walk_trajectory_by_duration(path_points, velocities, starting_idx, duration)
+        self.assertEqual(new_idx, 2)
 
 if __name__ == '__main__':
     unittest.main()
