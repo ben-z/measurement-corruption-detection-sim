@@ -11,7 +11,7 @@ from utils import (
     wrap_to_pi,
     get_lookahead_idx,
     clamp,
-    walk_trajectory_by_duration,
+    walk_trajectory_by_durations,
 )
 
 class TestKinematicBicycleModel(unittest.TestCase):
@@ -119,23 +119,44 @@ class TestWalkTrajectoryByDuration(unittest.TestCase):
         path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
         velocities = [1, 1, 1, 1]
         starting_idx = 0
-        duration = 0.5
-        new_idx = walk_trajectory_by_duration(path_points, velocities, starting_idx, duration)
-        self.assertEqual(new_idx, 0)
+        durations = [0.4]
+        indices = walk_trajectory_by_durations(path_points, velocities, starting_idx, durations)
+        self.assertEqual(indices, [0])
     def test_crossing_1_segment(self):
         path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
         velocities = [1, 1, 1, 1]
         starting_idx = 0
-        duration = 1.5
-        new_idx = walk_trajectory_by_duration(path_points, velocities, starting_idx, duration)
-        self.assertEqual(new_idx, 1)
+        durations = [1.4]
+        indices = walk_trajectory_by_durations(path_points, velocities, starting_idx, durations)
+        self.assertEqual(indices, [1])
     def test_crossing_2_segments(self):
         path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
         velocities = [1, 1, 1, 1]
         starting_idx = 0
-        duration = 2.5
-        new_idx = walk_trajectory_by_duration(path_points, velocities, starting_idx, duration)
-        self.assertEqual(new_idx, 2)
+        durations = [2.4]
+        indices = walk_trajectory_by_durations(path_points, velocities, starting_idx, durations)
+        self.assertEqual(indices, [2])
+    def test_multiple_durations_1(self):
+        path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
+        velocities = [1, 1, 1, 1]
+        starting_idx = 0
+        durations = [0.4, 1.0, 1.0]
+        indices = walk_trajectory_by_durations(path_points, velocities, starting_idx, durations)
+        self.assertEqual(indices, [0,1,2])
+    def test_multiple_durations_2(self):
+        path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
+        velocities = [1, 1, 1, 1]
+        starting_idx = 0
+        durations = [0.4, 0.4, 1.0, 1.0]
+        indices = walk_trajectory_by_durations(path_points, velocities, starting_idx, durations)
+        self.assertEqual(indices, [0,0,1,2])
+    def test_multiple_durations_3(self):
+        path_points = [[0, 0], [1, 0], [1, 1], [0, 1]]
+        velocities = [1, 1, 1, 1]
+        starting_idx = 0
+        durations = [0.4, 0.4, 0.1, 0.2, 0.2, 0.3, 1.0]
+        indices = walk_trajectory_by_durations(path_points, velocities, starting_idx, durations)
+        self.assertEqual(indices, [0,0,0,1,1,1,2])
 
 if __name__ == '__main__':
     unittest.main()

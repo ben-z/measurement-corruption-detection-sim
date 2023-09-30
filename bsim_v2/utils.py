@@ -189,19 +189,28 @@ def get_lookahead_idx(path_points, starting_idx, dist):
 def clamp(x, lower, upper):
     return np.maximum(lower, np.minimum(x, upper))
 
-def walk_trajectory_by_duration(path_points, velocities, starting_idx, duration):
-    assert duration >= 0, "Duration must be non-negative"
-    remaining_duration = duration
-    idx = starting_idx
-    while remaining_duration > 0:
-        candidate_dist = velocities[idx]*remaining_duration
-        segment_dist = sqrt((path_points[(idx+1)%len(path_points)][0] - path_points[idx][0])**2 + (path_points[(idx+1)%len(path_points)][1] - path_points[idx][1])**2)
-        if candidate_dist > segment_dist:
-            # going onto the next segment
+def walk_trajectory_by_durations(path_points, velocities, starting_idx, durations):
+    assert all(d >= 0 for d in durations), "durations must be non-negative"
+    assert len(durations) > 0, "Must have a duration"
+
+    idx = starting_idx - 1
+    remaining_segment_duration = 0.0
+    indices = []
+    for duration in durations:
+        remaining_duration = max(0.0, duration - remaining_segment_duration)
+        remaining_segment_duration -= duration - remaining_duration
+
+        while remaining_duration > 1e-15:
+            assert remaining_segment_duration >= 0, "remaining segment duration must be non-negative in the beginning of this loop"
+            if remaining_segment_duration < 1e-15:
+                idx = (idx+1)%len(path_points)
+
+            segment_dist = sqrt((path_points[(idx+1)%len(path_points)][0] - path_points[idx][0])**2 + (path_points[(idx+1)%len(path_points)][1] - path_points[idx][1])**2)
             segment_duration = segment_dist / velocities[idx]
-            remaining_duration -= segment_duration
-            idx = (idx+1)%len(path_points)
-        else:
-            # we are done
-            break
-    return idx
+            
+            remaining_segment_duration = max(0, segment_duration - remaining_duration)
+            remaining_duration -= segment_duration - remaining_segment_duration
+
+        indices.append(idx)
+    return indices
+
