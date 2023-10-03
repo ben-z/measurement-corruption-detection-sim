@@ -197,12 +197,20 @@ def walk_trajectory_by_durations(path_points, velocities, starting_idx, duration
     remaining_segment_duration = 0.0
     indices = []
     for duration in durations:
+        # first travel the untravelled portion of the current segment
         remaining_duration = max(0.0, duration - remaining_segment_duration)
         remaining_segment_duration -= duration - remaining_duration
 
+        # at least one of two scenarios are possible here:
+        # - we have used up the remaining segment duration, thus go into the loop to go onto the next segment
+        # - we have not used up te remaining segment duration, so we stay on the current segment.
+        # If both are true, we arbitrarily choose to record the existing segment index instead of the new one.
+        # This is okay because we are already doing floating point calculations (minor errors are tolerable).
         while remaining_duration > 1e-15:
-            assert remaining_segment_duration >= 0, "remaining segment duration must be non-negative in the beginning of this loop"
+            # if this assertion is violated, then we have travelled more than the remaining duration, which is not possible
+            assert -1e-15 < remaining_segment_duration < 1e-15, "remaining segment duration must be zero in the beginning of this loop"
             if remaining_segment_duration < 1e-15:
+                # we have used up the remaining segment duration, progress onto the next segment
                 idx = (idx+1)%len(path_points)
 
             segment_dist = sqrt((path_points[(idx+1)%len(path_points)][0] - path_points[idx][0])**2 + (path_points[(idx+1)%len(path_points)][1] - path_points[idx][1])**2)
