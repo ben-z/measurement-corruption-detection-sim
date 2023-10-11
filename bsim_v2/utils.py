@@ -1,4 +1,7 @@
+import cvxpy as cp
 import numpy as np
+import time
+from itertools import chain, combinations
 from math import pi, sin, cos, atan2, sqrt
 
 # Kinematic bicycle model
@@ -222,3 +225,58 @@ def walk_trajectory_by_durations(path_points, velocities, starting_idx, duration
         indices.append(idx)
     return indices
 
+def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15):
+    # solves the l0 minimization problem
+    # Phi: numpy.ndarray - tensor of size (N, q, n), where N is the number of time steps, q is the number of outputs, and n is the number of states
+    # Y: numpy.ndarray - measured outputs, with input effects subtracted, size (N, q)
+    # eps: numpy.ndarray - noise tolerance for each output, size (1,) or (q,)
+    # returns: numpy.ndarray - estimated state, size (n)
+
+    N, q, n = Phi.shape
+    assert Y.shape == (N, q)
+
+    cvx_Y = Y.reshape((N*q,)) # groups of sensor measurements stacked vertically
+    cvx_Phi = Phi.reshape((N*q, n)) # groups of transition+output matrices stacked vertically
+
+    # Support scalar or vector eps
+    if np.isscalar(eps):
+        eps_final: np.ndarray = np.ones(q) * eps
+    else:
+        eps_final: np.ndarray = eps
+
+    def optimize_case(corrupt_indices):
+        x0_hat = cp.Variable(n)
+        optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N))
+        optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
+
+        # Set toleance constraints to account for noise
+        constraints = []
+        for j in set(range(q)) - set(corrupt_indices):
+            for k in range(N):
+                constraints.append(optimizer[j][k] <= eps_final[j])
+                constraints.append(optimizer[j][k] >= -eps_final[j])
+
+        prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
+
+        start = time.time()
+        prob.solve()
+        end = time.time()
+    
+        # for debugging
+        # print(f"Solved l0 subproblem in {end-start:.2f} seconds. Corrupt indices: {corrupt_indices}, status: {prob.status}, value: {prob.value}")
+
+        return x0_hat, prob, {
+            'corrupt_indices': corrupt_indices,
+        }
+
+    solns = [optimize_case(K) for K in powerset(range(q))]
+    for x0_hat, prob, metadata in solns:
+        if prob.status in ["optimal", "optimal_inaccurate"]:
+            return (x0_hat, prob, metadata, solns)
+
+    return (None, None, None, solns)
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))

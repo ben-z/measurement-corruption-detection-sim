@@ -141,7 +141,7 @@ for i in range(num_steps):
         output[3] += 5
 
     # fault-tolerant estimator
-
+    
 
     # estimates
     x_hat = output[0]

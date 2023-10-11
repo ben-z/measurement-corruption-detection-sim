@@ -1,6 +1,8 @@
 import unittest
 import numpy as np
+import cvxpy as cp
 from math import pi, sin, cos, atan2, sqrt
+from scipy.linalg import expm
 from utils import (
     kinematic_bicycle_model,
     generate_circle_approximation,
@@ -12,6 +14,7 @@ from utils import (
     get_lookahead_idx,
     clamp,
     walk_trajectory_by_durations,
+    optimize_l0,
 )
 
 class TestKinematicBicycleModel(unittest.TestCase):
@@ -157,6 +160,38 @@ class TestWalkTrajectoryByDuration(unittest.TestCase):
         durations = [0.4, 0.4, 0.1, 0.2, 0.2, 0.3, 1.0]
         indices = walk_trajectory_by_durations(path_points, velocities, starting_idx, durations)
         self.assertEqual(indices, [0,0,0,1,1,1,2])
+
+class TestOptimizeL0(unittest.TestCase):
+    def test_simple_integrator(self):
+        C = np.eye(3)
+        A = np.array([
+            [0, 1, 0], 
+            [0, 0, 1], 
+            [0, 0, 0]
+        ])
+        detaT = 0.1
+        Ad = expm(A * detaT)
+        x0 = np.array([0, 1, 0.1])
+
+        Phi = np.array([
+            C,
+            C @ Ad,
+            C @ Ad @ Ad,
+        ])
+        Y = np.array([
+            C @ x0,
+            C @ Ad @ x0,
+            C @ Ad @ Ad @ x0,
+        ])
+        x0_hat, prob, metadata, solns = optimize_l0(Phi, Y)
+
+        self.assertIsNotNone(x0_hat)
+        self.assertIsNotNone(prob)
+        self.assertIsNotNone(metadata)
+        self.assertTrue(np.allclose(x0_hat.value, x0))
+        self.assertSequenceEqual(metadata['corrupt_indices'], [])
+
+        print('done')
 
 if __name__ == '__main__':
     unittest.main()
