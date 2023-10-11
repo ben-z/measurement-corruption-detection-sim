@@ -188,10 +188,50 @@ class TestOptimizeL0(unittest.TestCase):
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
-        self.assertTrue(np.allclose(x0_hat.value, x0))
+        self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
         self.assertSequenceEqual(metadata['corrupt_indices'], [])
 
-        print('done')
+    def test_simple_attacks(self):
+        C = np.eye(3)
+        A = np.array([
+            [0, 1, 0], 
+            [0, 0, 1], 
+            [0, 0, 0]
+        ])
+        detaT = 0.1
+        Ad = expm(A * detaT)
+        x0 = np.array([0, 1, 0.1])
+
+        Phi = np.array([
+            C,
+            C @ Ad,
+            C @ Ad @ Ad,
+        ])
+
+        Y = np.array([
+            C @ x0 + np.array([0, 0, 1]),
+            C @ Ad @ x0 + np.array([0, 0, 1]),
+            C @ Ad @ Ad @ x0 + np.array([0, 0, 1]),
+        ])
+        x0_hat, prob, metadata, solns = optimize_l0(Phi, Y)
+        self.assertIsNotNone(x0_hat)
+        self.assertIsNotNone(prob)
+        self.assertIsNotNone(metadata)
+        self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
+        self.assertSequenceEqual(metadata['corrupt_indices'], [2])
+
+        # # TODO: find the s-sparse observability of the simple integrator and test this on more complex systems
+        # Y = np.array([
+        #     C @ x0 + np.array([0, 1, 0]),
+        #     C @ Ad @ x0 + np.array([0, 1, 0]),
+        #     C @ Ad @ Ad @ x0 + np.array([0, 1, 0]),
+        # ])
+        # x0_hat, prob, metadata, solns = optimize_l0(Phi, Y)
+        # self.assertIsNotNone(x0_hat)
+        # self.assertIsNotNone(prob)
+        # self.assertIsNotNone(metadata)
+        # self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
+        # self.assertSequenceEqual(metadata['corrupt_indices'], [1])
 
 if __name__ == '__main__':
     unittest.main()
