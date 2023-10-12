@@ -4,6 +4,25 @@ import time
 from itertools import chain, combinations
 from math import pi, sin, cos, atan2, sqrt
 
+#################################################################
+# General utility functions
+#################################################################
+
+def wrap_to_pi(x):
+    return (x + np.pi) % (2 * np.pi) - np.pi
+
+def clamp(x, lower, upper):
+    return np.maximum(lower, np.minimum(x, upper))
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+#################################################################
+# Models
+#################################################################
+
 # Kinematic bicycle model
 def kinematic_bicycle_model(state, input, params):
     # state = [x, y, theta, v, delta]
@@ -32,6 +51,10 @@ def kinematic_bicycle_model(state, input, params):
     delta += delta_dot * dt
 
     return np.array([x, y, theta, v, delta])
+
+#################################################################
+# Paths
+#################################################################
 
 # Derived from research-jackal
 def generate_circle_approximation(center, radius, num_points):
@@ -66,7 +89,6 @@ def generate_circle_approximation(center, radius, num_points):
         curvatures.append(1/sqrt(a**2*sin(t)**2 + a**2*cos(t)**2))
         dK_ds_list.append(0) # circles have constant curvature
     return points, headings, curvatures, dK_ds_list
-
 
 # Derived from research-jackal
 def generate_figure_eight_approximation(center, length, width, num_points):
@@ -112,23 +134,9 @@ def generate_figure_eight_approximation(center, length, width, num_points):
         dK_ds_list.append((-3*a*b*cos(t)*cos(2*t)/(a**2*cos(t)**2 + b**2*cos(2*t)**2)**(3/2) + (3*a**2*sin(t)*cos(t) + 6*b**2*sin(2*t)*cos(2*t))*(a*b*sin(t)*cos(2*t) - 2*a*b*sin(2*t)*cos(t))/(a**2*cos(t)**2 + b**2*cos(2*t)**2)**(5/2))/sqrt(a**2*cos(t)**2 + b**2*cos(2*t)**2))
     return points, headings, curvatures, dK_ds_list
 
-
-class PIDController:
-    def __init__(self, kp, ki, kd, dt):
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
-        self.dt = dt
-
-        self.integral = 0
-        self.prev_error = 0
-
-    def step(self, error):
-        self.integral += error * self.dt
-        derivative = (error - self.prev_error) / self.dt
-        self.prev_error = error
-
-        return self.kp * error + self.ki * self.integral + self.kd * derivative
+#################################################################
+# Path Helper Functions
+#################################################################
 
 def closest_point_idx(points, x, y):
     closest_idx = None
@@ -175,9 +183,6 @@ def closest_point_idx_local(points, x, y, prev_idx):
     else:
         return closest_idx_backward
 
-def wrap_to_pi(x):
-    return (x + np.pi) % (2 * np.pi) - np.pi
-
 def get_lookahead_idx(path_points, starting_idx, dist):
     remaining_dist = dist
     idx = starting_idx
@@ -188,9 +193,6 @@ def get_lookahead_idx(path_points, starting_idx, dist):
             idx += 1
         remaining_dist -= sqrt((path_points[idx][0] - path_points[idx-1][0])**2 + (path_points[idx][1] - path_points[idx-1][1])**2)
     return idx
-
-def clamp(x, lower, upper):
-    return np.maximum(lower, np.minimum(x, upper))
 
 def walk_trajectory_by_durations(path_points, velocities, starting_idx, durations):
     assert all(d >= 0 for d in durations), "durations must be non-negative"
@@ -225,12 +227,45 @@ def walk_trajectory_by_durations(path_points, velocities, starting_idx, duration
         indices.append(idx)
     return indices
 
+#################################################################
+# Controllers
+#################################################################
+
+class PIDController:
+    def __init__(self, kp, ki, kd, dt):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.dt = dt
+
+        self.integral = 0
+        self.prev_error = 0
+
+    def step(self, error):
+        self.integral += error * self.dt
+        derivative = (error - self.prev_error) / self.dt
+        self.prev_error = error
+
+        return self.kp * error + self.ki * self.integral + self.kd * derivative
+
+#################################################################
+# Research Functions
+#################################################################
+
 def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15):
-    # solves the l0 minimization problem
-    # Phi: numpy.ndarray - tensor of size (N, q, n), where N is the number of time steps, q is the number of outputs, and n is the number of states
-    # Y: numpy.ndarray - measured outputs, with input effects subtracted, size (N, q)
-    # eps: numpy.ndarray - noise tolerance for each output, size (1,) or (q,)
-    # returns: numpy.ndarray - estimated state, size (n)
+    """
+    solves the l0 minimization problem
+    Parameters:
+        Phi: numpy.ndarray - tensor of size (N, q, n) that describes the evolution of the output over time.
+            $N$ is the number of time steps, $q$ is the number of outputs, and $n$ is the number of states
+        Y: numpy.ndarray - measured outputs, with input effects subtracted, size $(N, q)$
+        eps: numpy.ndarray - noise tolerance for each output, size $(1,)$ or $(q,)$
+    Returns:
+        x0_hat: numpy.ndarray - estimated state, size $n$
+        prob: cvxpy.Problem - the optimization problem
+        metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
+        solns: list - list of solutions for each possible set of corrupted sensors that was tried
+    """
 
     N, q, n = Phi.shape
     assert Y.shape == (N, q)
@@ -262,11 +297,9 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15)
         prob.solve()
         end = time.time()
     
-        # for debugging
-        # print(f"Solved l0 subproblem in {end-start:.2f} seconds. Corrupt indices: {corrupt_indices}, status: {prob.status}, value: {prob.value}")
-
         return x0_hat, prob, {
             'corrupt_indices': corrupt_indices,
+            'solve_time': end-start,
         }
 
     solns = [optimize_case(K) for K in powerset(range(q))]
@@ -276,7 +309,51 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15)
 
     return (None, None, None, solns)
 
-def powerset(iterable):
-    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
-    s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+def get_state_evolution_tensor(As: list[np.ndarray]):
+    """
+    Given a list of $N-1$ state transition matrices, returns a tensor of size $(N,n,n)$ that describes the evolution of the state over time,
+    where $n$ is the size of the state. The first element of the tensor is the identity matrix.
+    Parameters:
+        As: list[np.ndarray] - list of state transition matrices, size (n, n) each, where n is the number of states
+    Returns:
+        Evo: numpy.ndarray - tensor of size $(N, n, n)$ that describes the evolution of the state over time. When multiplied with the
+            initial state, it produces the state at each time step.
+    """
+    assert len(As) > 0, "Must have at least one state transition matrix"
+
+    N = len(As) + 1
+    n = As[0].shape[0]
+    Evo = np.zeros((N, n, n))
+    Evo[0] = np.eye(n)
+    for i in range(1, N):
+        Evo[i] = np.matmul(As[i-1], Evo[i-1])
+    return Evo
+
+def get_output_evolution_tensor(Cs: list[np.ndarray], Evo: np.ndarray):
+    """
+    Given a list of $N$ output matrices and the state evolution tensor, returns a tensor of size
+    $(N,q,n)$ that describes the evolution of the output over time, where $q$ is the number of
+    outputs and $n$ is the number of states.
+
+    Parameters:
+        Cs: list[np.ndarray] - list of output matrices, size (q, n) each, where q is the number of outputs and n is the number of states
+        Evo: numpy.ndarray - tensor of size $(N, n, n)$ that describes the evolution of the state over time. When multiplied with the
+            initial state, it produces the state at each time step.
+    Returns:
+        Phi: numpy.ndarray - tensor of size $(N, q, n)$ that describes the evolution of the output over time.
+    """
+    assert len(Cs) > 0, "Must have at least one output matrix"
+    assert Evo.shape[1] == Evo.shape[2], "State evolution matrices must be square"
+    N = len(Cs)
+    assert N == Evo.shape[0], "The number of output matrices must be equal to the size of the first dimension of the state evolution tensor"
+    q = Cs[0].shape[0]
+    n = Cs[0].shape[1]
+    assert n == Evo.shape[1], "The number of states must match between the output matrices and the state evolution tensor"
+
+    Phi = np.zeros((N, q, n))
+
+    for i in range(N):
+        Phi[i] = np.matmul(Cs[i], Evo[i])
+    
+    return Phi
+        

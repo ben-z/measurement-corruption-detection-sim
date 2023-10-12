@@ -15,6 +15,8 @@ from utils import (
     clamp,
     walk_trajectory_by_durations,
     optimize_l0,
+    get_state_evolution_tensor,
+    get_output_evolution_tensor,
 )
 
 class TestKinematicBicycleModel(unittest.TestCase):
@@ -232,6 +234,73 @@ class TestOptimizeL0(unittest.TestCase):
         # self.assertIsNotNone(metadata)
         # self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
         # self.assertSequenceEqual(metadata['corrupt_indices'], [1])
+
+class TestGetStateEvolutionTensor(unittest.TestCase):
+    def test_single_matrix(self):
+        A = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        As = [A]
+        expected_Evo = np.zeros((2, 3, 3))
+        expected_Evo[0] = np.eye(3)
+        expected_Evo[1] = A
+        Evo = get_state_evolution_tensor(As)
+        np.testing.assert_allclose(Evo, expected_Evo)
+
+    def test_multiple_matrices(self):
+        A1 = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        A2 = np.array([[9, 8, 7], [6, 5, 4], [3, 2, 1]])
+        As = [A1, A2]
+        expected_Evo = np.zeros((3, 3, 3))
+        expected_Evo[0] = np.eye(3)
+        expected_Evo[1] = A1
+        expected_Evo[2] = np.matmul(A2, A1)
+        Evo = get_state_evolution_tensor(As)
+        np.testing.assert_allclose(Evo, expected_Evo)
+
+class TestGetOutputEvolutionTensor(unittest.TestCase):
+    def test_get_output_evolution_tensor(self):
+        Cs = [
+            np.array([
+                [1, 0, 0],
+                [0, 1, 0]
+            ]),
+            np.array([
+                [0, 1, 0],
+                [1, 0, 0]
+            ]),
+            np.array([
+                [1, 0, 1],
+                [0, 1, 0]
+            ])
+        ]
+        As = [
+            np.array([
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1]
+            ]),
+            np.array([
+                [1, 0, 1],
+                [0, 1, 0],
+                [0, 0, 1]
+            ]),
+        ]
+        Evo = get_state_evolution_tensor(As)
+        expected_Phi = np.array([
+            [
+                [1, 0, 0],
+                [0, 1, 0]
+            ],
+            [
+                [0, 1, 0],
+                [1, 0, 0]
+            ],
+            [
+                [1, 0, 2],
+                [0, 1, 0]
+            ],
+        ])
+        Phi = get_output_evolution_tensor(Cs, Evo)
+        np.testing.assert_allclose(Phi, expected_Phi)
 
 if __name__ == '__main__':
     unittest.main()
