@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import cvxpy as cp
-from math import pi, sin, cos, atan2, sqrt
+from math import pi, sin, cos, atan2, sqrt, tan
 from scipy.linalg import expm
 from utils import (
     kinematic_bicycle_model,
@@ -17,6 +17,7 @@ from utils import (
     optimize_l0,
     get_state_evolution_tensor,
     get_output_evolution_tensor,
+    get_s_sparse_observability,
 )
 
 class TestKinematicBicycleModel(unittest.TestCase):
@@ -301,6 +302,159 @@ class TestGetOutputEvolutionTensor(unittest.TestCase):
         ])
         Phi = get_output_evolution_tensor(Cs, Evo)
         np.testing.assert_allclose(Phi, expected_Phi)
+
+class OrderedBuckets():
+    """
+    A class that allows us to define a list of buckets and then access them by item index.
+    """
+
+    def __init__(self, buckets):
+        self.buckets = buckets
+    
+    def getBuckeForItem(self, i):
+        for bucket in self.buckets:
+            i -= len(bucket)
+            if i < 0:
+                return bucket
+        
+        raise IndexError(f"Index {i} out of range")
+
+class TestGetSSparseObservability(unittest.TestCase):
+    def test_simple(self):
+        # Define system matrices
+        A1 = np.array([[1, 1], [0, 1]])
+        A2 = np.array([[1, 0], [0, 1]])
+        As = [A1, A2]
+        C1 = np.array([[1, 0], [0, 1]])
+        C2 = np.array([[1, 0], [0, 1]])
+        Cs = [C1, C2, C1]
+
+        # Compute s-sparse observability
+        s, cases = get_s_sparse_observability(Cs, As)
+
+        # Check results
+        self.assertEqual(s, 0)
+        # Here we don't assert the length of the cases to allow for implementation flexibility
+        expected_cases = OrderedBuckets([
+            [
+                ([0, 1], True),
+            ],
+            [
+                ([0], False),
+                ([1], False),
+            ],
+        ])
+        for i in range(len(cases)):
+            self.assertIn(cases[i], expected_cases.getBuckeForItem(i))
+
+    def test_complete(self):
+        # A 4x4 system
+        A = np.array([
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0]
+        ])
+        n = A.shape[0]
+
+        C = np.eye(n)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 0)
+
+        C = np.concatenate((np.eye(n), np.eye(n)))
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 1)
+
+        C = np.concatenate((np.eye(n), np.eye(n), np.eye(n)))
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 2)
+
+        C = np.concatenate((np.eye(n), np.eye(n), np.eye(n), np.eye(n)))
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 3)
+
+        # Kinematic bicycle
+        theta = np.pi / 4
+        delta = np.pi / 8
+        L = 2.9
+        v = 5
+
+        A = np.array([
+            [0, 0, -v*sin(theta), cos(theta), 0],
+            [0, 0, v*cos(theta), sin(theta), 0],
+            [0, 0, 0, tan(delta)/L, v/(L*cos(theta) ** 2)],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0]
+        ])
+        n = A.shape[0]
+
+        C = np.eye(n)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 0)
+
+        C = np.concatenate((np.eye(n), np.eye(n)))
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 1)
+
+        C = np.concatenate((np.eye(n), np.eye(n), np.eye(n)))
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 2)
+
+        C = np.concatenate((np.eye(n), np.eye(n), np.eye(n), np.eye(n)))
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 3)
+
+        # redundant x and y sensors
+        C = np.array([
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 1],
+        ])
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 1)
+
+        # 3 pairs of x and y sensors
+        C = np.array([
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 1],
+        ])
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 2)
+
+        # 4 pairs of x and y sensors
+        C = np.array([
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 1],
+        ])
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 3)
+
+        # 5 pairs of x and y sensors
+        C = np.array([
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 1],
+        ])
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 4)
 
 if __name__ == '__main__':
     unittest.main()
