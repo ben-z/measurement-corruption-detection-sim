@@ -192,7 +192,7 @@ class TestOptimizeL0(unittest.TestCase):
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
         self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
-        self.assertSequenceEqual(metadata['corrupt_indices'], [])
+        self.assertSequenceEqual(metadata['K'], [])
 
     def test_simple_attacks(self):
         C = np.eye(3)
@@ -221,9 +221,29 @@ class TestOptimizeL0(unittest.TestCase):
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
         self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
-        self.assertSequenceEqual(metadata['corrupt_indices'], [2])
+        self.assertSequenceEqual(metadata['K'], [2])
 
-        # # TODO: find the s-sparse observability of the simple integrator and test this on more complex systems
+        # TODO: find the s-sparse observability of the simple integrator and test this on more complex systems
+        # In this example, losing sensor 0 decreases observability. So we need to protect 0.
+        # > get_s_sparse_observability([C]*3,[A]*2)
+        # ([0, 1, 2], True)
+        # ([1, 2], False)
+        # ([0, 2], True)
+        # ([0, 1], True)
+        # ([2], False)
+        # ([1], False)
+        # ([0], True)
+        # ([], False)
+        # Current feasibility status:
+        # > [print(soln[2]['S'], soln[1].status) for soln in solns]
+        # () infeasible
+        # (0,) optimal
+        # (1,) optimal
+        # (2,) infeasible
+        # (0, 1) optimal
+        # (0, 2) optimal
+        # (1, 2) optimal
+        # (0, 1, 2) optimal
         # Y = np.array([
         #     C @ x0 + np.array([0, 1, 0]),
         #     C @ Ad @ x0 + np.array([0, 1, 0]),
@@ -234,7 +254,7 @@ class TestOptimizeL0(unittest.TestCase):
         # self.assertIsNotNone(prob)
         # self.assertIsNotNone(metadata)
         # self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
-        # self.assertSequenceEqual(metadata['corrupt_indices'], [1])
+        # self.assertSequenceEqual(metadata['K'], [1])
 
 class TestGetStateEvolutionTensor(unittest.TestCase):
     def test_single_matrix(self):
@@ -345,6 +365,8 @@ class TestGetSSparseObservability(unittest.TestCase):
             ([1], False),
             ([], False),
         ]
+        self.assertEqual(len(cases), len(expected_cases))
+        # We don't enforce the order the cases are returned.
         for i in range(len(cases)):
             self.assertIn(cases[i], expected_cases)
 

@@ -279,14 +279,20 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15)
     else:
         eps_final: np.ndarray = eps
 
-    def optimize_case(corrupt_indices):
+    def optimize_case(K):
+        """
+        Solves the l0 minimization problem for a given set of corrupted sensors $K$.
+        """
+        # S is the sensors that are not corrupted (i.e. the sensors that are not in K)
+        S = list(set(range(q)) - set(K))
+
         x0_hat = cp.Variable(n)
         optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N))
         optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
 
         # Set toleance constraints to account for noise
         constraints = []
-        for j in set(range(q)) - set(corrupt_indices):
+        for j in S:
             for k in range(N):
                 constraints.append(optimizer[j][k] <= eps_final[j])
                 constraints.append(optimizer[j][k] >= -eps_final[j])
@@ -298,7 +304,8 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15)
         end = time.time()
     
         return x0_hat, prob, {
-            'corrupt_indices': corrupt_indices,
+            'K': K,
+            'S': S,
             'solve_time': end-start,
         }
 
