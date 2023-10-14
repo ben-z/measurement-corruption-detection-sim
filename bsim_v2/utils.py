@@ -357,13 +357,14 @@ def get_output_evolution_tensor(Cs: list[np.ndarray], Evo: np.ndarray):
     
     return Phi
         
-def get_s_sparse_observability(Cs, As):
+def get_s_sparse_observability(Cs, As, early_exit=False):
     """
     Returns the s-sparse observability for the given system.
 
     Parameters:
-        Cs: list[np.ndarray] - list of output matrices, size (q, n) each, where q is the number of outputs and n is the number of states
-        As: list[np.ndarray] - list of state transition matrices, size (n, n) each, where n is the number of states
+        Cs: list[np.ndarray] - list of output matrices, size $(q, n)$ each, where q is the number of outputs and n is the number of states
+        As: list[np.ndarray] - list of state transition matrices, size $(n, n)$ each, where n is the number of states
+        early_exit: bool - whether or not to stop after finding $s$.
     Requires:
         len(Cs) == len(As) + 1
     Returns:
@@ -383,13 +384,16 @@ def get_s_sparse_observability(Cs, As):
     Phi = get_output_evolution_tensor(Cs, Evo)
 
     # We want to find the largest s such that removing s sensors still leaves the system observable.
-    s = -1
+    s = None
     cases = []
+    # K is the missing sensors
     for K in powerset(range(q)):
-        # K is the missing sensors
-        
         # S is the sensors that are not missing
         S = list(set(range(q)) - set(K))
+        if len(S) == 0:
+            # if we are missing all sensors, then the system is not observable
+            cases.append((S, False))
+            continue
 
         Phi_S = Phi[:, S, :]
 
@@ -399,9 +403,11 @@ def get_s_sparse_observability(Cs, As):
 
         cases.append((S, O_S_rank == n))
 
-        if s == -1 and O_S_rank < n:
+        if s is None and O_S_rank < n:
             # found the first non-full-rank entry
             s = len(K) - 1
-            break
+
+            if early_exit:
+                break
 
     return s, cases

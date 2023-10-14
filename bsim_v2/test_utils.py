@@ -322,30 +322,31 @@ class OrderedBuckets():
 class TestGetSSparseObservability(unittest.TestCase):
     def test_simple(self):
         # Define system matrices
-        A1 = np.array([[1, 1], [0, 1]])
-        A2 = np.array([[1, 0], [0, 1]])
-        As = [A1, A2]
-        C1 = np.array([[1, 0], [0, 1]])
-        C2 = np.array([[1, 0], [0, 1]])
-        Cs = [C1, C2, C1]
+        As = [
+            np.array([
+                [1, 1],
+                [0, 1]
+            ]),
+            np.array([
+                [1, 0],
+                [0, 1]
+            ])
+        ]
+        Cs = [np.eye(2)] * 3
 
         # Compute s-sparse observability
         s, cases = get_s_sparse_observability(Cs, As)
 
         # Check results
         self.assertEqual(s, 0)
-        # Here we don't assert the length of the cases to allow for implementation flexibility
-        expected_cases = OrderedBuckets([
-            [
-                ([0, 1], True),
-            ],
-            [
-                ([0], False),
-                ([1], False),
-            ],
-        ])
+        expected_cases = [
+            ([0, 1], True),
+            ([0], True),
+            ([1], False),
+            ([], False),
+        ]
         for i in range(len(cases)):
-            self.assertIn(cases[i], expected_cases.getBuckeForItem(i))
+            self.assertIn(cases[i], expected_cases)
 
     def test_complete(self):
         # A 4x4 system
@@ -358,16 +359,16 @@ class TestGetSSparseObservability(unittest.TestCase):
         n = A.shape[0]
 
         C = np.eye(n)
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 0)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 0)
 
         C = np.concatenate((np.eye(n), np.eye(n)))
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 1)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 1)
 
         C = np.concatenate((np.eye(n), np.eye(n), np.eye(n)))
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 2)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 2)
 
         C = np.concatenate((np.eye(n), np.eye(n), np.eye(n), np.eye(n)))
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 3)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 3)
 
         # Kinematic bicycle
         theta = np.pi / 4
@@ -385,16 +386,16 @@ class TestGetSSparseObservability(unittest.TestCase):
         n = A.shape[0]
 
         C = np.eye(n)
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 0)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 0)
 
         C = np.concatenate((np.eye(n), np.eye(n)))
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 1)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 1)
 
         C = np.concatenate((np.eye(n), np.eye(n), np.eye(n)))
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 2)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 2)
 
         C = np.concatenate((np.eye(n), np.eye(n), np.eye(n), np.eye(n)))
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 3)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 3)
 
         # redundant x and y sensors
         C = np.array([
@@ -406,7 +407,7 @@ class TestGetSSparseObservability(unittest.TestCase):
             [0, 0, 0, 1, 0],
             [0, 0, 0, 0, 1],
         ])
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 1)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 1)
 
         # 3 pairs of x and y sensors
         C = np.array([
@@ -420,7 +421,7 @@ class TestGetSSparseObservability(unittest.TestCase):
             [0, 0, 0, 1, 0],
             [0, 0, 0, 0, 1],
         ])
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 2)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 2)
 
         # 4 pairs of x and y sensors
         C = np.array([
@@ -436,7 +437,7 @@ class TestGetSSparseObservability(unittest.TestCase):
             [0, 0, 0, 1, 0],
             [0, 0, 0, 0, 1],
         ])
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 3)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 3)
 
         # 5 pairs of x and y sensors
         C = np.array([
@@ -454,7 +455,7 @@ class TestGetSSparseObservability(unittest.TestCase):
             [0, 0, 0, 1, 0],
             [0, 0, 0, 0, 1],
         ])
-        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1))[0], 4)
+        self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 4)
 
 if __name__ == '__main__':
     unittest.main()
