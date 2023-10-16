@@ -3,6 +3,8 @@ import numpy as np
 import time
 from itertools import chain, combinations
 from math import pi, sin, cos, atan2, sqrt
+from numpy.typing import NDArray
+from typing import TypeVar, Iterable, Tuple, Optional
 
 #################################################################
 # General utility functions
@@ -14,7 +16,10 @@ def wrap_to_pi(x):
 def clamp(x, lower, upper):
     return np.maximum(lower, np.minimum(x, upper))
 
-def powerset(iterable):
+
+T = TypeVar('T')
+
+def powerset(iterable: Iterable[T]) -> Iterable[Iterable[T]]:
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
@@ -252,14 +257,17 @@ class PIDController:
 # Research Functions
 #################################################################
 
-def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15):
-    """
-    solves the l0 minimization problem
+def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None):
+    r"""
+    solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
+    the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
     Parameters:
         Phi: numpy.ndarray - tensor of size (N, q, n) that describes the evolution of the output over time.
             $N$ is the number of time steps, $q$ is the number of outputs, and $n$ is the number of states
         Y: numpy.ndarray - measured outputs, with input effects subtracted, size $(N, q)$
         eps: numpy.ndarray - noise tolerance for each output, size $(1,)$ or $(q,)$
+        S_list: Optional[Iterable[Iterable[int]]] - list of sensor combinations to try. If None, then all possible sensor combinations are tried.
+            This is useful when you know that some sensors are not corrupted.
     Returns:
         x0_hat: numpy.ndarray - estimated state, size $n$
         prob: cvxpy.Problem - the optimization problem
@@ -275,16 +283,16 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15)
 
     # Support scalar or vector eps
     if np.isscalar(eps):
-        eps_final: np.ndarray = np.ones(q) * eps
+        eps_final: NDArray[np.float64] = np.ones(q) * eps
     else:
-        eps_final: np.ndarray = eps
+        eps_final: NDArray[np.float64] = eps
 
-    def optimize_case(K):
+    def optimize_case(S):
         """
-        Solves the l0 minimization problem for a given set of corrupted sensors $K$.
+        Solves the l0 minimization problem for a given set of uncorrupted sensors $S$.
         """
-        # S is the sensors that are not corrupted (i.e. the sensors that are not in K)
-        S = list(set(range(q)) - set(K))
+        # K is the sensors that can be corrupted (i.e. the sensors that are not in S)
+        K = list(set(range(q)) - set(S))
 
         x0_hat = cp.Variable(n)
         optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N))
@@ -309,7 +317,11 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: np.ndarray | float = 1e-15)
             'solve_time': end-start,
         }
 
-    solns = [optimize_case(K) for K in powerset(range(q))]
+    # sort the list of sensor combinations by size, largest to smallest
+    # this is because the optimization algorithm needs to minimize the number of corrupt sensors
+    S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
+
+    solns = [optimize_case(S) for S in S_list]
     for x0_hat, prob, metadata in solns:
         if prob.status in ["optimal", "optimal_inaccurate"]:
             return (x0_hat, prob, metadata, solns)

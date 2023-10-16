@@ -1,6 +1,7 @@
-import unittest
-import numpy as np
 import cvxpy as cp
+import json
+import numpy as np
+import unittest
 from math import pi, sin, cos, atan2, sqrt, tan
 from scipy.linalg import expm
 from utils import (
@@ -13,6 +14,7 @@ from utils import (
     wrap_to_pi,
     get_lookahead_idx,
     clamp,
+    powerset,
     walk_trajectory_by_durations,
     optimize_l0,
     get_state_evolution_tensor,
@@ -166,6 +168,9 @@ class TestWalkTrajectoryByDuration(unittest.TestCase):
 
 class TestOptimizeL0(unittest.TestCase):
     def test_simple_integrator(self):
+        """
+        Sanity test to make sure the recovery without attacks works.
+        """
         C = np.eye(3)
         A = np.array([
             [0, 1, 0], 
@@ -195,6 +200,16 @@ class TestOptimizeL0(unittest.TestCase):
         self.assertSequenceEqual(metadata['K'], [])
 
     def test_simple_attacks(self):
+        # This system is maximally 0-sparse observable, and maximally 2-sparse observable with protection on sensor 0
+        # > get_s_sparse_observability([C]*3,[A]*2)
+        # ([0, 1, 2], True)
+        # ([1, 2], False)
+        # ([0, 2], True)
+        # ([0, 1], True)
+        # ([2], False)
+        # ([1], False)
+        # ([0], True)
+        # ([], False)
         C = np.eye(3)
         A = np.array([
             [0, 1, 0], 
@@ -216,45 +231,37 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0 + np.array([0, 0, 1]),
             C @ Ad @ Ad @ x0 + np.array([0, 0, 1]),
         ])
-        x0_hat, prob, metadata, solns = optimize_l0(Phi, Y)
+        x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S])
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
         self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
         self.assertSequenceEqual(metadata['K'], [2])
+        self.assertSetEqual(set([
+            json.dumps({'K': [], 'S': [0,1,2], 'status': 'infeasible'}),
+            json.dumps({'K': [2], 'S': [0,1], 'status': 'optimal'}),
+            json.dumps({'K': [1], 'S': [0,2], 'status': 'infeasible'}),
+            json.dumps({'K': [1,2], 'S': [0], 'status': 'optimal'}),
+        ]), set(json.dumps({'K': soln[2]['K'], 'S': soln[2]['S'], 'status': soln[1].status}) for soln in solns))
 
-        # TODO: find the s-sparse observability of the simple integrator and test this on more complex systems
-        # In this example, losing sensor 0 decreases observability. So we need to protect 0.
-        # > get_s_sparse_observability([C]*3,[A]*2)
-        # ([0, 1, 2], True)
-        # ([1, 2], False)
-        # ([0, 2], True)
-        # ([0, 1], True)
-        # ([2], False)
-        # ([1], False)
-        # ([0], True)
-        # ([], False)
-        # Current feasibility status:
-        # > [print(soln[2]['S'], soln[1].status) for soln in solns]
-        # () infeasible
-        # (0,) optimal
-        # (1,) optimal
-        # (2,) infeasible
-        # (0, 1) optimal
-        # (0, 2) optimal
-        # (1, 2) optimal
-        # (0, 1, 2) optimal
-        # Y = np.array([
-        #     C @ x0 + np.array([0, 1, 0]),
-        #     C @ Ad @ x0 + np.array([0, 1, 0]),
-        #     C @ Ad @ Ad @ x0 + np.array([0, 1, 0]),
-        # ])
-        # x0_hat, prob, metadata, solns = optimize_l0(Phi, Y)
-        # self.assertIsNotNone(x0_hat)
-        # self.assertIsNotNone(prob)
-        # self.assertIsNotNone(metadata)
-        # self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
-        # self.assertSequenceEqual(metadata['K'], [1])
+        Y = np.array([
+            C @ x0 + np.array([0, 1, 0]),
+            C @ Ad @ x0 + np.array([0, 1, 0]),
+            C @ Ad @ Ad @ x0 + np.array([0, 1, 0]),
+        ])
+        x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S])
+        self.assertIsNotNone(x0_hat)
+        self.assertIsNotNone(prob)
+        self.assertIsNotNone(metadata)
+        self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
+        self.assertSequenceEqual(metadata['K'], [1])
+        self.assertSetEqual(set([
+            json.dumps({'K': [], 'S': [0,1,2], 'status': 'infeasible'}),
+            json.dumps({'K': [2], 'S': [0,1], 'status': 'infeasible'}),
+            json.dumps({'K': [1], 'S': [0,2], 'status': 'optimal'}),
+            json.dumps({'K': [1,2], 'S': [0], 'status': 'optimal'}),
+        ]), set(json.dumps({'K': soln[2]['K'], 'S': soln[2]['S'], 'status': soln[1].status}) for soln in solns))
+
 
 class TestGetStateEvolutionTensor(unittest.TestCase):
     def test_single_matrix(self):
