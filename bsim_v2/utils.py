@@ -4,7 +4,9 @@ import time
 from itertools import chain, combinations
 from math import pi, sin, cos, atan2, sqrt
 from numpy.typing import NDArray
+from numpy.linalg import matrix_power
 from typing import TypeVar, Iterable, Tuple, Optional
+from scipy.linalg import expm
 
 #################################################################
 # General utility functions
@@ -56,6 +58,80 @@ def kinematic_bicycle_model(state, input, params):
     delta += delta_dot * dt
 
     return np.array([x, y, theta, v, delta])
+
+def kinematic_bicycle_model_linearize(theta, v, delta, dt, l):
+    """
+    Returns a linearized version of the kinematic bicycle model.
+    Parameters:
+        theta: float - the heading of the robot
+        v: float - the velocity of the robot
+        delta: float - the steering angle of the robot
+        dt: float - the time step
+        l: float - the length of the robot
+    Returns:
+        A: np.ndarray - the state transition matrix
+        B: np.ndarray - the input matrix
+    """
+    A = np.array([
+        [0, 0, -v*np.sin(theta), np.cos(theta), 0],
+        [0, 0, v*np.cos(theta), np.sin(theta), 0],
+        [0, 0, 0, np.tan(delta)/l, v*(1+np.tan(delta)**2)/l],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0]
+    ])
+
+    B = np.array([
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [1, 0],
+        [0, 1],
+    ])
+
+    # Calculate Ad and Bd at the same time: https://en.wikipedia.org/wiki/Discretization#cite_note-2
+    ABd = expm(dt * np.block([
+        [A, B],
+        [np.zeros((B.shape[1], A.shape[0]+B.shape[1]))]
+    ]))
+
+    Ad = ABd[:A.shape[0], :A.shape[1]]
+    Bd = ABd[:B.shape[0], A.shape[1]:]
+
+    return Ad, Bd
+
+def calc_input_effects_on_output(As, Bs, Cs, inputs):
+    # calculates the input effects on the output
+    # Parameters:
+    # As: numpy.ndarray[] - list of N-1 matrices of size (n,n)
+    # Bs: numpy.ndarray[] - list of N-1 matrices of size (n,p)
+    # Cs: numpy.ndarray[] - list of N matrices of size (q,n)
+    # inputs: numpy.ndarray[] - list of N-1 input vectors of size p
+    # Returns:
+    # output_effects: numpy.ndarray[] - the effects of the inputs on the output, a list of N matrices of size (q,)
+
+    n = As[0].shape[0]
+    N = len(Cs)
+    assert len(As) == N-1, "As must have length N-1"
+    assert len(Bs) == N-1, "Bs must have length N-1"
+    assert len(inputs) == N-1, "inputs must have length N-1"
+
+    # Algorithm (for LTV systems):
+    # zeros
+    # B[0]u[0]
+    # B[1]u[1] + A[0](B[0]u[0])
+    # B[2]u[2] + A[1](B[1]u[1] + A[0](B[0]u[0]))
+    # ...
+    # Then pass everything through C
+    state_effects = [
+        np.zeros((n,)),
+        np.matmul(Bs[0], inputs[0])
+    ]
+    for i in range(1, N-1):
+        state_effects.append(np.matmul(Bs[i], inputs[i]) + np.matmul(As[i-1], state_effects[-1]))
+
+    output_effects = [Cs[i]@state_effects[i] for i in range(N)]
+
+    return output_effects
 
 #################################################################
 # Paths
@@ -200,8 +276,20 @@ def get_lookahead_idx(path_points, starting_idx, dist):
     return idx
 
 def walk_trajectory_by_durations(path_points, velocities, starting_idx, durations):
-    assert all(d >= 0 for d in durations), "durations must be non-negative"
+    """
+    Walks a trajectory by the given durations. Returns the indices of the path points that were travelled to.
+    Parameters:
+        path_points: list[tuple[float, float]] - list of path points denoting x and y coordinates over time
+        velocities: list[float] - list of velocities at each path point
+        starting_idx: int - the index of the starting path point
+        durations: list[float] - list of durations to travel for each segment. This is non-cumulative.
+    Returns:
+        indices: list[int] - list of indices of path points that were travelled to
+    """
+    assert len(path_points) == len(velocities), "path_points and velocities must have the same length"
+    assert starting_idx >= 0 and starting_idx < len(path_points), "starting_idx must be a valid index"
     assert len(durations) > 0, "Must have a duration"
+    assert all(d >= 0 for d in durations), "durations must be non-negative"
 
     idx = starting_idx - 1
     remaining_segment_duration = 0.0

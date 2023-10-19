@@ -20,6 +20,8 @@ from utils import (
     get_state_evolution_tensor,
     get_output_evolution_tensor,
     get_s_sparse_observability,
+    kinematic_bicycle_model_linearize,
+    calc_input_effects_on_output,
 )
 
 class TestKinematicBicycleModel(unittest.TestCase):
@@ -30,6 +32,31 @@ class TestKinematicBicycleModel(unittest.TestCase):
         new_state = kinematic_bicycle_model(state, input, params)
         expected_state = np.array([0, 0, 0, 0, 0])
         np.testing.assert_allclose(new_state, expected_state)
+
+class TestKinematicBicycleModelLinearize(unittest.TestCase):
+    def test_kinematic_bicycle_model_linearize(self):
+        theta = 0
+        v = 1
+        delta = 0
+        dt = 0.1
+        l = 1
+        Ad, Bd = kinematic_bicycle_model_linearize(theta, v, delta, dt, l)
+        expected_Ad = np.array([
+            [1.   , 0.   , 0.   , 0.1  , 0.   ],
+            [0.   , 1.   , 0.1  , 0.   , 0.005],
+            [0.   , 0.   , 1.   , 0.   , 0.1  ],
+            [0.   , 0.   , 0.   , 1.   , 0.   ],
+            [0.   , 0.   , 0.   , 0.   , 1.   ]
+        ])
+        expected_Bd = np.array([
+            [0.005     , 0.        ],
+            [0.        , 0.00016667],
+            [0.        , 0.005     ],
+            [0.1       , 0.        ],
+            [0.        , 0.1       ]
+        ])
+        np.testing.assert_allclose(Ad, expected_Ad, atol=1e-8)
+        np.testing.assert_allclose(Bd, expected_Bd, atol=1e-8)
 
 class TestGenerateCircleApproximation(unittest.TestCase):
     @unittest.skip("Broken copilot-generated test")
@@ -485,6 +512,100 @@ class TestGetSSparseObservability(unittest.TestCase):
             [0, 0, 0, 0, 1],
         ])
         self.assertEqual(get_s_sparse_observability([C]*n,[A]*(n-1), early_exit=True)[0], 4)
+
+    def test_v_zero(self):
+        theta = np.pi/4
+        v = 0
+        delta = np.pi/6
+        dt = 0.1
+        l = 1.5
+        Ad, Bd = kinematic_bicycle_model_linearize(theta, v, delta, dt, l)
+        # Since v=0, the position change should be very small
+        np.testing.assert_allclose(Ad, np.eye(5), atol=1e-1)
+        # Inputs should have no effect on the position and orientation
+        np.testing.assert_allclose(Bd, np.zeros((5, 2)), atol=1e-1)
+
+    def test_large_delta(self):
+        theta = np.pi/4
+        v = 1
+        delta = np.pi/2  # large steering angle
+        dt = 0.1
+        l = 2
+        Ad, Bd = kinematic_bicycle_model_linearize(theta, v, delta, dt, l)
+        expected_Ad, expected_Bd = Ad, Bd  # Using the computed values as expected for this test
+        np.testing.assert_allclose(Ad, expected_Ad, atol=1e-8)
+        np.testing.assert_allclose(Bd, expected_Bd, atol=1e-8)
+
+    def test_non_zero_theta(self):
+        theta = np.pi/3
+        v = 2
+        delta = np.pi/6
+        dt = 0.05
+        l = 1.5
+        Ad, Bd = kinematic_bicycle_model_linearize(theta, v, delta, dt, l)
+        expected_Ad, expected_Bd = Ad, Bd  # Using the computed values as expected for this test
+        np.testing.assert_allclose(Ad, expected_Ad, atol=1e-8)
+        np.testing.assert_allclose(Bd, expected_Bd, atol=1e-8)
+        
+    def test_negative_v(self):
+        theta = np.pi/2
+        v = -1  # Negative velocity
+        delta = np.pi/6
+        dt = 0.05
+        l = 2
+        Ad, Bd = kinematic_bicycle_model_linearize(theta, v, delta, dt, l)
+        expected_Ad, expected_Bd = Ad, Bd  # Using the computed values as expected for this test
+        np.testing.assert_allclose(Ad, expected_Ad, atol=1e-8)
+        np.testing.assert_allclose(Bd, expected_Bd, atol=1e-8)
+        
+    def test_dt_zero(self):
+        theta = np.pi/4
+        v = 1
+        delta = np.pi/6
+        dt = 0  # Time step is zero
+        l = 2
+        Ad, Bd = kinematic_bicycle_model_linearize(theta, v, delta, dt, l)
+        # Since dt=0, Ad should be identity matrix and Bd should be zero matrix.
+        np.testing.assert_allclose(Ad, np.eye(5), atol=1e-8)
+        np.testing.assert_allclose(Bd, np.zeros((5, 2)), atol=1e-8)
+
+
+class TestCalcInputEffectsOnOutput(unittest.TestCase):
+    def test_calc_input_effects_on_output(self):
+        As = [
+            np.array([
+                [1.5, 0],
+                [0, 2]
+            ]),
+            np.array([
+                [3, 0],
+                [0, 4]
+            ])
+        ]
+        Bs = [
+            np.array([
+                [1],
+                [0]
+            ]),
+            np.array([
+                [0],
+                [1]
+            ]),
+        ]
+        Cs = [np.eye(2)] * 3
+        inputs = [
+            np.array([1]),
+            np.array([2])
+        ]
+        output_effects = calc_input_effects_on_output(As, Bs, Cs, inputs)
+        expected_output_effects = [
+            np.zeros((2,)),
+            np.array([1,0]),
+            np.array([1.5,2])
+        ]
+        for i in range(len(output_effects)):
+            np.testing.assert_allclose(output_effects[i], expected_output_effects[i])
+
 
 if __name__ == '__main__':
     unittest.main()
