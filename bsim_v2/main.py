@@ -14,6 +14,7 @@
 #! %load_ext autoreload
 #! %autoreload 2
 
+import cvxpy as cp
 import json
 import math
 import matplotlib.pyplot as plt
@@ -205,9 +206,13 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
     Y = np.array(output_hist_no_input_effects)
     Phi = get_output_evolution_tensor(Cs, get_state_evolution_tensor(As))
 
-    x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, eps=np.array([0.5]*2+[1e-3]*4))
+    x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, eps=np.array([0.5]*2+[1e-3]*4), solver_args={'solver': cp.CLARABEL})
     assert metadata is not None, 'Optimization failed'
     print("K: ", metadata['K'])
+    for soln in solns:
+        _, _, m = soln
+        print(m)
+    print("Total solve time:", sum(m['solve_time'] for _, _, m in solns))
 
     return x_hat,y_hat,theta_hat,v_hat,delta_hat
 

@@ -345,7 +345,7 @@ class PIDController:
 # Research Functions
 #################################################################
 
-def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None):
+def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
     r"""
     solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
     the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -396,7 +396,7 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
         prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
 
         start = time.time()
-        prob.solve()
+        prob.solve(**solver_args)
         end = time.time()
     
         return x0_hat, prob, {
