@@ -165,14 +165,14 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
     x0_hat = estimate_hist[0]
     closest_idx = closest_point_idx(path_points, x0_hat[0], x0_hat[1])
 
-    # TODO: add in safe guard to prevent solving when we are too far away from the desired state
-    # We can use the oldest estimate to determine whether we are too far.
+    # Safe guard to prevent solving when we are too far away from the desired state
+    # We are using the oldest estimate in the window to do this because it is the least
+    # likely to be corrupted
     x_err = path_points[closest_idx][0] - x0_hat[0]
     y_err = path_points[closest_idx][1] - x0_hat[1]
     theta_err = wrap_to_pi(path_headings[closest_idx] - x0_hat[2])
     v_err = velocities[closest_idx] - x0_hat[3]
     delta_err = -x0_hat[4] # we use linear inerpolation, so the desrd delta is always 0
-
     if abs(x_err) > 1.0 \
             or abs(y_err) > 1.0 \
             or abs(theta_err) > 0.1 \
