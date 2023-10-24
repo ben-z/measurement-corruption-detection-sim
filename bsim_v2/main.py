@@ -128,7 +128,7 @@ velocity_profile = np.clip(velocity_profile, min_linear_velocity, max_linear_vel
 # Plot the acceleration profile
 plt.figure()
 
-def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_headings, velocities, Cs, dt, l, N, enable_fault_tolerance=True):
+def estimate_state(output_hist, input_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l, N, enable_fault_tolerance=True):
     """
     Estimates the state of the vehicle.
     Parameters:
@@ -141,9 +141,11 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
     Returns:
         (x_hat, y_hat, theta_hat, v_hat, delta_hat): tuple[float,float,float,float,float] - the estimated state
     """
+    # This is the latest output
     output = output_hist[-1]
     assert len(output) == 6, 'This function only works with output (x,y,theta,v,delta1,delta2)'
 
+    # State estimator
     x_hat = output[0]
     y_hat = output[1]
     theta_hat = output[2]
@@ -153,6 +155,9 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
     if not enable_fault_tolerance:
         return x_hat,y_hat,theta_hat,v_hat,delta_hat
 
+    ###########################################################################
+    # Fault detection
+    ###########################################################################
     if len(output_hist) < N:
         print(f"Insufficient data to solve for corrupt sensors. Need {N} outputs, only have {len(output_hist)}")
         return x_hat,y_hat,theta_hat,v_hat,delta_hat
@@ -163,15 +168,15 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
 
     # Use the beginning of the time window and the path to generate the As
     x0_hat = estimate_hist[0]
-    closest_idx = closest_point_idx(path_points, x0_hat[0], x0_hat[1])
+    x0_hat_closest_idx = closest_idx_hist[0]
 
     # Safe guard to prevent solving when we are too far away from the desired state
     # We are using the oldest estimate in the window to do this because it is the least
     # likely to be corrupted
-    x_err = path_points[closest_idx][0] - x0_hat[0]
-    y_err = path_points[closest_idx][1] - x0_hat[1]
-    theta_err = wrap_to_pi(path_headings[closest_idx] - x0_hat[2])
-    v_err = velocities[closest_idx] - x0_hat[3]
+    x_err = path_points[x0_hat_closest_idx][0] - x0_hat[0]
+    y_err = path_points[x0_hat_closest_idx][1] - x0_hat[1]
+    theta_err = wrap_to_pi(path_headings[x0_hat_closest_idx] - x0_hat[2])
+    v_err = velocities[x0_hat_closest_idx] - x0_hat[3]
     delta_err = -x0_hat[4] # we use linear inerpolation, so the desrd delta is always 0
     if abs(x_err) > 1.0 \
             or abs(y_err) > 1.0 \
@@ -181,8 +186,8 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
         print(f"Too far from desired state. x_err: {x_err:.2f}, y_err: {y_err:.2f}, theta_err: {theta_err:.2f}, v_err: {v_err:.2f}, delta_err: {delta_err:.2f}. Not solving.")
         return x_hat,y_hat,theta_hat,v_hat,delta_hat
 
-    # Use walk_trajectory_by_durations to get the path indices at each time step
-    desired_path_indices = [closest_idx] + walk_trajectory_by_durations(path_points, velocities, closest_idx, [dt]*(N-1))
+    # Use walk_trajectory_by_durations to get the desired path indices at each time step
+    desired_path_indices = [x0_hat_closest_idx] + walk_trajectory_by_durations(path_points, velocities, x0_hat_closest_idx, [dt]*(N-1))
 
     # Generate the As and Bs for each time step
     models = [kinematic_bicycle_model_linearize(path_headings[idx], velocities[idx], 0, dt, l) for idx in desired_path_indices]
@@ -190,13 +195,13 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
     Bs = list(m[1] for m in models[:N-1])
     
     # List of desired outputs at the linearization points
-    desired_trajectory = [C @ np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0]) for idx in desired_path_indices]
+    desired_trajectory = [Cs[i] @ np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0]) for i, idx in enumerate(desired_path_indices)]
     
-    # subtract the input effects from the output
+    # Calculate the effects on outputs due to inputs, then subtract them from the outputs.
+    # Also subtract the desired outputs to get deviations.
     input_effects = calc_input_effects_on_output(As, Bs, Cs, input_hist)
     output_hist_no_input_effects = [output - input_effect - desired_output for output, input_effect, desired_output in zip(output_hist, input_effects, desired_trajectory)]
-
-    # Normalize angular measurements
+    # normalize angular measurements
     for o in output_hist_no_input_effects:
         o[2] = wrap_to_pi(o[2])
         o[4] = wrap_to_pi(o[4])
@@ -208,11 +213,11 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
 
     x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, eps=np.array([0.1]*2+[1e-2]+[1e-3]*3), solver_args={'solver': cp.CLARABEL})
     assert metadata is not None, 'Optimization failed'
-    print("K: ", metadata['K'])
     for soln in solns:
         x, p, m = soln
         print(p.status, f"v: {p.value:.4f}", m, "x:", x.value)
     print("Total solve time:", sum(m['solve_time'] for _, _, m in solns))
+    print("K: ", metadata['K'])
 
     return x_hat,y_hat,theta_hat,v_hat,delta_hat
 
@@ -250,7 +255,7 @@ for i in range(num_steps):
     output_hist.append(output)
 
     # fault-tolerant estimator
-    x_hat, y_hat, theta_hat, v_hat, delta_hat = estimate_state(output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=False)
+    x_hat, y_hat, theta_hat, v_hat, delta_hat = estimate_state(output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=False)
 
     estimate_hist.append([x_hat, y_hat, theta_hat, v_hat, delta_hat])
 
@@ -344,7 +349,7 @@ axes_control[1].set_ylabel(r'Steering rate ($rad/s$)')
 axes_control[1].legend()
 
 #%%
-res = estimate_state([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-(N-1):], estimate_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
+res = estimate_state([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
 
 # %%
 
