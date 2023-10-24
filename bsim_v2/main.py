@@ -128,6 +128,57 @@ velocity_profile = np.clip(velocity_profile, min_linear_velocity, max_linear_vel
 # Plot the acceleration profile
 plt.figure()
 
+def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l):
+    """
+    Returns the precomputed data needed to solve for corrupted sensors.
+    Parameters:
+        output_hist: list[float] - a list of N outputs
+        input_hist: list[float] - a list of N-1 inputs
+        closest_idx_hist: list[int] - a list of N-1 closest indices
+        path_points: list[tuple[float,float]] - a list of points on the path
+        velocities: list[float] - a list of velocities at each point on the path
+        dt: float - the time step
+        l: float - the distance between the front and rear axles
+    """
+    N = len(output_hist)
+    assert len(input_hist) == N-1, 'input_hist must be one shorter than output_hist'
+    assert len(closest_idx_hist) == N-1, 'closest_idx_hist must be one shorter than output_hist'
+    assert len(Cs) == N, 'Cs must be N long'
+
+    x0_hat_closest_idx = closest_idx_hist[0]
+
+    # Use walk_trajectory_by_durations to get the desired path indices at each time step
+    desired_path_indices = [x0_hat_closest_idx] + walk_trajectory_by_durations(path_points, velocities, x0_hat_closest_idx, [dt]*(N-1))
+
+    # Generate the As and Bs for each time step
+    models = [kinematic_bicycle_model_linearize(path_headings[idx], velocities[idx], 0, dt, l) for idx in desired_path_indices]
+    As = list(m[0] for m in models[:N-1])
+    Bs = list(m[1] for m in models[:N-1])
+    
+    # List of desired outputs at the linearization points
+    desired_trajectory = [Cs[i] @ np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0]) for i, idx in enumerate(desired_path_indices)]
+    
+    # Calculate the effects on outputs due to inputs, then subtract them from the outputs.
+    # Also subtract the desired outputs to get deviations.
+    input_effects = calc_input_effects_on_output(As, Bs, Cs, input_hist)
+    output_hist_no_input_effects = [output - input_effect - desired_output for output, input_effect, desired_output in zip(output_hist, input_effects, desired_trajectory)]
+    # normalize angular measurements
+    for o in output_hist_no_input_effects:
+        o[2] = wrap_to_pi(o[2])
+        o[4] = wrap_to_pi(o[4])
+        o[5] = wrap_to_pi(o[5])
+
+    # Solve for corrupted sensors
+    Y = np.array(output_hist_no_input_effects)
+    Phi = get_output_evolution_tensor(Cs, get_state_evolution_tensor(As))
+
+    return {
+        'Y': Y,
+        'Phi': Phi,
+        'output_hist_no_input_effects': output_hist_no_input_effects,
+    }
+
+
 def estimate_state(output_hist, input_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l, N, enable_fault_tolerance=True):
     """
     Estimates the state of the vehicle.
@@ -186,32 +237,9 @@ def estimate_state(output_hist, input_hist, estimate_hist, closest_idx_hist, pat
         print(f"Too far from desired state. x_err: {x_err:.2f}, y_err: {y_err:.2f}, theta_err: {theta_err:.2f}, v_err: {v_err:.2f}, delta_err: {delta_err:.2f}. Not solving.")
         return x_hat,y_hat,theta_hat,v_hat,delta_hat
 
-    # Use walk_trajectory_by_durations to get the desired path indices at each time step
-    desired_path_indices = [x0_hat_closest_idx] + walk_trajectory_by_durations(path_points, velocities, x0_hat_closest_idx, [dt]*(N-1))
+    setup = get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l)
 
-    # Generate the As and Bs for each time step
-    models = [kinematic_bicycle_model_linearize(path_headings[idx], velocities[idx], 0, dt, l) for idx in desired_path_indices]
-    As = list(m[0] for m in models[:N-1])
-    Bs = list(m[1] for m in models[:N-1])
-    
-    # List of desired outputs at the linearization points
-    desired_trajectory = [Cs[i] @ np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0]) for i, idx in enumerate(desired_path_indices)]
-    
-    # Calculate the effects on outputs due to inputs, then subtract them from the outputs.
-    # Also subtract the desired outputs to get deviations.
-    input_effects = calc_input_effects_on_output(As, Bs, Cs, input_hist)
-    output_hist_no_input_effects = [output - input_effect - desired_output for output, input_effect, desired_output in zip(output_hist, input_effects, desired_trajectory)]
-    # normalize angular measurements
-    for o in output_hist_no_input_effects:
-        o[2] = wrap_to_pi(o[2])
-        o[4] = wrap_to_pi(o[4])
-        o[5] = wrap_to_pi(o[5])
-
-    # Solve for corrupted sensors
-    Y = np.array(output_hist_no_input_effects)
-    Phi = get_output_evolution_tensor(Cs, get_state_evolution_tensor(As))
-
-    x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, eps=np.array([0.1]*2+[1e-2]+[1e-3]*3), solver_args={'solver': cp.CLARABEL})
+    x0_hat, prob, metadata, solns = optimize_l0(setup['Phi'], setup['Y'], eps=np.array([0.1]*2+[1e-2]+[1e-3]*3), solver_args={'solver': cp.CLARABEL})
     assert metadata is not None, 'Optimization failed'
     for soln in solns:
         x, p, m = soln
@@ -227,6 +255,14 @@ num_steps = int(simulation_seconds / model_params['dt'])
 x0 = np.array([200,0, pi/4, 1, 0])
 state = x0
 N = 10
+C = np.array([
+    [1, 0, 0, 0, 0],
+    [0, 1, 0, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 0, 0, 1, 0],
+    [0, 0, 0, 0, 1],
+    [0, 0, 0, 0, 1],
+])
 state_hist = []
 output_hist = []
 estimate_hist = []
@@ -237,15 +273,6 @@ delta_dot_controller = PIDController(5, 0, 0, model_params['dt'])
 prev_closest_idx = None
 for i in range(num_steps):
     state_hist.append(state)
-
-    C = np.array([
-        [1, 0, 0, 0, 0],
-        [0, 1, 0, 0, 0],
-        [0, 0, 1, 0, 0],
-        [0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 1],
-        [0, 0, 0, 0, 1],
-    ])
 
     # measurement
     output = C @ state
@@ -349,7 +376,27 @@ axes_control[1].set_ylabel(r'Steering rate ($rad/s$)')
 axes_control[1].legend()
 
 #%%
-res = estimate_state([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
+# Run the solver for the last N outputs
+
+# Note that the indexing here is slightly different from the one in the loop, because in the loop, we are getting data before we append elements to u_hist, estimate_hist, and closest_idx_hist
+# res = estimate_state([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
+
+# solver_setup = get_solver_setup([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'])
+# print(solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y'])
+
+# %%
+# Retroactively calculate from data the modelling error and the noise
+errors = []
+
+for i in range(N, len(output_hist)+1):
+    solver_setup = get_solver_setup(output_hist[i-N:i], u_hist[i-N:i-1], closest_idx_hist[i-N:i-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'])
+    errors.append(solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y'])
+
+print(errors[-1])
+
+# TODO: find the max noise on each output
+# Can make a tensor and use np.max.
+
 
 # %%
 
