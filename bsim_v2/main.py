@@ -210,8 +210,8 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
     assert metadata is not None, 'Optimization failed'
     print("K: ", metadata['K'])
     for soln in solns:
-        _, _, m = soln
-        print(m)
+        x, p, m = soln
+        print(p.status, f"v: {p.value:.4f}", m, "x:", x.value)
     print("Total solve time:", sum(m['solve_time'] for _, _, m in solns))
 
     return x_hat,y_hat,theta_hat,v_hat,delta_hat
