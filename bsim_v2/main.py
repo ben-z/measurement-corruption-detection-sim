@@ -301,7 +301,7 @@ EGO_ACTUATION_COLOR = 'tab:green'
 TARGET_COLOR = 'tab:blue'
 TITLE = "Simulation Data"
 FIGSIZE_MULTIPLIER = 1.5
-fig = plt.figure(figsize=[6.4 * FIGSIZE_MULTIPLIER, 4.8 * FIGSIZE_MULTIPLIER], constrained_layout=True)
+fig = plt.figure(figsize=(6.4 * FIGSIZE_MULTIPLIER, 4.8 * FIGSIZE_MULTIPLIER), constrained_layout=True)
 suptitle = fig.suptitle(TITLE)
 subfigs = fig.subfigures(2, 2)
 # BEV plot

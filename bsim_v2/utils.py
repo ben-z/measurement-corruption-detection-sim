@@ -494,7 +494,7 @@ def get_s_sparse_observability(Cs, As, early_exit=False):
     s = None
     cases = []
     # K is the missing sensors
-    for K in powerset(range(q)):
+    for K in map(list, powerset(range(q))):
         # S is the sensors that are not missing
         S = list(set(range(q)) - set(K))
         if len(S) == 0:
