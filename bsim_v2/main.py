@@ -93,7 +93,7 @@ def calculate_segment_lengths(points: List[Tuple[float, float]]) -> List[float]:
 
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 10, 5, 1000)
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_circle_approximation([-10, 0], 10, 1000)
-path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 2000, 1000, 5000)
+path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 2000, 1000, 100000)
 
 path_lengths = calculate_segment_lengths(path_points)
 
@@ -197,16 +197,16 @@ def estimate_state(output_hist, input_hist, estimate_hist, path_points, path_hea
     output_hist_no_input_effects = [output - input_effect - desired_output for output, input_effect, desired_output in zip(output_hist, input_effects, desired_trajectory)]
 
     # Normalize angular measurements
-    for output in output_hist_no_input_effects:
-        output[2] = wrap_to_pi(output[2])
-        output[4] = wrap_to_pi(output[4])
-        output[5] = wrap_to_pi(output[5])
+    for o in output_hist_no_input_effects:
+        o[2] = wrap_to_pi(o[2])
+        o[4] = wrap_to_pi(o[4])
+        o[5] = wrap_to_pi(o[5])
 
     # Solve for corrupted sensors
     Y = np.array(output_hist_no_input_effects)
     Phi = get_output_evolution_tensor(Cs, get_state_evolution_tensor(As))
 
-    x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, eps=np.array([0.5]*2+[1e-3]*4), solver_args={'solver': cp.CLARABEL})
+    x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, eps=np.array([0.1]*2+[1e-2]+[1e-3]*3), solver_args={'solver': cp.CLARABEL})
     assert metadata is not None, 'Optimization failed'
     print("K: ", metadata['K'])
     for soln in solns:
@@ -345,8 +345,6 @@ axes_control[1].legend()
 
 #%%
 res = estimate_state([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-(N-1):], estimate_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
-# TODO: handle wrapping of angular measurements in the optimization problem -- how come this is still an issue even though we've subtracted away
-# the linearization points?
 
 # %%
 
