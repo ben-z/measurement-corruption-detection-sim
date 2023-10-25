@@ -252,7 +252,7 @@ def estimate_state(output_hist, input_hist, estimate_hist, closest_idx_hist, pat
 # Control the bicycle to follow the path
 simulation_seconds = 30
 num_steps = int(simulation_seconds / model_params['dt'])
-x0 = np.array([200,0, pi/4, 1, 0])
+x0 = np.array([200,100, pi/4, 1, 0])
 state = x0
 N = 10
 C = np.array([
@@ -276,6 +276,9 @@ for i in range(num_steps):
 
     # measurement
     output = C @ state
+    # Add noise
+    output += np.random.normal(0, [0.5,0.5,0.02,0.5,0.01,0.01])
+
     # attack
     # if i * model_params['dt'] > 5:
     #     output[3] += 5
@@ -388,15 +391,35 @@ axes_control[1].legend()
 # Retroactively calculate from data the modelling error and the noise
 errors = []
 
-for i in range(N, len(output_hist)+1):
+# Arbitrarily ignore the first 500 data points because they are not at steady state
+for i in range(max(N, 500), len(output_hist)+1):
     solver_setup = get_solver_setup(output_hist[i-N:i], u_hist[i-N:i-1], closest_idx_hist[i-N:i-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'])
-    errors.append(solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y'])
+    error = solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y']
+    error[:,2] = wrap_to_pi(error[:,2])
+    error[:,4] = wrap_to_pi(error[:,4])
+    error[:,5] = wrap_to_pi(error[:,5])
+    errors.append(error)
 
-print(errors[-1])
+errors_tensor = np.array(errors)
 
-# TODO: find the max noise on each output
-# Can make a tensor and use np.max.
+max_errors_over_time = abs(errors_tensor).max(axis=1)
+x = np.arange(len(max_errors_over_time))
+for i in range(6):
+    plt.plot(x, max_errors_over_time[:,i], ".-", label=f"sensor {i}")
+plt.xlabel("time step")
+plt.ylabel("max error")
+plt.title("Max error per sensor over time")
+plt.legend()
+plt.show()
 
+print("Max error per sensor and per time step in an interval")
+print(abs(errors_tensor).max(axis=0))
+
+print("95th percentile error per sensor per time step in an interval")
+print(np.percentile(abs(errors_tensor), 95, axis=0))
+
+print("90th percentile error per sensor per time step in an interval")
+print(np.percentile(abs(errors_tensor), 90, axis=0))
 
 # %%
 
