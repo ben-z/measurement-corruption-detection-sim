@@ -32,9 +32,14 @@ def powerset(iterable: Iterable[T]) -> Iterable[Iterable[T]]:
 
 # Kinematic bicycle model
 def kinematic_bicycle_model(state, input, params):
-    # state = [x, y, theta, v, delta]
-    # input = [a, delta_dot]
-    # params = {dt, l}
+    # Implements the kinematic bicycle model
+    #
+    # Parameters:
+    #   state = [x, y, theta, v, delta]
+    #   input = [a, delta_dot]
+    #   params = {dt, l}
+    # Returns:
+    #   new_state = [x, y, theta, v, delta]
     dt = params['dt']
     l = params['l']
 
