@@ -312,7 +312,7 @@ def z_mean(sigmas, Wm):
     return z
 
 # Control the bicycle to follow the path
-simulation_seconds = 30
+simulation_seconds = 15
 num_steps = int(simulation_seconds / model_params['dt'])
 x0 = np.array([200,100, pi/4, 1, 0])
 state = x0
@@ -326,7 +326,7 @@ C = np.array([
     [0, 0, 0, 0, 1],
 ])
 # TODO: tune the sigma points
-ukf_sigma_points = MerweScaledSigmaPoints(n=C.shape[1], alpha=0.1, beta=2, kappa=0, subtract=subtract_states)
+ukf_sigma_points = MerweScaledSigmaPoints(n=C.shape[1], alpha=0.3, beta=2, kappa=3-C.shape[1], subtract=subtract_states)
 ukf = UnscentedKalmanFilter(
     dim_x=C.shape[1],
     dim_z=C.shape[0],
@@ -348,6 +348,7 @@ output_hist = []
 estimate_hist = []
 u_hist = []
 closest_idx_hist = []
+ukf_P_hist = []
 a_controller = PIDController(2, 0, 0, model_params['dt'])
 delta_dot_controller = PIDController(5, 0, 0, model_params['dt'])
 prev_closest_idx = None
@@ -357,18 +358,21 @@ for i in range(num_steps):
     # measurement
     output = C @ state
     # Add noise
-    output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.01,0.01])
+    # output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.0001,0.0001])
 
     # Add attack
-    # if i * model_params['dt'] > 10:
+    if i * model_params['dt'] > 10:
+        pass
         # output[2] += 1
         # output[3] += 5
+        # output[4] += 0.1
     output_hist.append(output)
 
     # fault-tolerant estimator
     x_hat, y_hat, theta_hat, v_hat, delta_hat = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=False)
 
     estimate_hist.append([x_hat, y_hat, theta_hat, v_hat, delta_hat])
+    ukf_P_hist.append(ukf.P.copy())
 
     if prev_closest_idx is None:
         closest_idx = closest_point_idx(path_points, x_hat, y_hat)
@@ -410,7 +414,10 @@ t_hist = [i * model_params['dt'] for i in range(num_steps)]
 # plt.legend()
 # plt.show()
 
+# %%
 # Plot simulation data
+from filterpy.stats import plot_covariance
+
 EGO_COLOR = 'tab:orange'
 EGO_ESTIMATE_COLOR = 'tab:red'
 EGO_ACTUATION_COLOR = 'tab:green'
@@ -420,38 +427,51 @@ FIGSIZE_MULTIPLIER = 1.5
 fig = plt.figure(figsize=(6.4 * FIGSIZE_MULTIPLIER, 4.8 * FIGSIZE_MULTIPLIER), constrained_layout=True)
 suptitle = fig.suptitle(TITLE)
 subfigs = fig.subfigures(2, 2)
+COV_INTERVAL_S = 5 # number of seconds between covariance ellipses
+
 # BEV plot
 ax_bev = subfigs[0][0].add_subplot(111)
-ax_bev.plot([p[0] for p in path_points], [p[1] for p in path_points], '.', label='path')
-ego_position = ax_bev.plot([p[0] for p in state_hist], [p[1] for p in state_hist], '.', color=EGO_COLOR, label='ego')[0]
-ego_position_estimate = ax_bev.plot([p[0] for p in estimate_hist], [p[1] for p in estimate_hist], '.', color=EGO_ESTIMATE_COLOR, label='ego estimate')[0]
+ax_bev.plot([p[0] for p in path_points], [p[1] for p in path_points], '.', label='path', markersize=0.1, color=TARGET_COLOR)
+ego_position = ax_bev.plot([p[0] for p in state_hist], [p[1] for p in state_hist], '.', markersize=0.1, color=EGO_COLOR, label='ego')[0]
+ego_position_estimate = ax_bev.plot([p[0] for p in estimate_hist], [p[1] for p in estimate_hist], '.', markersize=0.1, color=EGO_ESTIMATE_COLOR, label='ego estimate')[0]
 # Velocity plot
 ax_velocity = subfigs[0][1].add_subplot(111)
 ax_velocity.plot(t_hist, [velocity_profile[idx] for idx in closest_idx_hist], label=r"$v_d$", color=TARGET_COLOR) # target velocity
 ax_velocity.plot(t_hist, [p[3] for p in state_hist], label=r"$v$", color=EGO_COLOR) # velocity
 ax_velocity.plot(t_hist, [p[3] for p in estimate_hist], label=r"$\hat{v}$", color=EGO_ESTIMATE_COLOR) # velocity estimate
-# Heading plot
-ax_heading = subfigs[1][0].add_subplot(111)
-ax_heading.plot(t_hist, [path_headings[idx] for idx in closest_idx_hist], label=r"$\theta_d$", color=TARGET_COLOR) # target heading
-ax_heading.plot(t_hist, [wrap_to_pi(p[2]) for p in state_hist], label=r"$\theta$", color=EGO_COLOR) # heading
-ax_heading.plot(t_hist, [wrap_to_pi(p[2]) for p in estimate_hist], label=r"$\hat{\theta}$", color=EGO_ESTIMATE_COLOR) # heading estimate
+# Heading&Steering plot
+ax_heading_steering = subfigs[1][0].subplots(2, 1, sharex=True)
+ax_heading = ax_heading_steering[0]
+ax_heading.plot(t_hist, np.unwrap([path_headings[idx] for idx in closest_idx_hist]), label=r"$\theta_d$", color=TARGET_COLOR) # target heading
+ax_heading.plot(t_hist, np.unwrap([p[2] for p in state_hist]), label=r"$\theta$", color=EGO_COLOR) # heading
+ax_heading.plot(t_hist, np.unwrap([p[2] for p in estimate_hist]), label=r"$\hat{\theta}$", color=EGO_ESTIMATE_COLOR) # heading estimate
+ax_steering = ax_heading_steering[1]
+ax_steering.plot(t_hist, [p[4] for p in state_hist], label=r"$\delta$", color=EGO_COLOR) # steering
+ax_steering.plot(t_hist, [p[4] for p in estimate_hist], label=r"$\hat{\delta}$", color=EGO_ESTIMATE_COLOR) # steering estimate
 # Control signals plot
 axes_control = subfigs[1][1].subplots(2, 1, sharex=True)
 axes_control[0].plot(t_hist, [u[0] for u in u_hist], label=r"$a$", color=EGO_ACTUATION_COLOR) # a
 axes_control[1].plot(t_hist, [u[1] for u in u_hist], label=r"$\dot{\delta}$", color=EGO_ACTUATION_COLOR) # delta_dot
 
+# # Plot covariance ellipses
+# plt.sca(ax_bev)
+# for est, ukf_P in zip(estimate_hist[::int(COV_INTERVAL_S/model_params['dt'])], ukf_P_hist[::int(COV_INTERVAL_S/model_params['dt'])]):
+#     plot_covariance(est[:2], std=100, cov=ukf_P[0:2, 0:2], facecolor='none', edgecolor=EGO_ESTIMATE_COLOR)
+
 # Finalize plots
 ax_bev.axis('equal')
 ax_bev.set_title('BEV')
-ax_bev.legend()
+ax_bev.legend(markerscale=50)
 ax_velocity.set_title("Velocity over time")
 ax_velocity.set_xlabel(r'Time ($s$)')
 ax_velocity.set_ylabel(r'Velocity ($m/s$)')
 ax_velocity.legend()
-ax_heading.set_title("Heading over time")
-ax_heading.set_xlabel(r'Time ($s$)')
+ax_heading.set_title("Heading and Steering over time")
 ax_heading.set_ylabel(r'Heading ($rad$)')
 ax_heading.legend()
+ax_steering.set_xlabel(r'Time ($s$)')
+ax_steering.set_ylabel(r'Steering ($rad$)')
+ax_steering.legend()
 axes_control[0].set_title("Control signals over time")
 axes_control[0].set_ylabel(r'Acceleration ($m/s^2$)')
 axes_control[0].legend()
