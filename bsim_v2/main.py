@@ -439,6 +439,8 @@ ax_velocity = subfigs[0][1].add_subplot(111)
 ax_velocity.plot(t_hist, [velocity_profile[idx] for idx in closest_idx_hist], label=r"$v_d$", color=TARGET_COLOR) # target velocity
 ax_velocity.plot(t_hist, [p[3] for p in state_hist], label=r"$v$", color=EGO_COLOR) # velocity
 ax_velocity.plot(t_hist, [p[3] for p in estimate_hist], label=r"$\hat{v}$", color=EGO_ESTIMATE_COLOR) # velocity estimate
+# plot velocity covariance using error bars
+ax_velocity.errorbar(t_hist[::int(COV_INTERVAL_S/model_params['dt'])], [p[3] for p in estimate_hist[::int(COV_INTERVAL_S/model_params['dt'])]], yerr=[np.sqrt(ukf_P[3,3]) for ukf_P in ukf_P_hist[::int(COV_INTERVAL_S/model_params['dt'])]], fmt='none', ecolor=EGO_ESTIMATE_COLOR, capsize=3)
 # Heading&Steering plot
 ax_heading_steering = subfigs[1][0].subplots(2, 1, sharex=True)
 ax_heading = ax_heading_steering[0]
