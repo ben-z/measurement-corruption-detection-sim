@@ -312,7 +312,7 @@ def z_mean(sigmas, Wm):
     return z
 
 # Control the bicycle to follow the path
-simulation_seconds = 15
+simulation_seconds = 30
 num_steps = int(simulation_seconds / model_params['dt'])
 x0 = np.array([200,100, pi/4, 1, 0])
 state = x0
@@ -341,8 +341,8 @@ ukf = UnscentedKalmanFilter(
 )
 ukf.x = x0
 ukf.P = np.diag([1,1,0.3,0.5,0.1]) # initial state covariance
-ukf.R = np.diag([0.2,0.2,0.02,0.5,0.01,0.01]) # measurement noise
-ukf.Q = np.diag([0.1,0.1,0.01,0.1,0.01]) # process noise
+ukf.R = np.diag([0.2,0.2,0.02,0.5,0.0001,0.0001]) # measurement noise
+ukf.Q = np.diag([0.1,0.1,0.01,0.1,0.001]) # process noise
 state_hist = []
 output_hist = []
 estimate_hist = []
@@ -358,7 +358,7 @@ for i in range(num_steps):
     # measurement
     output = C @ state
     # Add noise
-    # output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.0001,0.0001])
+    output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.0001,0.0001])
 
     # Add attack
     if i * model_params['dt'] > 10:
@@ -428,6 +428,7 @@ fig = plt.figure(figsize=(6.4 * FIGSIZE_MULTIPLIER, 4.8 * FIGSIZE_MULTIPLIER), c
 suptitle = fig.suptitle(TITLE)
 subfigs = fig.subfigures(2, 2)
 COV_INTERVAL_S = 5 # number of seconds between covariance ellipses
+uncertainty_std = 1 # number of standard deviations to plot for uncertainty
 
 # BEV plot
 ax_bev = subfigs[0][0].add_subplot(111)
@@ -439,17 +440,18 @@ ax_velocity = subfigs[0][1].add_subplot(111)
 ax_velocity.plot(t_hist, [velocity_profile[idx] for idx in closest_idx_hist], label=r"$v_d$", color=TARGET_COLOR) # target velocity
 ax_velocity.plot(t_hist, [p[3] for p in state_hist], label=r"$v$", color=EGO_COLOR) # velocity
 ax_velocity.plot(t_hist, [p[3] for p in estimate_hist], label=r"$\hat{v}$", color=EGO_ESTIMATE_COLOR) # velocity estimate
-# plot velocity covariance using error bars
-ax_velocity.errorbar(t_hist[::int(COV_INTERVAL_S/model_params['dt'])], [p[3] for p in estimate_hist[::int(COV_INTERVAL_S/model_params['dt'])]], yerr=[np.sqrt(ukf_P[3,3]) for ukf_P in ukf_P_hist[::int(COV_INTERVAL_S/model_params['dt'])]], fmt='none', ecolor=EGO_ESTIMATE_COLOR, capsize=3)
+ax_velocity.fill_between(t_hist, [p[3] - uncertainty_std*np.sqrt(ukf_P[3,3]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], [p[3] + uncertainty_std*np.sqrt(ukf_P[3,3]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], alpha=0.2, color=EGO_ESTIMATE_COLOR)
 # Heading&Steering plot
 ax_heading_steering = subfigs[1][0].subplots(2, 1, sharex=True)
 ax_heading = ax_heading_steering[0]
 ax_heading.plot(t_hist, np.unwrap([path_headings[idx] for idx in closest_idx_hist]), label=r"$\theta_d$", color=TARGET_COLOR) # target heading
 ax_heading.plot(t_hist, np.unwrap([p[2] for p in state_hist]), label=r"$\theta$", color=EGO_COLOR) # heading
 ax_heading.plot(t_hist, np.unwrap([p[2] for p in estimate_hist]), label=r"$\hat{\theta}$", color=EGO_ESTIMATE_COLOR) # heading estimate
+ax_heading.fill_between(t_hist, np.unwrap([p[2] - uncertainty_std*np.sqrt(ukf_P[2,2]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)]), np.unwrap([p[2] + uncertainty_std*np.sqrt(ukf_P[2,2]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)]), alpha=0.2, color=EGO_ESTIMATE_COLOR)
 ax_steering = ax_heading_steering[1]
 ax_steering.plot(t_hist, [p[4] for p in state_hist], label=r"$\delta$", color=EGO_COLOR) # steering
 ax_steering.plot(t_hist, [p[4] for p in estimate_hist], label=r"$\hat{\delta}$", color=EGO_ESTIMATE_COLOR) # steering estimate
+ax_steering.fill_between(t_hist, [p[4] - uncertainty_std*np.sqrt(ukf_P[4,4]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], [p[4] + uncertainty_std*np.sqrt(ukf_P[4,4]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], alpha=0.2, color=EGO_ESTIMATE_COLOR)
 # Control signals plot
 axes_control = subfigs[1][1].subplots(2, 1, sharex=True)
 axes_control[0].plot(t_hist, [u[0] for u in u_hist], label=r"$a$", color=EGO_ACTUATION_COLOR) # a
