@@ -94,6 +94,7 @@ def calculate_segment_lengths(points: List[Tuple[float, float]]) -> List[float]:
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 10, 5, 1000)
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_circle_approximation([-10, 0], 10, 1000)
 path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 2000, 1000, 100000)
+# path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 1000, 500, 100000)
 
 path_lengths = calculate_segment_lengths(path_points)
 
