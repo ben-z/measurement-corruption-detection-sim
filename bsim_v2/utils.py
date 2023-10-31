@@ -1,12 +1,17 @@
 import cvxpy as cp
 import numpy as np
+import os
 import time
-from itertools import chain, combinations
+from collections import namedtuple
+from itertools import chain, combinations, repeat
 from math import pi, sin, cos, atan2, sqrt
 from numpy.typing import NDArray
 from numpy.linalg import matrix_power
 from typing import TypeVar, Iterable, Tuple, Optional
 from scipy.linalg import expm
+from multiprocessing import Pool
+
+MAX_POOL_SIZE = 32
 
 #################################################################
 # General utility functions
@@ -350,6 +355,9 @@ class PIDController:
 # Research Functions
 #################################################################
 
+# Stripped down cvxpy.Problem that is serializable
+MyCvxpyProblem = namedtuple('MyCvxpyProblem', ['status', 'solver_stats', 'compilation_time', 'solve_time', 'value'])
+
 def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
     r"""
     solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
@@ -363,7 +371,7 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
             This is useful when you know that some sensors are not corrupted.
     Returns:
         x0_hat: numpy.ndarray - estimated state, size $n$
-        prob: cvxpy.Problem - the optimization problem
+        prob: MyCvxpyProblem- the optimization problem
         metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
         solns: list - list of solutions for each possible set of corrupted sensors that was tried
     """
@@ -384,14 +392,14 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
     # this is because the optimization algorithm needs to minimize the number of corrupt sensors
     S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
 
-    solns = [optimize_l0_case(S, N, q, n, cvx_Y, cvx_Phi, eps_final, solver_args) for S in S_list]
+    with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
+        solns = pool.starmap(optimize_l0_case, zip(S_list, repeat(N), repeat(q), repeat(n), repeat(cvx_Y), repeat(cvx_Phi), repeat(eps_final), repeat(solver_args)))
 
     for x0_hat, prob, metadata in solns:
         if prob.status in ["optimal", "optimal_inaccurate"]:
             return (x0_hat, prob, metadata, solns)
 
     return (None, None, None, solns)
-
 
 def optimize_l0_case(S: Iterable[int], N: int, q: int, n: int, cvx_Y: np.ndarray, cvx_Phi: np.ndarray, eps_final: np.ndarray, solver_args: dict = {}):
     r"""
@@ -407,7 +415,7 @@ def optimize_l0_case(S: Iterable[int], N: int, q: int, n: int, cvx_Y: np.ndarray
         solver_args: dict - arguments to pass to the solver
     Returns:
         x0_hat: numpy.ndarray - estimated state, size $n$
-        prob: cvxpy.Problem - the optimization problem
+        prob: MyCvxpyProblem - the optimization problem
         metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
     """
     # K is the sensors that can be corrupted (i.e. the sensors that are not in S)
@@ -430,7 +438,13 @@ def optimize_l0_case(S: Iterable[int], N: int, q: int, n: int, cvx_Y: np.ndarray
     prob.solve(**solver_args)
     end = time.perf_counter()
 
-    return x0_hat, prob, {
+    return x0_hat, MyCvxpyProblem(
+        status=prob.status,
+        solver_stats=prob.solver_stats,
+        compilation_time=prob.compilation_time,
+        solve_time=prob._solve_time,
+        value=prob.value,
+    ), {
         'K': K,
         'S': S,
         'solve_time': end-start,
@@ -538,3 +552,6 @@ def get_s_sparse_observability(Cs, As, early_exit=False):
                 break
 
     return s, cases
+
+def get_properties(obj):
+    return [attr for attr in dir(obj) if isinstance(getattr(obj.__class__, attr, None), property)]
