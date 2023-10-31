@@ -38,6 +38,7 @@ from utils import (
     get_output_evolution_tensor,
     get_state_evolution_tensor,
     optimize_l0,
+    format_floats,
 )
 import matplotlib.pyplot as plt
 
@@ -263,7 +264,7 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
     assert metadata is not None, 'Optimization failed'
     for soln in solns:
         x, p, m = soln
-        print(p.status, f"v: {p.value:.4f}", m, "x:", x.value)
+        print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x.value, 4))
     print(f"Total/real solve time (s): {sum(m['solve_time'] for _, _, m in solns):.2f}/{end-start:.2f}")
     print("K: ", metadata['K'])
 

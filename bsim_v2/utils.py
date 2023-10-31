@@ -555,3 +555,16 @@ def get_s_sparse_observability(Cs, As, early_exit=False):
 
 def get_properties(obj):
     return [attr for attr in dir(obj) if isinstance(getattr(obj.__class__, attr, None), property)]
+
+def format_floats(item, decimals=2):
+    if isinstance(item, float):
+        return f'{item:.{decimals}f}'
+    elif isinstance(item, dict):
+        return {key: format_floats(value, decimals) for key, value in item.items()}
+    elif isinstance(item, (list, tuple)):
+        return [format_floats(value, decimals) for value in item]
+    elif isinstance(item, np.ndarray):
+        vectorized_format = np.vectorize(lambda x: format_floats(x, decimals))
+        return vectorized_format(item)
+    else:
+        return item
