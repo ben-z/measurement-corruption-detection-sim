@@ -257,12 +257,14 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
     # eps = np.array([0.1]*2+[1e-2]+[1e-3]*3)
     eps = np.array([1.5]*2+[0.3]+[1.5]+[0.05]*2)
 
+    start = time.perf_counter()
     x0_hat, prob, metadata, solns = optimize_l0(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
+    end = time.perf_counter()
     assert metadata is not None, 'Optimization failed'
     for soln in solns:
         x, p, m = soln
         print(p.status, f"v: {p.value:.4f}", m, "x:", x.value)
-    print("Total solve time:", sum(m['solve_time'] for _, _, m in solns))
+    print(f"Total/real solve time (s): {sum(m['solve_time'] for _, _, m in solns):.2f}/{end-start:.2f}")
     print("K: ", metadata['K'])
 
     return x_hat,y_hat,theta_hat,v_hat,delta_hat

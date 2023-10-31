@@ -380,46 +380,61 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
     else:
         eps_final: NDArray[np.float64] = eps
 
-    def optimize_case(S):
-        """
-        Solves the l0 minimization problem for a given set of uncorrupted sensors $S$.
-        """
-        # K is the sensors that can be corrupted (i.e. the sensors that are not in S)
-        K = list(set(range(q)) - set(S))
-
-        x0_hat = cp.Variable(n)
-        optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N))
-        optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
-
-        # Set toleance constraints to account for noise
-        constraints = []
-        for j in S:
-            for k in range(N):
-                constraints.append(optimizer[j][k] <= eps_final[j])
-                constraints.append(optimizer[j][k] >= -eps_final[j])
-
-        prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
-
-        start = time.time()
-        prob.solve(**solver_args)
-        end = time.time()
-    
-        return x0_hat, prob, {
-            'K': K,
-            'S': S,
-            'solve_time': end-start,
-        }
-
     # sort the list of sensor combinations by size, largest to smallest
     # this is because the optimization algorithm needs to minimize the number of corrupt sensors
     S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
 
-    solns = [optimize_case(S) for S in S_list]
+    solns = [optimize_l0_case(S, N, q, n, cvx_Y, cvx_Phi, eps_final, solver_args) for S in S_list]
+
     for x0_hat, prob, metadata in solns:
         if prob.status in ["optimal", "optimal_inaccurate"]:
             return (x0_hat, prob, metadata, solns)
 
     return (None, None, None, solns)
+
+
+def optimize_l0_case(S: Iterable[int], N: int, q: int, n: int, cvx_Y: np.ndarray, cvx_Phi: np.ndarray, eps_final: np.ndarray, solver_args: dict = {}):
+    r"""
+    Solves the l0 minimization problem for a given set of uncorrupted sensors $S$.
+    Parameters:
+        S: Iterable[int] - the set of uncorrupted sensors
+        N: int - the number of time steps
+        q: int - the number of outputs
+        n: int - the number of states
+        cvx_Y: numpy.ndarray - the output measurements, size $(Nq,)$
+        cvx_Phi: numpy.ndarray - the evolution of the output over time, size $(Nq, n)$
+        eps_final: numpy.ndarray - noise tolerance for each output, size $(q,)$
+        solver_args: dict - arguments to pass to the solver
+    Returns:
+        x0_hat: numpy.ndarray - estimated state, size $n$
+        prob: cvxpy.Problem - the optimization problem
+        metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
+    """
+    # K is the sensors that can be corrupted (i.e. the sensors that are not in S)
+    K = list(set(range(q)) - set(S))
+
+    x0_hat = cp.Variable(n)
+    optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N))
+    optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
+
+    # Set toleance constraints to account for noise
+    constraints = []
+    for j in S:
+        for k in range(N):
+            constraints.append(optimizer[j][k] <= eps_final[j])
+            constraints.append(optimizer[j][k] >= -eps_final[j])
+
+    prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
+
+    start = time.perf_counter()
+    prob.solve(**solver_args)
+    end = time.perf_counter()
+
+    return x0_hat, prob, {
+        'K': K,
+        'S': S,
+        'solve_time': end-start,
+    }
 
 def get_state_evolution_tensor(As: list[np.ndarray]):
     """
