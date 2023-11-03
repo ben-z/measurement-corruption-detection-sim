@@ -4,6 +4,7 @@ import numpy as np
 import unittest
 from math import pi, sin, cos, atan2, sqrt, tan
 from scipy.linalg import expm
+from parameterized import parameterized
 from utils import (
     kinematic_bicycle_model,
     generate_circle_approximation,
@@ -17,12 +18,14 @@ from utils import (
     powerset,
     walk_trajectory_by_durations,
     optimize_l0_v2,
+    Optimizer,
     get_state_evolution_tensor,
     get_output_evolution_tensor,
     get_s_sparse_observability,
     kinematic_bicycle_model_linearize,
     calc_input_effects_on_output,
 )
+
 
 class TestKinematicBicycleModel(unittest.TestCase):
     def test_noop(self):
@@ -194,7 +197,20 @@ class TestWalkTrajectoryByDuration(unittest.TestCase):
         self.assertEqual(indices, [0,0,0,1,1,1,2])
 
 class TestOptimizeL0(unittest.TestCase):
-    def test_simple_integrator(self):
+    def get_optimizer_fn(self, version, N, C, solver):
+        if version == "v2":
+            return optimize_l0_v2
+        if version == "v4":
+            optimizer = Optimizer(N, C.shape[0], C.shape[1], solver)
+            return optimizer.optimize_l0_v4
+        
+        raise Exception(f"Unknown version {version}")
+
+    @parameterized.expand([
+        "v2",
+        "v4",
+    ])
+    def test_simple_integrator(self, version):
         """
         Sanity test to make sure the recovery without attacks works.
         """
@@ -218,7 +234,9 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0,
             C @ Ad @ Ad @ x0,
         ])
-        x0_hat, prob, metadata, solns = optimize_l0_v2(Phi, Y, solver_args={'solver': cp.CLARABEL})
+        solver = cp.CLARABEL
+        optimizer_fn = self.get_optimizer_fn(version, 3, C, solver)
+        x0_hat, prob, metadata, solns = optimizer_fn(Phi, Y, solver_args={'solver': solver})
 
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
@@ -226,7 +244,11 @@ class TestOptimizeL0(unittest.TestCase):
         self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
         self.assertSequenceEqual(metadata['K'], [])
 
-    def test_simple_attacks(self):
+    @parameterized.expand([
+        "v2",
+        "v4",
+    ])
+    def test_simple_attacks(self, version):
         # This system is maximally 0-sparse observable, and maximally 2-sparse observable with protection on sensor 0
         # > get_s_sparse_observability([C]*3,[A]*2)
         # ([0, 1, 2], True)
@@ -253,17 +275,23 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ Ad,
         ])
 
+        solver = cp.CLARABEL
+        optimizer_fn = self.get_optimizer_fn(version, 3, C, solver)
+
         Y = np.array([
             C @ x0 + np.array([0, 0, 1]),
             C @ Ad @ x0 + np.array([0, 0, 1]),
             C @ Ad @ Ad @ x0 + np.array([0, 0, 1]),
         ])
-        x0_hat, prob, metadata, solns = optimize_l0_v2(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL})
+        x0_hat, prob, metadata, solns = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
         self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
+        print(metadata)
+        print([json.dumps({'K': soln[2]['K'], 'S': soln[2]['S'], 'status': soln[1].status}) for soln in solns])
         self.assertSequenceEqual(metadata['K'], [2])
+        print([json.dumps({'K': soln[2]['K'], 'S': soln[2]['S'], 'status': soln[1].status}) for soln in solns])
         self.assertSetEqual(set([
             json.dumps({'K': [], 'S': [0,1,2], 'status': 'infeasible'}),
             json.dumps({'K': [2], 'S': [0,1], 'status': 'optimal'}),
@@ -276,7 +304,7 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0 + np.array([0, 1, 0]),
             C @ Ad @ Ad @ x0 + np.array([0, 1, 0]),
         ])
-        x0_hat, prob, metadata, solns = optimize_l0_v2(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL})
+        x0_hat, prob, metadata, solns = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)

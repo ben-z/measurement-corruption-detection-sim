@@ -355,7 +355,7 @@ class PIDController:
 # Research Functions
 #################################################################
 
-def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
+def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, **_kwargs):
     r"""
     solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
     the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -460,7 +460,7 @@ class Optimizer:
         # Warm up problem data cache. This should make compilation much faster see (prob.compilation_time)
         self.prob.get_problem_data(self.solver)
     
-    def optimize_l0_v4(self, Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
+    def optimize_l0_v4(self, Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, early_exit: bool = True):
         r"""
         solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
         the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -506,14 +506,17 @@ class Optimizer:
         # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
         #   soln_generator = pool.starmap(optimize_l0_case, zip(*map_args))
 
+        ret = None
         solns = []
         for soln in soln_generator:
             x0_hat, prob, metadata = soln
             solns.append(soln)
-            if prob.status in ["optimal", "optimal_inaccurate"]:
-                return (x0_hat, prob, metadata, solns)
+            if ret is None and prob.status in ["optimal", "optimal_inaccurate"]:
+                ret = (x0_hat, prob, metadata)
+                if early_exit:
+                    break
 
-        return (None, None, None, solns)
+        return (*(ret or (None, None, None)), solns)
 
 def optimize_l0_case(S: Iterable[int], q: int, prob: cp.Problem, x0_hat: cp.Variable, can_corrupt: cp.Parameter, solver_args: dict = {}):
     r"""
