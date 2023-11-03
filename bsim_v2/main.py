@@ -37,7 +37,8 @@ from utils import (
     calc_input_effects_on_output,
     get_output_evolution_tensor,
     get_state_evolution_tensor,
-    optimize_l0,
+    optimize_l0_v2,
+    Optimizer,
     format_floats,
 )
 import matplotlib.pyplot as plt
@@ -259,7 +260,8 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
     # eps = np.array([1.5]*2+[0.3]+[1.5]+[0.05]*2)
 
     start = time.perf_counter()
-    x0_hat, prob, metadata, solns = optimize_l0(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
+    x0_hat, prob, metadata, solns = optimizer.optimize_l0_v4(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
+    # x0_hat, prob, metadata, solns = optimize_l0_v2(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
     end = time.perf_counter()
     assert metadata is not None, 'Optimization failed'
     for soln in solns:
@@ -348,6 +350,7 @@ ukf.x = x0
 ukf.P = np.diag([1,1,0.3,0.5,0.1]) # initial state covariance
 ukf.R = np.diag([0.2,0.2,0.02,0.5,0.0001,0.0001]) # measurement noise
 ukf.Q = np.diag([0.1,0.1,0.01,0.1,0.001]) # process noise
+optimizer = Optimizer(N,C.shape[0],C.shape[1])
 state_hist = []
 output_hist = []
 estimate_hist = []
@@ -368,7 +371,7 @@ for i in range(num_steps):
     # Add attack
     if i * model_params['dt'] > 8:
         pass
-        # output[2] += 1
+        output[2] += 1
         # output[3] += 10
         # output[4] += 0.1
         # output[5] += 0.1

@@ -16,7 +16,7 @@ from utils import (
     clamp,
     powerset,
     walk_trajectory_by_durations,
-    optimize_l0,
+    optimize_l0_v2,
     get_state_evolution_tensor,
     get_output_evolution_tensor,
     get_s_sparse_observability,
@@ -218,7 +218,7 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0,
             C @ Ad @ Ad @ x0,
         ])
-        x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, solver_args={'solver': cp.CLARABEL})
+        x0_hat, prob, metadata, solns = optimize_l0_v2(Phi, Y, solver_args={'solver': cp.CLARABEL})
 
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
@@ -258,7 +258,7 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0 + np.array([0, 0, 1]),
             C @ Ad @ Ad @ x0 + np.array([0, 0, 1]),
         ])
-        x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL})
+        x0_hat, prob, metadata, solns = optimize_l0_v2(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL})
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
@@ -276,7 +276,7 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0 + np.array([0, 1, 0]),
             C @ Ad @ Ad @ x0 + np.array([0, 1, 0]),
         ])
-        x0_hat, prob, metadata, solns = optimize_l0(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL})
+        x0_hat, prob, metadata, solns = optimize_l0_v2(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL})
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)

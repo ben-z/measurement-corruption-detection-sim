@@ -355,7 +355,7 @@ class PIDController:
 # Research Functions
 #################################################################
 
-def optimize_l0_old(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
+def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
     r"""
     solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
     the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -432,92 +432,88 @@ def optimize_l0_old(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | f
 
     return (None, None, None, solns)
 
-
 # Stripped down cvxpy.Problem that is serializable
 MyCvxpyProblem = namedtuple('MyCvxpyProblem', ['status', 'solver_stats', 'compilation_time', 'solve_time', 'value'])
 
-STATIC_N = 10
-STATIC_q = 6
-STATIC_n = 5
-STATIC_eps_final = np.array([0.1]*2+[1e-2]+[1e-3]*3)
+class Optimizer:
+    def __init__(self, N: int, q: int, n: int, solver: str = cp.CLARABEL):
+        self.N = N
+        self.q = q
+        self.n = n
+        self.eps_param = cp.Parameter((q,))
+        self.cvx_Y_param = cp.Parameter((self.N*self.q,))
+        self.cvx_Phi_param = cp.Parameter((self.N*self.q, self.n))
+        self.solver = solver
 
-cvx_Y_param = cp.Parameter((STATIC_N*STATIC_q,))
-cvx_Phi_param = cp.Parameter((STATIC_N*STATIC_q, STATIC_n))
+        self.x0_hat = cp.Variable(self.n)
+        optimizer = cp.reshape(self.cvx_Y_param - self.cvx_Phi_param @ self.x0_hat, (self.q, self.N))
+        optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
 
-x0_hat = cp.Variable(STATIC_n)
-optimizer = cp.reshape(cvx_Y_param - cvx_Phi_param @ x0_hat, (STATIC_q, STATIC_N))
-optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
+        self.can_corrupt = cp.Parameter(self.q, boolean=True)
+        self.can_corrupt.value = np.ones(self.q)
+        slack = cp.Variable(self.q)
+        constraints = []
+        for j in range(self.q):
+            for k in range(self.N):
+                constraints.append(cp.abs(optimizer[j][k]) <= self.eps_param[j] + cp.multiply(self.can_corrupt[j], slack[j]))
+        self.prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
+        # Warm up problem data cache. This should make compilation much faster see (prob.compilation_time)
+        self.prob.get_problem_data(self.solver)
+    
+    def optimize_l0_v4(self, Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
+        r"""
+        solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
+        the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
+        Parameters:
+            Phi: numpy.ndarray - tensor of size (N, q, n) that describes the evolution of the output over time.
+                $N$ is the number of time steps, $q$ is the number of outputs, and $n$ is the number of states
+            Y: numpy.ndarray - measured outputs, with input effects subtracted, size $(N, q)$
+            eps: numpy.ndarray - noise tolerance for each output, size $(1,)$ or $(q,)$
+            S_list: Optional[Iterable[Iterable[int]]] - list of sensor combinations to try. If None, then all possible sensor combinations are tried.
+                This is useful when you know that some sensors are not corrupted.
+            solver_args: dict - arguments to pass to the cp.Problem().solve function
+        Returns:
+            x0_hat: numpy.ndarray - estimated state, size $n$
+            prob: MyCvxpyProblem- the optimization problem
+            metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
+            solns: list - list of solutions for each possible set of corrupted sensors that was tried
+        """
+        start = time.perf_counter()
 
-can_corrupt = cp.Parameter(STATIC_q, boolean=True)
-can_corrupt.value = np.ones(STATIC_q)
-slack = cp.Variable(STATIC_q)
-constraints = []
-for j in range(STATIC_q):
-    for k in range(STATIC_N):
-        constraints.append(cp.abs(optimizer[j][k]) <= STATIC_eps_final[j] + cp.multiply(can_corrupt[j], slack[j]))
-prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
-# Warm up problem data cache. This should make compilation much faster see (prob.compilation_time)
-# TODO: figure out if this is sufficient, because the first compile still seems slower than the rest.
-prob.get_problem_data(cp.CLARABEL)
+        N, q, n = Phi.shape
+        assert Y.shape == (N, q)
+        assert N == self.N, f"N must be equal to {self.N=}"
+        assert q == self.q, f"q must be equal to {self.q=}"
+        assert n == self.n, f"n must be equal to {self.n=}"
 
-def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
-    r"""
-    solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
-    the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
-    Parameters:
-        Phi: numpy.ndarray - tensor of size (N, q, n) that describes the evolution of the output over time.
-            $N$ is the number of time steps, $q$ is the number of outputs, and $n$ is the number of states
-        Y: numpy.ndarray - measured outputs, with input effects subtracted, size $(N, q)$
-        eps: numpy.ndarray - noise tolerance for each output, size $(1,)$ or $(q,)$
-        S_list: Optional[Iterable[Iterable[int]]] - list of sensor combinations to try. If None, then all possible sensor combinations are tried.
-            This is useful when you know that some sensors are not corrupted.
-    Returns:
-        x0_hat: numpy.ndarray - estimated state, size $n$
-        prob: MyCvxpyProblem- the optimization problem
-        metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
-        solns: list - list of solutions for each possible set of corrupted sensors that was tried
-    """
-    global prob, x0_hat
-    start = time.perf_counter()
+        cvx_Y = Y.reshape((N*q,)) # groups of sensor measurements stacked vertically
+        cvx_Phi = Phi.reshape((N*q, n)) # groups of transition+output matrices stacked vertically
 
-    N, q, n = Phi.shape
-    assert Y.shape == (N, q)
-    assert N == STATIC_N, f"N must be equal to {STATIC_N=}"
-    assert q == STATIC_q, f"q must be equal to {STATIC_q=}"
-    assert n == STATIC_n, f"n must be equal to {STATIC_n=}"
+        # sort the list of sensor combinations by size, largest to smallest
+        # this is because the optimization algorithm needs to minimize the number of corrupt sensors
+        S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
 
-    cvx_Y = Y.reshape((N*q,)) # groups of sensor measurements stacked vertically
-    cvx_Phi = Phi.reshape((N*q, n)) # groups of transition+output matrices stacked vertically
+        # Support scalar or vector eps
+        self.eps_param.value = np.broadcast_to(eps, (q,))
+        self.cvx_Y_param.value = cvx_Y
+        self.cvx_Phi_param.value = cvx_Phi
 
-    # Support scalar or vector eps
-    if np.isscalar(eps):
-        eps_final: NDArray[np.float64] = np.ones(q) * eps
-    else:
-        eps_final: NDArray[np.float64] = eps
+        end = time.perf_counter()
+        print(f"Setup time: {end-start:.4f}s")
 
-    # sort the list of sensor combinations by size, largest to smallest
-    # this is because the optimization algorithm needs to minimize the number of corrupt sensors
-    S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
+        map_args = [S_list, repeat(q), repeat(self.prob), repeat(self.x0_hat), repeat(self.can_corrupt), repeat({'solver': self.solver, **solver_args})]
+        soln_generator = map(optimize_l0_case, *map_args)
+        # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
+        #   soln_generator = pool.starmap(optimize_l0_case, zip(*map_args))
 
-    cvx_Y_param.value = cvx_Y
-    cvx_Phi_param.value = cvx_Phi
+        solns = []
+        for soln in soln_generator:
+            x0_hat, prob, metadata = soln
+            solns.append(soln)
+            if prob.status in ["optimal", "optimal_inaccurate"]:
+                return (x0_hat, prob, metadata, solns)
 
-    end = time.perf_counter()
-    print(f"Setup time: {end-start:.4f}s")
-
-    map_args = [S_list, repeat(q), repeat(prob), repeat(x0_hat), repeat(can_corrupt), repeat(solver_args)]
-    soln_generator = map(optimize_l0_case, *map_args)
-    # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
-    #   soln_generator = pool.starmap(optimize_l0_case, zip(*map_args))
-
-    solns = []
-    for soln in soln_generator:
-        x0_hat, prob, metadata = soln
-        solns.append(soln)
-        if prob.status in ["optimal", "optimal_inaccurate"]:
-            return (x0_hat, prob, metadata, solns)
-
-    return (None, None, None, solns)
+        return (None, None, None, solns)
 
 def optimize_l0_case(S: Iterable[int], q: int, prob: cp.Problem, x0_hat: cp.Variable, can_corrupt: cp.Parameter, solver_args: dict = {}):
     r"""
@@ -540,8 +536,6 @@ def optimize_l0_case(S: Iterable[int], q: int, prob: cp.Problem, x0_hat: cp.Vari
     can_corrupt.value = np.ones(q)
     for j in S:
         can_corrupt.value[j] = False
-
-    # prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
 
     start = time.perf_counter()
     prob.solve(**solver_args)
