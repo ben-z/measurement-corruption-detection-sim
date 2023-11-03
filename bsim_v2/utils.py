@@ -436,6 +436,30 @@ def optimize_l0_old(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | f
 # Stripped down cvxpy.Problem that is serializable
 MyCvxpyProblem = namedtuple('MyCvxpyProblem', ['status', 'solver_stats', 'compilation_time', 'solve_time', 'value'])
 
+STATIC_N = 10
+STATIC_q = 6
+STATIC_n = 5
+STATIC_eps_final = np.array([0.1]*2+[1e-2]+[1e-3]*3)
+
+cvx_Y_param = cp.Parameter((STATIC_N*STATIC_q,))
+cvx_Phi_param = cp.Parameter((STATIC_N*STATIC_q, STATIC_n))
+
+x0_hat = cp.Variable(STATIC_n)
+optimizer = cp.reshape(cvx_Y_param - cvx_Phi_param @ x0_hat, (STATIC_q, STATIC_N))
+optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
+
+can_corrupt = cp.Parameter(STATIC_q, boolean=True)
+can_corrupt.value = np.ones(STATIC_q)
+slack = cp.Variable(STATIC_q)
+constraints = []
+for j in range(STATIC_q):
+    for k in range(STATIC_N):
+        constraints.append(cp.abs(optimizer[j][k]) <= STATIC_eps_final[j] + cp.multiply(can_corrupt[j], slack[j]))
+prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
+# Warm up problem data cache. This should make compilation much faster see (prob.compilation_time)
+# TODO: figure out if this is sufficient, because the first compile still seems slower than the rest.
+prob.get_problem_data(cp.CLARABEL)
+
 def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}):
     r"""
     solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
@@ -453,10 +477,14 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
         metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
         solns: list - list of solutions for each possible set of corrupted sensors that was tried
     """
+    global prob, x0_hat
     start = time.perf_counter()
 
     N, q, n = Phi.shape
     assert Y.shape == (N, q)
+    assert N == STATIC_N, f"N must be equal to {STATIC_N=}"
+    assert q == STATIC_q, f"q must be equal to {STATIC_q=}"
+    assert n == STATIC_n, f"n must be equal to {STATIC_n=}"
 
     cvx_Y = Y.reshape((N*q,)) # groups of sensor measurements stacked vertically
     cvx_Phi = Phi.reshape((N*q, n)) # groups of transition+output matrices stacked vertically
@@ -471,31 +499,21 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
     # this is because the optimization algorithm needs to minimize the number of corrupt sensors
     S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
 
-    x0_hat = cp.Variable(n)
-    optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N))
-    optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
-
-    can_corrupt = cp.Parameter(q, boolean=True)
-    can_corrupt.value = np.ones(q)
-    slack = cp.Variable(q)
-    constraints = []
-    for j in range(q):
-        for k in range(N):
-            constraints.append(cp.abs(optimizer[j][k]) <= eps_final[j] + cp.multiply(can_corrupt[j], slack[j]))
-
-    prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
-    # Warm up problem data cache. This should make compilation much faster see (prob.compilation_time)
-    prob.get_problem_data(solver_args.get('solver', cp.CLARABEL))
+    cvx_Y_param.value = cvx_Y
+    cvx_Phi_param.value = cvx_Phi
 
     end = time.perf_counter()
     print(f"Setup time: {end-start:.4f}s")
 
     map_args = [S_list, repeat(q), repeat(prob), repeat(x0_hat), repeat(can_corrupt), repeat(solver_args)]
-    solns = list(map(optimize_l0_case, *map_args))
+    soln_generator = map(optimize_l0_case, *map_args)
     # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
-    #   solns = pool.starmap(optimize_l0_case, zip(*map_args))
+    #   soln_generator = pool.starmap(optimize_l0_case, zip(*map_args))
 
-    for x0_hat, prob, metadata in solns:
+    solns = []
+    for soln in soln_generator:
+        x0_hat, prob, metadata = soln
+        solns.append(soln)
         if prob.status in ["optimal", "optimal_inaccurate"]:
             return (x0_hat, prob, metadata, solns)
 

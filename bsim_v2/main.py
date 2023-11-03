@@ -265,7 +265,7 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
     for soln in solns:
         x, p, m = soln
         print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x, 4))
-    print(f"Total/real solve time (s): {sum(m['solve_time'] for _, _, m in solns):.2f}/{end-start:.2f}")
+    print(f"Total/real solve time (s): {sum(m['solve_time'] for _, _, m in solns):.4f}/{end-start:.4f}")
     print("K: ", metadata['K'])
     print(x0_hat)
 
@@ -370,7 +370,8 @@ for i in range(num_steps):
         pass
         # output[2] += 1
         # output[3] += 10
-        output[5] += 0.1
+        # output[4] += 0.1
+        # output[5] += 0.1
     output_hist.append(output)
 
     # fault-tolerant estimator
