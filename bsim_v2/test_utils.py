@@ -223,7 +223,7 @@ class TestOptimizeL0(unittest.TestCase):
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
-        self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
+        self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
         self.assertSequenceEqual(metadata['K'], [])
 
     def test_simple_attacks(self):
@@ -262,7 +262,7 @@ class TestOptimizeL0(unittest.TestCase):
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
-        self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
+        self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
         self.assertSequenceEqual(metadata['K'], [2])
         self.assertSetEqual(set([
             json.dumps({'K': [], 'S': [0,1,2], 'status': 'infeasible'}),
@@ -280,7 +280,7 @@ class TestOptimizeL0(unittest.TestCase):
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
-        self.assertTrue(np.allclose(x0_hat.value, x0), f"{x0_hat.value=} != {x0=}")
+        self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
         self.assertSequenceEqual(metadata['K'], [1])
         self.assertSetEqual(set([
             json.dumps({'K': [], 'S': [0,1,2], 'status': 'infeasible'}),

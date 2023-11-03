@@ -453,6 +453,7 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
         metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
         solns: list - list of solutions for each possible set of corrupted sensors that was tried
     """
+    start = time.perf_counter()
 
     N, q, n = Phi.shape
     assert Y.shape == (N, q)
@@ -476,24 +477,23 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
 
     can_corrupt = cp.Parameter(q, boolean=True)
     can_corrupt.value = np.ones(q)
-    # slack = cp.Variable((q, N))
     slack = cp.Variable(q)
     constraints = []
     for j in range(q):
         for k in range(N):
             constraints.append(cp.abs(optimizer[j][k]) <= eps_final[j] + cp.multiply(can_corrupt[j], slack[j]))
-            # constraints.append(cp.abs(optimizer[j][k]) <= eps_final[j] + cp.multiply(can_corrupt[j], slack[j][k]))
-            # constraints.append(can_corrupt[j] * optimizer[j][k] <= eps_final[j])
-            # constraints.append(can_corrupt[j] * optimizer[j][k] >= -eps_final[j])
 
     prob = cp.Problem(cp.Minimize(optimizer_final), constraints)
     # Warm up problem data cache. This should make compilation much faster see (prob.compilation_time)
     prob.get_problem_data(solver_args.get('solver', cp.CLARABEL))
 
-    map_args = [S_list, repeat(N), repeat(q), repeat(n), repeat(cvx_Y), repeat(cvx_Phi), repeat(eps_final), repeat(solver_args), repeat(prob), repeat(x0_hat), repeat(optimizer), repeat(optimizer_final), repeat(can_corrupt)]
+    end = time.perf_counter()
+    print(f"Setup time: {end-start:.4f}s")
+
+    map_args = [S_list, repeat(q), repeat(prob), repeat(x0_hat), repeat(can_corrupt), repeat(solver_args)]
     solns = list(map(optimize_l0_case, *map_args))
     # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
-    #   solns = pool.starmap(optimize_l0_case, zip(*map_args)) #
+    #   solns = pool.starmap(optimize_l0_case, zip(*map_args))
 
     for x0_hat, prob, metadata in solns:
         if prob.status in ["optimal", "optimal_inaccurate"]:
@@ -501,17 +501,15 @@ def optimize_l0(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float
 
     return (None, None, None, solns)
 
-def optimize_l0_case(S: Iterable[int], N: int, q: int, n: int, cvx_Y: np.ndarray, cvx_Phi: np.ndarray, eps_final: np.ndarray, solver_args: dict = {}, prob = None, x0_hat=None, optimizer=None, optimizer_final=None, can_corrupt=None):
+def optimize_l0_case(S: Iterable[int], q: int, prob: cp.Problem, x0_hat: cp.Variable, can_corrupt: cp.Parameter, solver_args: dict = {}):
     r"""
     Solves the l0 minimization problem for a given set of uncorrupted sensors $S$.
     Parameters:
         S: Iterable[int] - the set of uncorrupted sensors
-        N: int - the number of time steps
         q: int - the number of outputs
-        n: int - the number of states
-        cvx_Y: numpy.ndarray - the output measurements, size $(Nq,)$
-        cvx_Phi: numpy.ndarray - the evolution of the output over time, size $(Nq, n)$
-        eps_final: numpy.ndarray - noise tolerance for each output, size $(q,)$
+        prob: cp.Problem - the optimization problem
+        x0_hat: cp.Variable - the variable to optimize
+        can_corrupt: cp.Parameter - a parameter that indicates which sensors can be corrupted
         solver_args: dict - arguments to pass to the solver
     Returns:
         x0_hat: numpy.ndarray - estimated state, size $n$
@@ -520,26 +518,6 @@ def optimize_l0_case(S: Iterable[int], N: int, q: int, n: int, cvx_Y: np.ndarray
     """
     # K is the sensors that can be corrupted (i.e. the sensors that are not in S)
     K = list(set(range(q)) - set(S))
-
-    # x0_hat = cp.Variable(n)
-    # optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N))
-    # optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
-
-    # # Set toleance constraints to account for noise
-    # constraints = []
-    # for j in S:
-    #     for k in range(N):
-    #         constraints.append(optimizer[j][k] <= eps_final[j])
-    #         constraints.append(optimizer[j][k] >= -eps_final[j])
-
-    # can_corrupt = cp.Parameter(q)
-    # slack = cp.Variable((q, N))
-    # can_corrupt.value = np.ones(q)
-    # constraints = []
-    # for j in range(q):
-    #     for k in range(N):
-    #         constraints.append(cp.abs(optimizer[j][k]) <= eps_final[j] + cp.multiply(can_corrupt[j], slack[j][k]))
-    #         # constraints.append(cp.multiply(can_corrupt[j], optimizer[j][k]) >= -eps_final[j])
 
     can_corrupt.value = np.ones(q)
     for j in S:
