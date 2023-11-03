@@ -9,3 +9,4 @@ ipykernel>=6.25.2
 flake8>=6.1.0
 pytest>=7.4.2
 pandas>=2.1.2
+snakeviz>=2.2.0

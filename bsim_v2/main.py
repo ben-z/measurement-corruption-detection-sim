@@ -255,8 +255,8 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
 
     setup = get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l)
 
-    # eps = np.array([0.1]*2+[1e-2]+[1e-3]*3)
-    eps = np.array([1.5]*2+[0.3]+[1.5]+[0.05]*2)
+    eps = np.array([0.1]*2+[1e-2]+[1e-3]*3)
+    # eps = np.array([1.5]*2+[0.3]+[1.5]+[0.05]*2)
 
     start = time.perf_counter()
     x0_hat, prob, metadata, solns = optimize_l0(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
@@ -264,9 +264,10 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
     assert metadata is not None, 'Optimization failed'
     for soln in solns:
         x, p, m = soln
-        print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x.value, 4))
+        print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x, 4))
     print(f"Total/real solve time (s): {sum(m['solve_time'] for _, _, m in solns):.2f}/{end-start:.2f}")
     print("K: ", metadata['K'])
+    print(x0_hat)
 
     return x_hat,y_hat,theta_hat,v_hat,delta_hat
 
@@ -316,7 +317,7 @@ def z_mean(sigmas, Wm):
     return z
 
 # Control the bicycle to follow the path
-simulation_seconds = 30
+simulation_seconds = 8.1
 num_steps = int(simulation_seconds / model_params['dt'])
 x0 = np.array([200,100, pi/4, 1, 0])
 state = x0
@@ -362,14 +363,14 @@ for i in range(num_steps):
     # measurement
     output = C @ state
     # Add noise
-    output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.0001,0.0001])
+    # output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.0001,0.0001])
 
     # Add attack
-    if i * model_params['dt'] > 10:
+    if i * model_params['dt'] > 8:
         pass
         # output[2] += 1
-        # output[3] += 5
-        # output[4] += 0.1
+        # output[3] += 10
+        output[5] += 0.1
     output_hist.append(output)
 
     # fault-tolerant estimator
@@ -420,72 +421,76 @@ t_hist = [i * model_params['dt'] for i in range(num_steps)]
 
 # %%
 # Plot simulation data
-from filterpy.stats import plot_covariance
+def plot_quad():
+    from filterpy.stats import plot_covariance
 
-EGO_COLOR = 'tab:orange'
-EGO_ESTIMATE_COLOR = 'tab:red'
-EGO_ACTUATION_COLOR = 'tab:green'
-TARGET_COLOR = 'tab:blue'
-TITLE = "Simulation Data"
-FIGSIZE_MULTIPLIER = 1.5
-fig = plt.figure(figsize=(6.4 * FIGSIZE_MULTIPLIER, 4.8 * FIGSIZE_MULTIPLIER), constrained_layout=True)
-suptitle = fig.suptitle(TITLE)
-subfigs = fig.subfigures(2, 2)
-COV_INTERVAL_S = 5 # number of seconds between covariance ellipses
-uncertainty_std = 1 # number of standard deviations to plot for uncertainty
+    EGO_COLOR = 'tab:orange'
+    EGO_ESTIMATE_COLOR = 'tab:red'
+    EGO_ACTUATION_COLOR = 'tab:green'
+    TARGET_COLOR = 'tab:blue'
+    TITLE = "Simulation Data"
+    FIGSIZE_MULTIPLIER = 1.5
+    fig = plt.figure(figsize=(6.4 * FIGSIZE_MULTIPLIER, 4.8 * FIGSIZE_MULTIPLIER), constrained_layout=True)
+    suptitle = fig.suptitle(TITLE)
+    subfigs = fig.subfigures(2, 2)
+    COV_INTERVAL_S = 5 # number of seconds between covariance ellipses
+    uncertainty_std = 1 # number of standard deviations to plot for uncertainty
 
-# BEV plot
-ax_bev = subfigs[0][0].add_subplot(111)
-ax_bev.plot([p[0] for p in path_points], [p[1] for p in path_points], '.', label='path', markersize=0.1, color=TARGET_COLOR)
-ego_position = ax_bev.plot([p[0] for p in state_hist], [p[1] for p in state_hist], '.', markersize=0.1, color=EGO_COLOR, label='ego')[0]
-ego_position_estimate = ax_bev.plot([p[0] for p in estimate_hist], [p[1] for p in estimate_hist], '.', markersize=0.1, color=EGO_ESTIMATE_COLOR, label='ego estimate')[0]
-# Velocity plot
-ax_velocity = subfigs[0][1].add_subplot(111)
-ax_velocity.plot(t_hist, [velocity_profile[idx] for idx in closest_idx_hist], label=r"$v_d$", color=TARGET_COLOR) # target velocity
-ax_velocity.plot(t_hist, [p[3] for p in state_hist], label=r"$v$", color=EGO_COLOR) # velocity
-ax_velocity.plot(t_hist, [p[3] for p in estimate_hist], label=r"$\hat{v}$", color=EGO_ESTIMATE_COLOR) # velocity estimate
-ax_velocity.fill_between(t_hist, [p[3] - uncertainty_std*np.sqrt(ukf_P[3,3]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], [p[3] + uncertainty_std*np.sqrt(ukf_P[3,3]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], alpha=0.2, color=EGO_ESTIMATE_COLOR)
-# Heading&Steering plot
-ax_heading_steering = subfigs[1][0].subplots(2, 1, sharex=True)
-ax_heading = ax_heading_steering[0]
-ax_heading.plot(t_hist, np.unwrap([path_headings[idx] for idx in closest_idx_hist]), label=r"$\theta_d$", color=TARGET_COLOR) # target heading
-ax_heading.plot(t_hist, np.unwrap([p[2] for p in state_hist]), label=r"$\theta$", color=EGO_COLOR) # heading
-ax_heading.plot(t_hist, np.unwrap([p[2] for p in estimate_hist]), label=r"$\hat{\theta}$", color=EGO_ESTIMATE_COLOR) # heading estimate
-ax_heading.fill_between(t_hist, np.unwrap([p[2] - uncertainty_std*np.sqrt(ukf_P[2,2]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)]), np.unwrap([p[2] + uncertainty_std*np.sqrt(ukf_P[2,2]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)]), alpha=0.2, color=EGO_ESTIMATE_COLOR)
-ax_steering = ax_heading_steering[1]
-ax_steering.plot(t_hist, [p[4] for p in state_hist], label=r"$\delta$", color=EGO_COLOR) # steering
-ax_steering.plot(t_hist, [p[4] for p in estimate_hist], label=r"$\hat{\delta}$", color=EGO_ESTIMATE_COLOR) # steering estimate
-ax_steering.fill_between(t_hist, [p[4] - uncertainty_std*np.sqrt(ukf_P[4,4]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], [p[4] + uncertainty_std*np.sqrt(ukf_P[4,4]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], alpha=0.2, color=EGO_ESTIMATE_COLOR)
-# Control signals plot
-axes_control = subfigs[1][1].subplots(2, 1, sharex=True)
-axes_control[0].plot(t_hist, [u[0] for u in u_hist], label=r"$a$", color=EGO_ACTUATION_COLOR) # a
-axes_control[1].plot(t_hist, [u[1] for u in u_hist], label=r"$\dot{\delta}$", color=EGO_ACTUATION_COLOR) # delta_dot
+    # BEV plot
+    ax_bev = subfigs[0][0].add_subplot(111)
+    ax_bev.plot([p[0] for p in path_points], [p[1] for p in path_points], '.', label='path', markersize=0.1, color=TARGET_COLOR)
+    ego_position = ax_bev.plot([p[0] for p in state_hist], [p[1] for p in state_hist], '.', markersize=0.1, color=EGO_COLOR, label='ego')[0]
+    ego_position_estimate = ax_bev.plot([p[0] for p in estimate_hist], [p[1] for p in estimate_hist], '.', markersize=0.1, color=EGO_ESTIMATE_COLOR, label='ego estimate')[0]
+    # Velocity plot
+    ax_velocity = subfigs[0][1].add_subplot(111)
+    ax_velocity.plot(t_hist, [velocity_profile[idx] for idx in closest_idx_hist], label=r"$v_d$", color=TARGET_COLOR) # target velocity
+    ax_velocity.plot(t_hist, [p[3] for p in state_hist], label=r"$v$", color=EGO_COLOR) # velocity
+    ax_velocity.plot(t_hist, [p[3] for p in estimate_hist], label=r"$\hat{v}$", color=EGO_ESTIMATE_COLOR) # velocity estimate
+    ax_velocity.fill_between(t_hist, [p[3] - uncertainty_std*np.sqrt(ukf_P[3,3]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], [p[3] + uncertainty_std*np.sqrt(ukf_P[3,3]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], alpha=0.2, color=EGO_ESTIMATE_COLOR)
+    # Heading&Steering plot
+    ax_heading_steering = subfigs[1][0].subplots(2, 1, sharex=True)
+    ax_heading = ax_heading_steering[0]
+    ax_heading.plot(t_hist, np.unwrap([path_headings[idx] for idx in closest_idx_hist]), label=r"$\theta_d$", color=TARGET_COLOR) # target heading
+    ax_heading.plot(t_hist, np.unwrap([p[2] for p in state_hist]), label=r"$\theta$", color=EGO_COLOR) # heading
+    ax_heading.plot(t_hist, np.unwrap([p[2] for p in estimate_hist]), label=r"$\hat{\theta}$", color=EGO_ESTIMATE_COLOR) # heading estimate
+    ax_heading.fill_between(t_hist, np.unwrap([p[2] - uncertainty_std*np.sqrt(ukf_P[2,2]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)]), np.unwrap([p[2] + uncertainty_std*np.sqrt(ukf_P[2,2]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)]), alpha=0.2, color=EGO_ESTIMATE_COLOR)
+    ax_steering = ax_heading_steering[1]
+    ax_steering.plot(t_hist, [p[4] for p in state_hist], label=r"$\delta$", color=EGO_COLOR) # steering
+    ax_steering.plot(t_hist, [p[4] for p in estimate_hist], label=r"$\hat{\delta}$", color=EGO_ESTIMATE_COLOR) # steering estimate
+    ax_steering.fill_between(t_hist, [p[4] - uncertainty_std*np.sqrt(ukf_P[4,4]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], [p[4] + uncertainty_std*np.sqrt(ukf_P[4,4]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], alpha=0.2, color=EGO_ESTIMATE_COLOR)
+    # Control signals plot
+    axes_control = subfigs[1][1].subplots(2, 1, sharex=True)
+    axes_control[0].plot(t_hist, [u[0] for u in u_hist], label=r"$a$", color=EGO_ACTUATION_COLOR) # a
+    axes_control[1].plot(t_hist, [u[1] for u in u_hist], label=r"$\dot{\delta}$", color=EGO_ACTUATION_COLOR) # delta_dot
 
-# # Plot covariance ellipses
-# plt.sca(ax_bev)
-# for est, ukf_P in zip(estimate_hist[::int(COV_INTERVAL_S/model_params['dt'])], ukf_P_hist[::int(COV_INTERVAL_S/model_params['dt'])]):
-#     plot_covariance(est[:2], std=100, cov=ukf_P[0:2, 0:2], facecolor='none', edgecolor=EGO_ESTIMATE_COLOR)
+    # # Plot covariance ellipses
+    # plt.sca(ax_bev)
+    # for est, ukf_P in zip(estimate_hist[::int(COV_INTERVAL_S/model_params['dt'])], ukf_P_hist[::int(COV_INTERVAL_S/model_params['dt'])]):
+    #     plot_covariance(est[:2], std=100, cov=ukf_P[0:2, 0:2], facecolor='none', edgecolor=EGO_ESTIMATE_COLOR)
 
-# Finalize plots
-ax_bev.axis('equal')
-ax_bev.set_title('BEV')
-ax_bev.legend(markerscale=50)
-ax_velocity.set_title("Velocity over time")
-ax_velocity.set_xlabel(r'Time ($s$)')
-ax_velocity.set_ylabel(r'Velocity ($m/s$)')
-ax_velocity.legend()
-ax_heading.set_title("Heading and Steering over time")
-ax_heading.set_ylabel(r'Heading ($rad$)')
-ax_heading.legend()
-ax_steering.set_xlabel(r'Time ($s$)')
-ax_steering.set_ylabel(r'Steering ($rad$)')
-ax_steering.legend()
-axes_control[0].set_title("Control signals over time")
-axes_control[0].set_ylabel(r'Acceleration ($m/s^2$)')
-axes_control[0].legend()
-axes_control[1].set_xlabel(r'Time ($s$)')
-axes_control[1].set_ylabel(r'Steering rate ($rad/s$)')
-axes_control[1].legend()
+    # Finalize plots
+    ax_bev.axis('equal')
+    ax_bev.set_title('BEV')
+    ax_bev.legend(markerscale=50)
+    ax_velocity.set_title("Velocity over time")
+    ax_velocity.set_xlabel(r'Time ($s$)')
+    ax_velocity.set_ylabel(r'Velocity ($m/s$)')
+    ax_velocity.legend()
+    ax_heading.set_title("Heading and Steering over time")
+    ax_heading.set_ylabel(r'Heading ($rad$)')
+    ax_heading.legend()
+    ax_steering.set_xlabel(r'Time ($s$)')
+    ax_steering.set_ylabel(r'Steering ($rad$)')
+    ax_steering.legend()
+    axes_control[0].set_title("Control signals over time")
+    axes_control[0].set_ylabel(r'Acceleration ($m/s^2$)')
+    axes_control[0].legend()
+    axes_control[1].set_xlabel(r'Time ($s$)')
+    axes_control[1].set_ylabel(r'Steering rate ($rad/s$)')
+    axes_control[1].legend()
+
+plot_quad()
+plt.show()
 
 #%%
 # Run the solver for the last N outputs
@@ -529,10 +534,6 @@ print(np.percentile(abs(errors_tensor), 95, axis=0))
 
 print("90th percentile error per sensor per time step in an interval")
 print(np.percentile(abs(errors_tensor), 90, axis=0))
-
-# %%
-
-# plt.show()
 
 #%%
 # Generate a GIF
