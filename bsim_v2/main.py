@@ -490,7 +490,50 @@ def plot_quad():
     axes_control[1].set_ylabel(r'Steering rate ($rad/s$)')
     axes_control[1].legend()
 
-plot_quad()
+    def generate_gif():
+        from matplotlib.animation import PillowWriter, FuncAnimation
+        ANIM_TITLE_FORMAT = 'Simulation Playback (Current time: ${:.2f}$ s)'
+
+        # add time cursors
+        time_cursors = []
+        time_cursors.append(ax_velocity.axvline(0, color='k'))
+        time_cursors.append(ax_heading.axvline(0, color='k'))
+        time_cursors.append(axes_control[0].axvline(0, color='k'))
+        time_cursors.append(axes_control[1].axvline(0, color='k'))
+        def animate(i):
+            # ================= Update title =================
+            suptitle.set_text(ANIM_TITLE_FORMAT.format(i * model_params['dt']))
+
+            # =============== Plot ego position ===============
+            # For a moving position, use this:
+            #ego_position.set_data(state_hist[i][0], state_hist[i][1])
+            # To plot the entire trajectory, use this:
+            ego_position.set_data([p[0] for p in state_hist[:i+1]], [p[1] for p in state_hist[:i+1]])
+            ego_position_estimate.set_data([p[0] for p in estimate_hist[:i+1]], [p[1] for p in estimate_hist[:i+1]])
+
+            # =============== Plot time cursors ===============
+            for time_cursor in time_cursors:
+                time_cursor.set_xdata([i * model_params['dt']])
+
+            return suptitle, ego_position, *time_cursors
+
+        anim_interval_ms = 2000
+        anim = FuncAnimation(fig, animate, frames=range(0, num_steps, int(anim_interval_ms / 1000 / model_params['dt'])), interval=anim_interval_ms)
+
+        start = time.perf_counter()
+        # anim.save('zero_state.gif', writer=PillowWriter(fps=1000/anim_interval_ms))
+
+        from IPython.core.display import HTML
+        html = HTML(anim.to_jshtml())
+        print(f"Animation generation took {time.perf_counter() - start:.2f} seconds")
+        plt.close(fig)
+
+        return html
+    
+    return generate_gif
+
+
+generate_gif = plot_quad()
 plt.show()
 
 #%%
@@ -536,51 +579,9 @@ print(np.percentile(abs(errors_tensor), 95, axis=0))
 print("90th percentile error per sensor per time step in an interval")
 print(np.percentile(abs(errors_tensor), 90, axis=0))
 
-#%%
-# Generate a GIF
-def generate_gif():
-    from matplotlib.animation import PillowWriter, FuncAnimation
-    ANIM_TITLE_FORMAT = 'Simulation Playback (Current time: ${:.2f}$ s)'
-
-    # add time cursors
-    time_cursors = []
-    time_cursors.append(ax_velocity.axvline(0, color='k'))
-    time_cursors.append(ax_heading.axvline(0, color='k'))
-    time_cursors.append(axes_control[0].axvline(0, color='k'))
-    time_cursors.append(axes_control[1].axvline(0, color='k'))
-    def animate(i):
-        # ================= Update title =================
-        suptitle.set_text(ANIM_TITLE_FORMAT.format(i * model_params['dt']))
-
-        # =============== Plot ego position ===============
-        # For a moving position, use this:
-        #ego_position.set_data(state_hist[i][0], state_hist[i][1])
-        # To plot the entire trajectory, use this:
-        ego_position.set_data([p[0] for p in state_hist[:i+1]], [p[1] for p in state_hist[:i+1]])
-        ego_position_estimate.set_data([p[0] for p in estimate_hist[:i+1]], [p[1] for p in estimate_hist[:i+1]])
-
-        # =============== Plot time cursors ===============
-        for time_cursor in time_cursors:
-            time_cursor.set_xdata([i * model_params['dt']])
-
-        return suptitle, ego_position, *time_cursors
-
-    anim_interval_ms = 2000
-    anim = FuncAnimation(fig, animate, frames=range(0, num_steps, int(anim_interval_ms / 1000 / model_params['dt'])), interval=anim_interval_ms)
-
-    start = time.perf_counter()
-    # anim.save('zero_state.gif', writer=PillowWriter(fps=1000/anim_interval_ms))
-
-    from IPython.core.display import HTML
-    html = HTML(anim.to_jshtml())
-    print(f"Animation generation took {time.perf_counter() - start:.2f} seconds")
-    plt.close(fig)
-
-    return html
-
 # generate_gif()
 
-# #%%
+#%%
 
 # # Plot velocity on top of target velocity
 # plt.figure()
