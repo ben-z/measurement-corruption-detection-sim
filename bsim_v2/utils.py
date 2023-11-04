@@ -355,7 +355,11 @@ class PIDController:
 # Research Functions
 #################################################################
 
-def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, **_kwargs):
+# Stripped down cvxpy.Problem that is serializable
+MyCvxpyProblem = namedtuple('MyCvxpyProblem', ['status', 'solver_stats', 'compilation_time', 'solve_time', 'value'])
+MyOptimizationCaseResult = Tuple[NDArray[np.float64] | None, MyCvxpyProblem, dict]
+
+def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, **_kwargs) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult]]:
     r"""
     solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
     the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -426,14 +430,12 @@ def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | fl
     S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
 
     solns = [optimize_case(S) for S in S_list]
-    for x0_hat, prob, metadata in solns:
+    for soln in solns:
+        _x0_hat, prob, _metadata = soln
         if prob.status in ["optimal", "optimal_inaccurate"]:
-            return (x0_hat, prob, metadata, solns)
+            return soln, solns
 
-    return (None, None, None, solns)
-
-# Stripped down cvxpy.Problem that is serializable
-MyCvxpyProblem = namedtuple('MyCvxpyProblem', ['status', 'solver_stats', 'compilation_time', 'solve_time', 'value'])
+    return None, solns
 
 class Optimizer:
     def __init__(self, N: int, q: int, n: int, solver: str = cp.CLARABEL):
@@ -460,7 +462,15 @@ class Optimizer:
         # Warm up problem data cache. This should make compilation much faster see (prob.compilation_time)
         self.prob.get_problem_data(self.solver)
     
-    def optimize_l0_v4(self, Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, early_exit: bool = True):
+    def optimize_l0_v4(
+        self,
+        Phi: np.ndarray,
+        Y: np.ndarray,
+        eps: NDArray[np.float64] | float = 1e-15,
+        S_list: Optional[Iterable[Iterable[int]]] = None,
+        solver_args: dict = {},
+        early_exit: bool = True,
+    ) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult]]:
         r"""
         solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
         the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -516,9 +526,16 @@ class Optimizer:
                 if early_exit:
                     break
 
-        return (*(ret or (None, None, None)), solns)
+        return ret, solns
 
-def optimize_l0_case(S: Iterable[int], q: int, prob: cp.Problem, x0_hat: cp.Variable, can_corrupt: cp.Parameter, solver_args: dict = {}):
+def optimize_l0_case(
+    S: Iterable[int],
+    q: int,
+    prob: cp.Problem,
+    x0_hat: cp.Variable,
+    can_corrupt: cp.Parameter,
+    solver_args: dict = {},
+) -> MyOptimizationCaseResult:
     r"""
     Solves the l0 minimization problem for a given set of uncorrupted sensors $S$.
     Parameters:

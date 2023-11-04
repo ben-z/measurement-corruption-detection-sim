@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 from math import pi, sin, cos, atan2, sqrt
+from numpy.typing import NDArray
 from typing import List, Tuple
 from utils import (
     generate_circle_approximation,
@@ -39,9 +40,9 @@ from utils import (
     get_state_evolution_tensor,
     optimize_l0_v2,
     Optimizer,
+    MyOptimizationCaseResult,
     format_floats,
 )
-import matplotlib.pyplot as plt
 
 plt.rcParams['text.usetex'] = True
 np.set_printoptions(suppress=True)
@@ -182,7 +183,21 @@ def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, pat
     }
 
 
-def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l, N, enable_fault_tolerance=True):
+def estimate_state(
+    kf,
+    output_hist,
+    input_hist,
+    estimate_hist,
+    closest_idx_hist,
+    path_points,
+    path_headings,
+    velocities,
+    Cs,
+    dt,
+    l,
+    N,
+    enable_fault_tolerance=True,
+) -> Tuple[NDArray[np.float64], Tuple[MyOptimizationCaseResult | None, List[MyOptimizationCaseResult]] | None, dict]:
     """
     Estimates the state of the vehicle.
     Parameters:
@@ -195,7 +210,11 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
         dt: float - the time step
     Returns:
         (x_hat, y_hat, theta_hat, v_hat, delta_hat): tuple[float,float,float,float,float] - the estimated state
+        optimizer_res: Optional[Optional[MyOptimizationCaseResult], List[MyOptimizationCaseResult]] - the result of the optimizer
+        metadata: dict - metadata about the estimation process
     """
+    metadata = {}
+    start = time.perf_counter()
     if kf is not None:
         if len(input_hist) == 0:
             kf.predict(u=np.array([0,0]))
@@ -211,41 +230,45 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
     if kf is not None:
         kf.update(output)
 
-        x_hat, y_hat, theta_hat, v_hat, delta_hat = kf.x
+        x_hat = kf.x
     else:
         # State estimator
-        x_hat = output[0]
-        y_hat = output[1]
-        theta_hat = output[2]
-        v_hat = output[3]
-        delta_hat = np.mean([output[4], output[5]])
+        x_hat = np.zeros(5)
+        x_hat[0] = output[0]
+        x_hat[1] = output[1]
+        x_hat[2] = output[2]
+        x_hat[3] = output[3]
+        x_hat[4] = np.mean([output[4], output[5]])
+    end = time.perf_counter()
+    metadata['filter_time'] = end - start
 
     if not enable_fault_tolerance:
-        return x_hat,y_hat,theta_hat,v_hat,delta_hat
+        return x_hat, None, metadata
 
     ###########################################################################
     # Fault detection
     ###########################################################################
     if len(output_hist) < N:
         print(f"Insufficient data to solve for corrupt sensors. Need {N} outputs, only have {len(output_hist)}")
-        return x_hat,y_hat,theta_hat,v_hat,delta_hat
+        return x_hat, None, metadata
 
     assert len(input_hist) == N-1, 'input_hist must be one shorter than output_hist'
     assert len(estimate_hist) == N-1, 'estimate_hist must be one shorter than output_hist'
     assert len(output_hist) == N, 'output_hist must be N long'
 
     # Use the beginning of the time window and the path to generate the As
-    x0_hat = estimate_hist[0]
-    x0_hat_closest_idx = closest_idx_hist[0]
+    # x0_hat = estimate_hist[0]
+    # x0_hat_closest_idx = closest_idx_hist[0]
 
     # Safe guard to prevent solving when we are too far away from the desired state
     # We are using the oldest estimate in the window to do this because it is the least
     # likely to be corrupted
-    x_err = path_points[x0_hat_closest_idx][0] - x0_hat[0]
-    y_err = path_points[x0_hat_closest_idx][1] - x0_hat[1]
-    theta_err = wrap_to_pi(path_headings[x0_hat_closest_idx] - x0_hat[2])
-    v_err = velocities[x0_hat_closest_idx] - x0_hat[3]
-    delta_err = -x0_hat[4] # we use linear inerpolation, so the desrd delta is always 0
+
+    # x_err = path_points[x0_hat_closest_idx][0] - x0_hat[0]
+    # y_err = path_points[x0_hat_closest_idx][1] - x0_hat[1]
+    # theta_err = wrap_to_pi(path_headings[x0_hat_closest_idx] - x0_hat[2])
+    # v_err = velocities[x0_hat_closest_idx] - x0_hat[3]
+    # delta_err = -x0_hat[4] # we use linear inerpolation, so the desrd delta is always 0
     # if abs(x_err) > 1.0 \
     #         or abs(y_err) > 1.0 \
     #         or abs(theta_err) > 0.1 \
@@ -260,18 +283,12 @@ def estimate_state(kf, output_hist, input_hist, estimate_hist, closest_idx_hist,
     # eps = np.array([1.5]*2+[0.3]+[1.5]+[0.05]*2)
 
     start = time.perf_counter()
-    x0_hat, prob, metadata, solns = optimizer.optimize_l0_v4(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
+    optimizer_res = optimizer.optimize_l0_v4(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
     # x0_hat, prob, metadata, solns = optimize_l0_v2(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
     end = time.perf_counter()
-    assert metadata is not None, 'Optimization failed'
-    for soln in solns:
-        x, p, m = soln
-        print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x, 4))
-    print(f"Total/real solve time (s): {sum(m['solve_time'] for _, _, m in solns):.4f}/{end-start:.4f}")
-    print("K: ", metadata['K'])
-    print(x0_hat)
+    metadata['optimizer_time'] = end - start
 
-    return x_hat,y_hat,theta_hat,v_hat,delta_hat
+    return x_hat, optimizer_res, metadata
 
 from filterpy.kalman import UnscentedKalmanFilter, MerweScaledSigmaPoints
 
@@ -378,7 +395,7 @@ for i in range(num_steps):
     output_hist.append(output)
 
     # fault-tolerant estimator
-    x_hat, y_hat, theta_hat, v_hat, delta_hat = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=False)
+    (x_hat, y_hat, theta_hat, v_hat, delta_hat), _, _ = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=False)
 
     estimate_hist.append([x_hat, y_hat, theta_hat, v_hat, delta_hat])
     ukf_P_hist.append(ukf.P.copy())
@@ -543,7 +560,16 @@ plt.show()
 # Run the solver for the last N outputs
 
 # Note that the indexing here is slightly different from the one in the loop, because in the loop, we are getting data before we append elements to u_hist, estimate_hist, and closest_idx_hist
-res = estimate_state(None, [o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], estimate_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
+estm_res, optimizer_res, metadata = estimate_state(None, [o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], estimate_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
+assert optimizer_res is not None, "Optimizer didn't run"
+soln, solns = optimizer_res
+assert soln is not None, 'Optimization failed'
+x0_hat, prob, soln_metadata = soln
+for x, p, m in solns:
+    print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x, 4))
+print(f"Internal/E2E solve time (s): {sum(m['solve_time'] for _, _, m in solns):.4f}/{metadata['optimizer_time']:.4f}")
+print("K: ", soln_metadata['K'])
+print(x0_hat)
 
 # solver_setup = get_solver_setup([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'])
 # print(solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y'])

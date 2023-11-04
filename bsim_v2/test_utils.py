@@ -236,11 +236,10 @@ class TestOptimizeL0(unittest.TestCase):
         ])
         solver = cp.CLARABEL
         optimizer_fn = self.get_optimizer_fn(version, 3, C, solver)
-        x0_hat, prob, metadata, solns = optimizer_fn(Phi, Y, solver_args={'solver': solver})
-
+        soln, solns = optimizer_fn(Phi, Y, solver_args={'solver': solver})
+        self.assertIsNotNone(soln)
+        x0_hat, prob, metadata = soln
         self.assertIsNotNone(x0_hat)
-        self.assertIsNotNone(prob)
-        self.assertIsNotNone(metadata)
         self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
         self.assertSequenceEqual(metadata['K'], [])
 
@@ -283,7 +282,9 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0 + np.array([0, 0, 1]),
             C @ Ad @ Ad @ x0 + np.array([0, 0, 1]),
         ])
-        x0_hat, prob, metadata, solns = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
+        soln, solns = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
+        self.assertIsNotNone(soln)
+        x0_hat, prob, metadata = soln
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
@@ -304,7 +305,9 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0 + np.array([0, 1, 0]),
             C @ Ad @ Ad @ x0 + np.array([0, 1, 0]),
         ])
-        x0_hat, prob, metadata, solns = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
+        soln, solns = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
+        self.assertIsNotNone(soln)
+        x0_hat, prob, metadata = soln
         self.assertIsNotNone(x0_hat)
         self.assertIsNotNone(prob)
         self.assertIsNotNone(metadata)
