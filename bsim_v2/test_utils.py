@@ -6,6 +6,7 @@ from math import pi, sin, cos, atan2, sqrt, tan
 from scipy.linalg import expm
 from parameterized import parameterized
 from utils import (
+    get_unpack_fn,
     kinematic_bicycle_model,
     generate_circle_approximation,
     generate_figure_eight_approximation,
@@ -26,6 +27,36 @@ from utils import (
     calc_input_effects_on_output,
 )
 
+# Helpers
+def add(a, b):
+    "Adds two numbers"
+    return a + b
+
+def multiply(a, b):
+    "Multiplies two numbers"
+    return a * b
+
+class TestUnpackFunction(unittest.TestCase):
+    def test_unpack_fn_add(self):
+        unpacked_add = get_unpack_fn(add)
+        self.assertEqual(unpacked_add((1, 2)), 3)
+        self.assertEqual(unpacked_add.__name__, 'add')
+        self.assertEqual(unpacked_add.__doc__, 'Adds two numbers')
+
+    def test_unpack_fn_multiply(self):
+        unpacked_multiply = get_unpack_fn(multiply)
+        self.assertEqual(unpacked_multiply((2, 3)), 6)
+        self.assertEqual(unpacked_multiply.__name__, 'multiply')
+        self.assertEqual(unpacked_multiply.__doc__, 'Multiplies two numbers')
+
+    def test_preserves_signature(self):
+        # This is a more advanced test and might not be necessary for all use cases
+        # since the signature is not actually preserved; the unpack_fn always takes
+        # a single argument (a tuple). For a true signature preservation, you would
+        # need to use introspection or third-party packages like `decorator`, which
+        # can recreate function signatures dynamically.
+        unpacked_add = get_unpack_fn(add)
+        self.assertEqual(unpacked_add.__annotations__, add.__annotations__)
 
 class TestKinematicBicycleModel(unittest.TestCase):
     def test_noop(self):

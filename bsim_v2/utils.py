@@ -3,6 +3,7 @@ import numpy as np
 import os
 import time
 from collections import namedtuple
+from functools import wraps
 from itertools import chain, combinations, repeat
 from math import pi, sin, cos, atan2, sqrt
 from numpy.typing import NDArray
@@ -30,6 +31,16 @@ def powerset(iterable: Iterable[T]) -> Iterable[Iterable[T]]:
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+def get_unpack_fn(fn):
+    """
+    Returns a function that unpacks the first argument of the given function.
+    """
+    @wraps(fn)
+    def unpack_fn(args):
+        return fn(*args)
+
+    return unpack_fn
 
 #################################################################
 # Models

@@ -15,15 +15,18 @@
 #! %autoreload 2
 
 import cvxpy as cp
+import os
 import json
 import math
 import matplotlib.pyplot as plt
 import numpy as np
 import time
 from math import pi, sin, cos, atan2, sqrt
+from multiprocessing import Pool
 from numpy.typing import NDArray
 from typing import List, Tuple
 from utils import (
+    get_unpack_fn,
     generate_circle_approximation,
     generate_figure_eight_approximation,
     kinematic_bicycle_model,
@@ -43,6 +46,7 @@ from utils import (
     MyOptimizationCaseResult,
     MyOptimizerRes,
     format_floats,
+    MAX_POOL_SIZE,
 )
 
 plt.rcParams['text.usetex'] = True
@@ -391,7 +395,7 @@ for i in range(num_steps):
     if i * model_params['dt'] > 8:
         pass
         # output[2] += 1
-        # output[3] += 10
+        output[3] += 10
         # output[4] += 0.1
         # output[5] += 0.1
     output_hist.append(output)
@@ -540,7 +544,7 @@ def plot_quad():
             return suptitle, ego_position, *time_cursors
 
         anim_interval_ms = 2000
-        anim = FuncAnimation(fig, animate, frames=range(0, num_steps, int(anim_interval_ms / 1000 / model_params['dt'])), interval=anim_interval_ms)
+        anim = FuncAnimation(fig, animate, frames=list(range(0, num_steps, int(anim_interval_ms / 1000 / model_params['dt']))), interval=anim_interval_ms)
 
         start = time.perf_counter()
         # anim.save('zero_state.gif', writer=PillowWriter(fps=1000/anim_interval_ms))
@@ -561,23 +565,64 @@ plt.show()
 #%%
 # Post-analysis
 
-# Run the solver from the beginning until we detect the corruption
-for k in range(max(N,500), len(output_hist)+1):
-    # print(f"{k=} (t={k*model_params['dt']:.2f}s)")
-    estm_res, optimizer_res, metadata = estimate_state(None, [o + np.array([0,0,0,0,0,0]) for o in output_hist[k-N:k]], u_hist[k-N:k-1], estimate_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
-    if optimizer_res is None:
-        continue
+def estimate_state_unpack(args):
+    return estimate_state(*args)
 
-    soln, solns, optimizer_metadata = optimizer_res
-    if soln is None:
-        continue
 
-    x0_hat, prob, soln_metadata = soln
-    if len(soln_metadata['K']) > 0:
-        print(f"Found corruption at {k=} (t={k*model_params['dt']:.2f}s), K={soln_metadata['K']}, estimator/optimizer/solve time: {metadata['total_time']:.4f}/{metadata['optimizer_time']:.4f}/{optimizer_metadata['solve_time']:.4f}")
-        break
-else:
-    print("No corruption detected")
+def find_corruption(output_hist, input_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocity_profile, Cs, N, starting_k, model_params):
+    # Run the solver from the beginning until we detect the corruption
+    ks = range(max(N,starting_k), len(output_hist)+1)
+    args_iterable = ((None, output_hist[k-N:k], input_hist[k-N:k-1], estimate_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, Cs, model_params['dt'], model_params['l'], N, True) for k in ks)
+
+    pool = None
+    res_iter = map(estimate_state_unpack, args_iterable)
+    # Optional parallelization
+    # pool = Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1))
+    # pool_chunksize = int(1/model_params['dt']) # set chunksize to be a deterministic number of seconds
+    # res_iter = pool.imap(estimate_state_unpack, args_iterable, chunksize=pool_chunksize)
+
+    try:
+        # Run the solver from the beginning until we detect the corruption
+        for k, (estm_res, optimizer_res, metadata) in zip(ks, res_iter):
+            # print(f"{k=} (t={k*model_params['dt']:.2f}s)")
+            if optimizer_res is None:
+                continue
+
+            soln, solns, optimizer_metadata = optimizer_res
+            if soln is None:
+                continue
+
+            x0_hat, prob, soln_metadata = soln
+            if len(soln_metadata['K']) > 0:
+                print(f"Found corruption at {k=} (t={k*model_params['dt']:.2f}s), K={soln_metadata['K']}, estimator/optimizer/solve time: {metadata['total_time']:.4f}/{metadata['optimizer_time']:.4f}/{optimizer_metadata['solve_time']:.4f}")
+                break
+        else:
+            print("No corruption detected")
+    finally:
+        if pool:
+            pool.terminate()
+            pool.join()
+
+
+    # # Run the solver from the beginning until we detect the corruption
+    # for k in range(max(N,starting_k), len(output_hist)+1):
+    #     # print(f"{k=} (t={k*model_params['dt']:.2f}s)")
+    #     estm_res, optimizer_res, metadata = estimate_state(None, output_hist[k-N:k], input_hist[k-N:k-1], estimate_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, Cs, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
+    #     if optimizer_res is None:
+    #         continue
+
+    #     soln, solns, optimizer_metadata = optimizer_res
+    #     if soln is None:
+    #         continue
+
+    #     x0_hat, prob, soln_metadata = soln
+    #     if len(soln_metadata['K']) > 0:
+    #         print(f"Found corruption at {k=} (t={k*model_params['dt']:.2f}s), K={soln_metadata['K']}, estimator/optimizer/solve time: {metadata['total_time']:.4f}/{metadata['optimizer_time']:.4f}/{optimizer_metadata['solve_time']:.4f}")
+    #         break
+    # else:
+    #     print("No corruption detected")
+
+find_corruption(output_hist, u_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocity_profile, [C]*N, N, 500, model_params)
 
 # # Run the solver for the last N outputs
 # # Note that the indexing here is slightly different from the one in the loop, because in the loop, we are getting data before we append elements to u_hist, estimate_hist, and closest_idx_hist
