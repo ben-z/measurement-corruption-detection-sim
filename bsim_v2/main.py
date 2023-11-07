@@ -41,6 +41,7 @@ from utils import (
     optimize_l0_v2,
     Optimizer,
     MyOptimizationCaseResult,
+    MyOptimizerRes,
     format_floats,
 )
 
@@ -197,7 +198,7 @@ def estimate_state(
     l,
     N,
     enable_fault_tolerance=True,
-) -> Tuple[NDArray[np.float64], Tuple[MyOptimizationCaseResult | None, List[MyOptimizationCaseResult]] | None, dict]:
+) -> Tuple[NDArray[np.float64], MyOptimizerRes | None, dict]:
     """
     Estimates the state of the vehicle.
     Parameters:
@@ -214,7 +215,7 @@ def estimate_state(
         metadata: dict - metadata about the estimation process
     """
     metadata = {}
-    start = time.perf_counter()
+    start = start_e2e = time.perf_counter()
     if kf is not None:
         if len(input_hist) == 0:
             kf.predict(u=np.array([0,0]))
@@ -279,14 +280,15 @@ def estimate_state(
 
     setup = get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l)
 
-    eps = np.array([0.1]*2+[1e-2]+[1e-3]*3)
-    # eps = np.array([1.5]*2+[0.3]+[1.5]+[0.05]*2)
+    # eps = np.array([0.1]*2+[1e-2]+[1e-3]*3)
+    eps = np.array([1.0]*2+[0.3]+[1.5]+[0.05]*2)
 
     start = time.perf_counter()
     optimizer_res = optimizer.optimize_l0_v4(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
-    # x0_hat, prob, metadata, solns = optimize_l0_v2(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
-    end = time.perf_counter()
+    # optimizer_res = optimize_l0_v2(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
+    end = end_e2e = time.perf_counter()
     metadata['optimizer_time'] = end - start
+    metadata['total_time'] = end_e2e - start_e2e
 
     return x_hat, optimizer_res, metadata
 
@@ -383,12 +385,12 @@ for i in range(num_steps):
     # measurement
     output = C @ state
     # Add noise
-    # output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.0001,0.0001])
+    output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.0001,0.0001])
 
     # Add attack
     if i * model_params['dt'] > 8:
         pass
-        output[2] += 1
+        # output[2] += 1
         # output[3] += 10
         # output[4] += 0.1
         # output[5] += 0.1
@@ -557,56 +559,75 @@ generate_gif = plot_quad()
 plt.show()
 
 #%%
-# Run the solver for the last N outputs
+# Post-analysis
 
-# Note that the indexing here is slightly different from the one in the loop, because in the loop, we are getting data before we append elements to u_hist, estimate_hist, and closest_idx_hist
-estm_res, optimizer_res, metadata = estimate_state(None, [o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], estimate_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
-assert optimizer_res is not None, "Optimizer didn't run"
-soln, solns = optimizer_res
-assert soln is not None, 'Optimization failed'
-x0_hat, prob, soln_metadata = soln
-for x, p, m in solns:
-    print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x, 4))
-print(f"Internal/E2E solve time (s): {sum(m['solve_time'] for _, _, m in solns):.4f}/{metadata['optimizer_time']:.4f}")
-print("K: ", soln_metadata['K'])
-print(x0_hat)
+# Run the solver from the beginning until we detect the corruption
+for k in range(max(N,500), len(output_hist)+1):
+    # print(f"{k=} (t={k*model_params['dt']:.2f}s)")
+    estm_res, optimizer_res, metadata = estimate_state(None, [o + np.array([0,0,0,0,0,0]) for o in output_hist[k-N:k]], u_hist[k-N:k-1], estimate_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
+    if optimizer_res is None:
+        continue
+
+    soln, solns, optimizer_metadata = optimizer_res
+    if soln is None:
+        continue
+
+    x0_hat, prob, soln_metadata = soln
+    if len(soln_metadata['K']) > 0:
+        print(f"Found corruption at {k=} (t={k*model_params['dt']:.2f}s), K={soln_metadata['K']}, estimator/optimizer/solve time: {metadata['total_time']:.4f}/{metadata['optimizer_time']:.4f}/{optimizer_metadata['solve_time']:.4f}")
+        break
+else:
+    print("No corruption detected")
+
+# # Run the solver for the last N outputs
+# # Note that the indexing here is slightly different from the one in the loop, because in the loop, we are getting data before we append elements to u_hist, estimate_hist, and closest_idx_hist
+# estm_res, optimizer_res, metadata = estimate_state(None, [o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], estimate_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
+# assert optimizer_res is not None, "Optimizer didn't run"
+# soln, solns, optimizer_metadata = optimizer_res
+# assert soln is not None, 'Optimization failed'
+# x0_hat, prob, soln_metadata = soln
+# for x, p, m in solns:
+#     print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x, 4))
+# print(f"optimizer/solve time (s): {metadata['optimizer_time']:.4f}/{sum(m['solve_time'] for _, _, m in solns):.4f}")
+# print("K: ", soln_metadata['K'])
+# print(x0_hat)
 
 # solver_setup = get_solver_setup([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'])
 # print(solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y'])
 
 # %%
 # Retroactively calculate from data the modelling error and the noise
-errors = []
+# errors = []
 
-# Arbitrarily ignore the first 500 data points because they are not at steady state
-for i in range(max(N, 500), len(output_hist)+1):
-    solver_setup = get_solver_setup(output_hist[i-N:i], u_hist[i-N:i-1], closest_idx_hist[i-N:i-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'])
-    error = solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y']
-    error[:,2] = wrap_to_pi(error[:,2])
-    error[:,4] = wrap_to_pi(error[:,4])
-    error[:,5] = wrap_to_pi(error[:,5])
-    errors.append(error)
+# # Arbitrarily ignore the first 500 data points because they are not at steady state
+# for i in range(max(N, 500), len(output_hist)+1):
+#     solver_setup = get_solver_setup(output_hist[i-N:i], u_hist[i-N:i-1], closest_idx_hist[i-N:i-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'])
+#     error = solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y']
+#     error[:,2] = wrap_to_pi(error[:,2])
+#     error[:,4] = wrap_to_pi(error[:,4])
+#     error[:,5] = wrap_to_pi(error[:,5])
+#     errors.append(error)
 
-errors_tensor = np.array(errors)
+# errors_tensor = np.array(errors)
 
-max_errors_over_time = abs(errors_tensor).max(axis=1)
-x = np.arange(len(max_errors_over_time))
-for i in range(6):
-    plt.plot(x, max_errors_over_time[:,i], ".-", label=f"sensor {i}")
-plt.xlabel("time step")
-plt.ylabel("max error")
-plt.title("Max error per sensor over time")
-plt.legend()
-plt.show()
+# max_errors_over_time = abs(errors_tensor).max(axis=1)
+# x = np.arange(len(max_errors_over_time))
+# for i in range(6):
+#     plt.plot(x, max_errors_over_time[:,i], ".-", label=f"sensor {i}")
+# plt.xlabel("time step")
+# plt.ylabel("max error")
+# plt.title("Max error per sensor over time")
+# plt.legend()
+# plt.show()
 
-print("Max error per sensor and per time step in an interval")
-print(abs(errors_tensor).max(axis=0))
+# print("Max error per sensor and per time step in an interval")
+# print(abs(errors_tensor).max(axis=0))
 
-print("95th percentile error per sensor per time step in an interval")
-print(np.percentile(abs(errors_tensor), 95, axis=0))
+# print("95th percentile error per sensor per time step in an interval")
+# print(np.percentile(abs(errors_tensor), 95, axis=0))
 
-print("90th percentile error per sensor per time step in an interval")
-print(np.percentile(abs(errors_tensor), 90, axis=0))
+# print("90th percentile error per sensor per time step in an interval")
+# print(np.percentile(abs(errors_tensor), 90, axis=0))
 
 # generate_gif()
 

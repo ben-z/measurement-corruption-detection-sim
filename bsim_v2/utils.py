@@ -7,7 +7,7 @@ from itertools import chain, combinations, repeat
 from math import pi, sin, cos, atan2, sqrt
 from numpy.typing import NDArray
 from numpy.linalg import matrix_power
-from typing import TypeVar, Iterable, Tuple, Optional
+from typing import TypeVar, Iterable, Tuple, Optional, List
 from scipy.linalg import expm
 from multiprocessing import Pool
 
@@ -358,6 +358,7 @@ class PIDController:
 # Stripped down cvxpy.Problem that is serializable
 MyCvxpyProblem = namedtuple('MyCvxpyProblem', ['status', 'solver_stats', 'compilation_time', 'solve_time', 'value'])
 MyOptimizationCaseResult = Tuple[NDArray[np.float64] | None, MyCvxpyProblem, dict]
+MyOptimizerRes = Tuple[Optional[MyOptimizationCaseResult], List[MyOptimizationCaseResult], dict]
 
 def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, **_kwargs) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult], dict]:
     r"""
@@ -524,18 +525,20 @@ class Optimizer:
         soln_generator = map(optimize_l0_case, *map_args)
         # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
         #   soln_generator = pool.starmap(optimize_l0_case, zip(*map_args))
-        end = time.perf_counter()
-        metadata['solve_time'] = end-start
 
         ret = None
         solns = []
-        for s in soln_generator:
-            s_x0_hat, s_prob, s_metadata = s
-            solns.append(s)
-            if ret is None and s_prob.status in ["optimal", "optimal_inaccurate"]:
-                ret = (s_x0_hat, s_prob, s_metadata)
-                if early_exit:
-                    break
+        try:
+            for s in soln_generator:
+                s_x0_hat, s_prob, s_metadata = s
+                solns.append(s)
+                if ret is None and s_prob.status in ["optimal", "optimal_inaccurate"]:
+                    ret = (s_x0_hat, s_prob, s_metadata)
+                    if early_exit:
+                        break
+        finally:
+            end = time.perf_counter()
+            metadata['solve_time'] = end-start
 
         return ret, solns, metadata
 
