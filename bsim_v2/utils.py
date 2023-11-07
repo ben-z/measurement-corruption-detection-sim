@@ -359,7 +359,7 @@ class PIDController:
 MyCvxpyProblem = namedtuple('MyCvxpyProblem', ['status', 'solver_stats', 'compilation_time', 'solve_time', 'value'])
 MyOptimizationCaseResult = Tuple[NDArray[np.float64] | None, MyCvxpyProblem, dict]
 
-def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, **_kwargs) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult]]:
+def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, **_kwargs) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult], dict]:
     r"""
     solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
     the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -376,7 +376,9 @@ def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | fl
         metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
         solns: list - list of solutions for each possible set of corrupted sensors that was tried
     """
+    metadata = {}
 
+    start = time.perf_counter()
     N, q, n = Phi.shape
     assert Y.shape == (N, q)
 
@@ -428,14 +430,19 @@ def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | fl
     # sort the list of sensor combinations by size, largest to smallest
     # this is because the optimization algorithm needs to minimize the number of corrupt sensors
     S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
+    end = time.perf_counter()
+    metadata['setup_time'] = end-start
 
+    start = time.perf_counter()
     solns = [optimize_case(S) for S in S_list]
+    end = time.perf_counter()
+    metadata['solve_time'] = end-start
     for soln in solns:
         _x0_hat, prob, _metadata = soln
         if prob.status in ["optimal", "optimal_inaccurate"]:
-            return soln, solns
+            return soln, solns, metadata
 
-    return None, solns
+    return None, solns, metadata
 
 class Optimizer:
     def __init__(self, N: int, q: int, n: int, solver: str = cp.CLARABEL):
@@ -470,7 +477,7 @@ class Optimizer:
         S_list: Optional[Iterable[Iterable[int]]] = None,
         solver_args: dict = {},
         early_exit: bool = True,
-    ) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult]]:
+    ) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult], dict]:
         r"""
         solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
         the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -488,6 +495,7 @@ class Optimizer:
             metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
             solns: list - list of solutions for each possible set of corrupted sensors that was tried
         """
+        metadata = {}
         start = time.perf_counter()
 
         N, q, n = Phi.shape
@@ -509,24 +517,27 @@ class Optimizer:
         self.cvx_Phi_param.value = cvx_Phi
 
         end = time.perf_counter()
-        print(f"Setup time: {end-start:.4f}s")
+        metadata['setup_time'] = end-start
 
+        start = time.perf_counter()
         map_args = [S_list, repeat(q), repeat(self.prob), repeat(self.x0_hat), repeat(self.can_corrupt), repeat({'solver': self.solver, **solver_args})]
         soln_generator = map(optimize_l0_case, *map_args)
         # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
         #   soln_generator = pool.starmap(optimize_l0_case, zip(*map_args))
+        end = time.perf_counter()
+        metadata['solve_time'] = end-start
 
         ret = None
         solns = []
-        for soln in soln_generator:
-            x0_hat, prob, metadata = soln
-            solns.append(soln)
-            if ret is None and prob.status in ["optimal", "optimal_inaccurate"]:
-                ret = (x0_hat, prob, metadata)
+        for s in soln_generator:
+            s_x0_hat, s_prob, s_metadata = s
+            solns.append(s)
+            if ret is None and s_prob.status in ["optimal", "optimal_inaccurate"]:
+                ret = (s_x0_hat, s_prob, s_metadata)
                 if early_exit:
                     break
 
-        return ret, solns
+        return ret, solns, metadata
 
 def optimize_l0_case(
     S: Iterable[int],

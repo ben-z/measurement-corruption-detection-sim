@@ -236,12 +236,12 @@ class TestOptimizeL0(unittest.TestCase):
         ])
         solver = cp.CLARABEL
         optimizer_fn = self.get_optimizer_fn(version, 3, C, solver)
-        soln, solns = optimizer_fn(Phi, Y, solver_args={'solver': solver})
+        soln, _solns, _metadata = optimizer_fn(Phi, Y, solver_args={'solver': solver})
         self.assertIsNotNone(soln)
-        x0_hat, prob, metadata = soln
-        self.assertIsNotNone(x0_hat)
-        self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
-        self.assertSequenceEqual(metadata['K'], [])
+        s_x0_hat, _s_prob, s_metadata = soln
+        self.assertIsNotNone(s_x0_hat)
+        self.assertTrue(np.allclose(s_x0_hat, x0, atol=1e-7), f"{s_x0_hat=} != {x0=}")
+        self.assertSequenceEqual(s_metadata['K'], [])
 
     @parameterized.expand([
         "v2",
@@ -282,16 +282,16 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0 + np.array([0, 0, 1]),
             C @ Ad @ Ad @ x0 + np.array([0, 0, 1]),
         ])
-        soln, solns = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
+        soln, solns, _metadata = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
         self.assertIsNotNone(soln)
-        x0_hat, prob, metadata = soln
-        self.assertIsNotNone(x0_hat)
-        self.assertIsNotNone(prob)
-        self.assertIsNotNone(metadata)
-        self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
-        print(metadata)
+        s_x0_hat, s_prob, s_metadata = soln
+        self.assertIsNotNone(s_x0_hat)
+        self.assertIsNotNone(s_prob)
+        self.assertIsNotNone(s_metadata)
+        self.assertTrue(np.allclose(s_x0_hat, x0, atol=1e-7), f"{s_x0_hat=} != {x0=}")
+        print(s_metadata)
         print([json.dumps({'K': soln[2]['K'], 'S': soln[2]['S'], 'status': soln[1].status}) for soln in solns])
-        self.assertSequenceEqual(metadata['K'], [2])
+        self.assertSequenceEqual(s_metadata['K'], [2])
         print([json.dumps({'K': soln[2]['K'], 'S': soln[2]['S'], 'status': soln[1].status}) for soln in solns])
         self.assertSetEqual(set([
             json.dumps({'K': [], 'S': [0,1,2], 'status': 'infeasible'}),
@@ -305,14 +305,14 @@ class TestOptimizeL0(unittest.TestCase):
             C @ Ad @ x0 + np.array([0, 1, 0]),
             C @ Ad @ Ad @ x0 + np.array([0, 1, 0]),
         ])
-        soln, solns = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
+        soln, solns, _metadata = optimizer_fn(Phi, Y, S_list=[S for S in powerset(range(C.shape[0])) if 0 in S], solver_args={'solver': cp.CLARABEL}, early_exit=False)
         self.assertIsNotNone(soln)
-        x0_hat, prob, metadata = soln
-        self.assertIsNotNone(x0_hat)
-        self.assertIsNotNone(prob)
-        self.assertIsNotNone(metadata)
-        self.assertTrue(np.allclose(x0_hat, x0, atol=1e-7), f"{x0_hat=} != {x0=}")
-        self.assertSequenceEqual(metadata['K'], [1])
+        s_x0_hat, s_prob, s_metadata = soln
+        self.assertIsNotNone(s_x0_hat)
+        self.assertIsNotNone(s_prob)
+        self.assertIsNotNone(s_metadata)
+        self.assertTrue(np.allclose(s_x0_hat, x0, atol=1e-7), f"{s_x0_hat=} != {x0=}")
+        self.assertSequenceEqual(s_metadata['K'], [1])
         self.assertSetEqual(set([
             json.dumps({'K': [], 'S': [0,1,2], 'status': 'infeasible'}),
             json.dumps({'K': [2], 'S': [0,1], 'status': 'infeasible'}),
