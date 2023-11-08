@@ -603,42 +603,8 @@ def find_corruption(output_hist, input_hist, estimate_hist, closest_idx_hist, pa
             pool.terminate()
             pool.join()
 
-
-    # # Run the solver from the beginning until we detect the corruption
-    # for k in range(max(N,starting_k), len(output_hist)+1):
-    #     # print(f"{k=} (t={k*model_params['dt']:.2f}s)")
-    #     estm_res, optimizer_res, metadata = estimate_state(None, output_hist[k-N:k], input_hist[k-N:k-1], estimate_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, Cs, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
-    #     if optimizer_res is None:
-    #         continue
-
-    #     soln, solns, optimizer_metadata = optimizer_res
-    #     if soln is None:
-    #         continue
-
-    #     x0_hat, prob, soln_metadata = soln
-    #     if len(soln_metadata['K']) > 0:
-    #         print(f"Found corruption at {k=} (t={k*model_params['dt']:.2f}s), K={soln_metadata['K']}, estimator/optimizer/solve time: {metadata['total_time']:.4f}/{metadata['optimizer_time']:.4f}/{optimizer_metadata['solve_time']:.4f}")
-    #         break
-    # else:
-    #     print("No corruption detected")
-
 find_corruption(output_hist, u_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocity_profile, [C]*N, N, 500, model_params)
 
-# # Run the solver for the last N outputs
-# # Note that the indexing here is slightly different from the one in the loop, because in the loop, we are getting data before we append elements to u_hist, estimate_hist, and closest_idx_hist
-# estm_res, optimizer_res, metadata = estimate_state(None, [o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], estimate_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=True)
-# assert optimizer_res is not None, "Optimizer didn't run"
-# soln, solns, optimizer_metadata = optimizer_res
-# assert soln is not None, 'Optimization failed'
-# x0_hat, prob, soln_metadata = soln
-# for x, p, m in solns:
-#     print(p.status, f"v: {p.value:.4f}", format_floats(m, 4), f"{p.solve_time=:.4f}, {p.compilation_time=:.4f}", "x:", format_floats(x, 4))
-# print(f"optimizer/solve time (s): {metadata['optimizer_time']:.4f}/{sum(m['solve_time'] for _, _, m in solns):.4f}")
-# print("K: ", soln_metadata['K'])
-# print(x0_hat)
-
-# solver_setup = get_solver_setup([o + np.array([0,0,0,0,0,0]) for o in output_hist[-N:]], u_hist[-N:-1], closest_idx_hist[-N:-1], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'])
-# print(solver_setup['Phi'] @ solver_setup['output_hist_no_input_effects'][0][:5] - solver_setup['Y'])
 
 # %%
 # Retroactively calculate from data the modelling error and the noise
