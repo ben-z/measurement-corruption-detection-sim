@@ -3,14 +3,17 @@ import numpy as np
 import os
 import time
 from collections import namedtuple
+from filterpy.kalman import UnscentedKalmanFilter, MerweScaledSigmaPoints
 from functools import wraps
 from itertools import chain, combinations, repeat
 from math import pi, sin, cos, atan2, sqrt
 from numpy.typing import NDArray
 from numpy.linalg import matrix_power
-from typing import TypeVar, Iterable, Tuple, Optional, List
+from typing import TypeVar, Iterable, Tuple, Optional, List, Any
 from scipy.linalg import expm
+import matplotlib.pyplot as plt
 from multiprocessing import Pool
+
 
 MAX_POOL_SIZE = 32
 
@@ -41,6 +44,22 @@ def get_unpack_fn(fn):
         return fn(*args)
 
     return unpack_fn
+
+def get_properties(obj):
+    return [attr for attr in dir(obj) if isinstance(getattr(obj.__class__, attr, None), property)]
+
+def format_floats(item, decimals=2):
+    if isinstance(item, float):
+        return f'{item:.{decimals}f}'
+    elif isinstance(item, dict):
+        return {key: format_floats(value, decimals) for key, value in item.items()}
+    elif isinstance(item, (list, tuple)):
+        return [format_floats(value, decimals) for value in item]
+    elif isinstance(item, np.ndarray):
+        vectorized_format = np.vectorize(lambda x: format_floats(x, decimals))
+        return vectorized_format(item)
+    else:
+        return item
 
 #################################################################
 # Models
@@ -399,9 +418,9 @@ def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | fl
 
     # Support scalar or vector eps
     if np.isscalar(eps):
-        eps_final: NDArray[np.float64] = np.ones(q) * eps
+        eps_final: NDArray[np.float64] = np.ones(q) * eps # type: ignore
     else:
-        eps_final: NDArray[np.float64] = eps
+        eps_final: NDArray[np.float64] = eps # type: ignore
 
     def optimize_case(S):
         """
@@ -411,7 +430,7 @@ def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | fl
         K = list(set(range(q)) - set(S))
 
         x0_hat = cp.Variable(n)
-        optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N))
+        optimizer = cp.reshape(cvx_Y - np.matmul(cvx_Phi, x0_hat), (q, N)) # type: ignore
         optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
 
         # Set toleance constraints to account for noise
@@ -645,6 +664,56 @@ def get_output_evolution_tensor(Cs: list[np.ndarray], Evo: np.ndarray):
         Phi[i] = np.matmul(Cs[i], Evo[i])
     
     return Phi
+
+def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l):
+    """
+    Returns the precomputed data needed to solve for corrupted sensors.
+    Parameters:
+        output_hist: list[float] - a list of N outputs
+        input_hist: list[float] - a list of N-1 inputs
+        closest_idx_hist: list[int] - a list of N-1 closest indices
+        path_points: list[tuple[float,float]] - a list of points on the path
+        velocities: list[float] - a list of velocities at each point on the path
+        dt: float - the time step
+        l: float - the distance between the front and rear axles
+    """
+    N = len(output_hist)
+    assert len(input_hist) == N-1, 'input_hist must be one shorter than output_hist'
+    assert len(closest_idx_hist) == N-1, 'closest_idx_hist must be one shorter than output_hist'
+    assert len(Cs) == N, 'Cs must be N long'
+
+    x0_hat_closest_idx = closest_idx_hist[0]
+
+    # Use walk_trajectory_by_durations to get the desired path indices at each time step
+    desired_path_indices = [x0_hat_closest_idx] + walk_trajectory_by_durations(path_points, velocities, x0_hat_closest_idx, [dt]*(N-1))
+
+    # Generate the As and Bs for each time step
+    models = [kinematic_bicycle_model_linearize(path_headings[idx], velocities[idx], 0, dt, l) for idx in desired_path_indices]
+    As = list(m[0] for m in models[:N-1])
+    Bs = list(m[1] for m in models[:N-1])
+    
+    # List of desired outputs at the linearization points
+    desired_trajectory = [Cs[i] @ np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0]) for i, idx in enumerate(desired_path_indices)]
+    
+    # Calculate the effects on outputs due to inputs, then subtract them from the outputs.
+    # Also subtract the desired outputs to get deviations.
+    input_effects = calc_input_effects_on_output(As, Bs, Cs, input_hist)
+    output_hist_no_input_effects = [output - input_effect - desired_output for output, input_effect, desired_output in zip(output_hist, input_effects, desired_trajectory)]
+    # normalize angular measurements
+    for o in output_hist_no_input_effects:
+        o[2] = wrap_to_pi(o[2])
+        o[4] = wrap_to_pi(o[4])
+        o[5] = wrap_to_pi(o[5])
+
+    # Solve for corrupted sensors
+    Y = np.array(output_hist_no_input_effects)
+    Phi = get_output_evolution_tensor(Cs, get_state_evolution_tensor(As))
+
+    return {
+        'Y': Y,
+        'Phi': Phi,
+        'output_hist_no_input_effects': output_hist_no_input_effects,
+    }
         
 def get_s_sparse_observability(Cs, As, early_exit=False):
     """
@@ -701,18 +770,342 @@ def get_s_sparse_observability(Cs, As, early_exit=False):
 
     return s, cases
 
-def get_properties(obj):
-    return [attr for attr in dir(obj) if isinstance(getattr(obj.__class__, attr, None), property)]
+def estimate_state(
+    kf,
+    output_hist,
+    input_hist,
+    estimate_hist,
+    closest_idx_hist,
+    path_points,
+    path_headings,
+    velocities,
+    Cs,
+    dt,
+    l,
+    N,
+    enable_fault_tolerance,
+    optimizer,
+    noise_std,
+) -> Tuple[NDArray[np.float64], MyOptimizerRes | None, dict]:
+    """
+    Estimates the state of the vehicle.
+    Parameters:
+        kf: Optional[filterpy.kalman.UnscentedKalmanFilter] - the filter to use. If None, simply average the sensors.
+        output_hist: list[float] - a list of N outputs
+        input_hist: list[float] - a list of N-1 inputs
+        estimate_hist: list[float] - a list of N-1 estimates
+        path_points: list[tuple[float,float]] - a list of points on the path
+        velocities: list[float] - a list of velocities at each point on the path
+        dt: float - the time step
+    Returns:
+        (x_hat, y_hat, theta_hat, v_hat, delta_hat): tuple[float,float,float,float,float] - the estimated state
+        optimizer_res: Optional[Optional[MyOptimizationCaseResult], List[MyOptimizationCaseResult]] - the result of the optimizer
+        metadata: dict - metadata about the estimation process
+    """
+    metadata = {}
+    start = start_e2e = time.perf_counter()
+    if kf is not None:
+        if len(input_hist) == 0:
+            kf.predict(u=np.array([0,0]))
+        else:
+            kf.predict(u=input_hist[-1])
 
-def format_floats(item, decimals=2):
-    if isinstance(item, float):
-        return f'{item:.{decimals}f}'
-    elif isinstance(item, dict):
-        return {key: format_floats(value, decimals) for key, value in item.items()}
-    elif isinstance(item, (list, tuple)):
-        return [format_floats(value, decimals) for value in item]
-    elif isinstance(item, np.ndarray):
-        vectorized_format = np.vectorize(lambda x: format_floats(x, decimals))
-        return vectorized_format(item)
+        # print(kf.x)
+        # print(kf.P)
+
+    # This is the latest output
+    output = output_hist[-1]
+    assert len(output) == 6, 'This function only works with output (x,y,theta,v,delta1,delta2)'
+    if kf is not None:
+        kf.update(output)
+
+        x_hat = kf.x
     else:
-        return item
+        # State estimator
+        x_hat = np.zeros(5)
+        x_hat[0] = output[0]
+        x_hat[1] = output[1]
+        x_hat[2] = output[2]
+        x_hat[3] = output[3]
+        x_hat[4] = np.mean([output[4], output[5]])
+    end = time.perf_counter()
+    metadata['filter_time'] = end - start
+
+    if not enable_fault_tolerance:
+        return x_hat, None, metadata
+
+    ###########################################################################
+    # Fault detection
+    ###########################################################################
+    if len(output_hist) < N:
+        print(f"Insufficient data to solve for corrupt sensors. Need {N} outputs, only have {len(output_hist)}")
+        return x_hat, None, metadata
+
+    assert len(input_hist) == N-1, 'input_hist must be one shorter than output_hist'
+    assert len(estimate_hist) == N-1, 'estimate_hist must be one shorter than output_hist'
+    assert len(output_hist) == N, 'output_hist must be N long'
+
+    setup = get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l)
+
+    # eps = np.array([0.1]*2+[1e-2]+[1e-3]*3)
+    # eps = np.array([1.0]*2+[0.3]+[1.5]+[0.05]*2)
+    eps = noise_std * 3 # 3 standard deviations captures 99.7% of the data
+
+    start = time.perf_counter()
+    optimizer_res = optimizer.optimize_l0_v4(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
+    # optimizer_res = optimize_l0_v2(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
+    end = end_e2e = time.perf_counter()
+    metadata['optimizer_time'] = end - start
+    metadata['total_time'] = end_e2e - start_e2e
+
+    return x_hat, optimizer_res, metadata
+
+def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, path_curvatures, path_dcurvatures, velocity_profile, optimizer, model_params):
+    """
+    Runs the simulation.
+    """
+    # Functions specific to the model used
+    def subtract_states(x1, x2):
+        return np.array([
+            x1[0] - x2[0],
+            x1[1] - x2[1],
+            wrap_to_pi(x1[2] - x2[2]),
+            x1[3] - x2[3],
+            wrap_to_pi(x1[4] - x2[4])
+        ])
+
+    def subtract_outputs(y1, y2):
+        return np.array([
+            y1[0] - y2[0],
+            y1[1] - y2[1],
+            wrap_to_pi(y1[2] - y2[2]),
+            y1[3] - y2[3],
+            wrap_to_pi(y1[4] - y2[4]),
+            wrap_to_pi(y1[5] - y2[5])
+        ])
+
+    # TODO: verify the implementations of state_mean and z_mean
+    def state_mean(sigmas, Wm):
+        x = np.zeros(5)
+        sum_sin = np.sum(np.dot(np.sin(sigmas[:,2]), Wm))
+        sum_cos = np.sum(np.dot(np.cos(sigmas[:,2]), Wm))
+        x[0] = np.dot(sigmas[:,0], Wm)
+        x[1] = np.dot(sigmas[:,1], Wm)
+        x[2] = atan2(sum_sin, sum_cos)
+        x[3] = np.dot(sigmas[:,3], Wm)
+        x[4] = np.dot(sigmas[:,4], Wm)
+        return x
+
+    def z_mean(sigmas, Wm):
+        z = np.zeros(6)
+        sum_sin = np.sum(np.dot(np.sin(sigmas[:,2]), Wm))
+        sum_cos = np.sum(np.dot(np.cos(sigmas[:,2]), Wm))
+        z[0] = np.dot(sigmas[:,0], Wm)
+        z[1] = np.dot(sigmas[:,1], Wm)
+        z[2] = atan2(sum_sin, sum_cos)
+        z[3] = np.dot(sigmas[:,3], Wm)
+        z[4] = np.dot(sigmas[:,4], Wm)
+        z[5] = np.dot(sigmas[:,5], Wm)
+        return z
+
+    def get_lookahead_distance(v):
+        return max(v * 0.5, 0.5)
+
+    state = x0
+    # TODO: tune the sigma points
+    ukf_sigma_points = MerweScaledSigmaPoints(n=C.shape[1], alpha=0.3, beta=2, kappa=3-C.shape[1], subtract=subtract_states)
+    ukf = UnscentedKalmanFilter(
+        dim_x=C.shape[1],
+        dim_z=C.shape[0],
+        dt=model_params['dt'],
+        fx=lambda x, _dt, u: kinematic_bicycle_model(x, u, model_params),
+        hx=lambda x: C @ x,
+        points=ukf_sigma_points,
+        residual_x=subtract_states,
+        residual_z=subtract_outputs,
+        x_mean_fn=state_mean,
+        z_mean_fn=z_mean,
+    )
+    ukf.x = x0
+    ukf.P = np.diag([1,1,0.3,0.5,0.1]) # initial state covariance
+    ukf.R = np.diag(noise_std**2) # measurement noise
+    ukf.Q = np.diag([0.1,0.1,0.01,0.1,0.001]) # process noise
+    state_hist = []
+    output_hist = []
+    estimate_hist = []
+    u_hist = []
+    closest_idx_hist = []
+    ukf_P_hist = []
+    a_controller = PIDController(2, 0, 0, model_params['dt'])
+    delta_dot_controller = PIDController(5, 0, 0, model_params['dt'])
+    prev_closest_idx = None
+    for i in range(num_steps):
+        state_hist.append(state)
+
+        # measurement
+        output = C @ state
+        # Add noise
+        output += np.random.normal(0, noise_std**2)
+
+        # Add attack
+        if i * model_params['dt'] > 8:
+            pass
+            # output[2] += 0.5
+            # output[3] += 10
+            output[4] += 0.1
+            # output[5] += 0.1
+        output_hist.append(output)
+
+        # fault-tolerant estimator
+        (x_hat, y_hat, theta_hat, v_hat, delta_hat), _, _ = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=False, optimizer=optimizer, noise_std=noise_std)
+
+        estimate_hist.append([x_hat, y_hat, theta_hat, v_hat, delta_hat])
+        ukf_P_hist.append(ukf.P.copy())
+
+        if prev_closest_idx is None:
+            closest_idx = closest_point_idx(path_points, x_hat, y_hat)
+        else:
+            closest_idx = closest_point_idx_local(path_points, x_hat, y_hat, prev_closest_idx)
+        assert closest_idx is not None, 'No closest point found'
+        closest_idx_hist.append(closest_idx)
+        prev_closest_idx = closest_idx
+
+        lookahead_distance = get_lookahead_distance(v_hat)
+        target_idx = get_lookahead_idx(path_points, closest_idx, lookahead_distance)
+
+        target_point = path_points[target_idx]
+        target_heading = path_headings[target_idx]
+        target_curvature = path_curvatures[target_idx]
+        target_dcurvature = path_dcurvatures[target_idx]
+        target_velocity = velocity_profile[target_idx]
+
+        # Pure pursuit controller
+        dist_to_target = sqrt((target_point[0] - x_hat)**2 + (target_point[1] - y_hat)**2)
+        angle_to_target = atan2(target_point[1] - y_hat, target_point[0] - x_hat) - theta_hat
+        target_delta = atan2(2*model_params['l']*sin(angle_to_target), dist_to_target)
+
+        # Compute the control inputs (with saturation)
+        a = clamp(a_controller.step(target_velocity - v_hat), -model_params["max_linear_acceleration"], model_params["max_linear_acceleration"])
+        delta_dot = clamp(delta_dot_controller.step(wrap_to_pi(target_delta - delta_hat)), -model_params["max_steering_rate"], model_params["max_steering_rate"])
+
+        # Simulate the bicycle
+        state = kinematic_bicycle_model(state, [a, delta_dot], model_params)
+        u_hist.append([a, delta_dot])
+    t_hist = [i * model_params['dt'] for i in range(num_steps)]
+
+    return t_hist, state_hist, output_hist, estimate_hist, u_hist, closest_idx_hist, ukf_P_hist
+
+# Plot simulation data
+def plot_quad(t_hist, state_hist, output_hist, estimate_hist, u_hist, closest_idx_hist, ukf_P_hist, path_points, path_headings, velocity_profile, model_params):
+    from filterpy.stats import plot_covariance
+
+    num_steps = len(t_hist)
+
+    EGO_COLOR = 'tab:orange'
+    EGO_ESTIMATE_COLOR = 'tab:red'
+    EGO_ACTUATION_COLOR = 'tab:green'
+    TARGET_COLOR = 'tab:blue'
+    TITLE = "Simulation Data"
+    FIGSIZE_MULTIPLIER = 1.5
+    fig = plt.figure(figsize=(6.4 * FIGSIZE_MULTIPLIER, 4.8 * FIGSIZE_MULTIPLIER), constrained_layout=True)
+    suptitle = fig.suptitle(TITLE)
+    subfigs = fig.subfigures(2, 2)
+    COV_INTERVAL_S = 5 # number of seconds between covariance ellipses
+    uncertainty_std = 1 # number of standard deviations to plot for uncertainty
+
+    # BEV plot
+    ax_bev = subfigs[0][0].add_subplot(111)
+    ax_bev.plot([p[0] for p in path_points], [p[1] for p in path_points], '.', label='path', markersize=0.1, color=TARGET_COLOR)
+    ego_position = ax_bev.plot([p[0] for p in state_hist], [p[1] for p in state_hist], '.', markersize=0.1, color=EGO_COLOR, label='ego')[0]
+    ego_position_estimate = ax_bev.plot([p[0] for p in estimate_hist], [p[1] for p in estimate_hist], '.', markersize=0.1, color=EGO_ESTIMATE_COLOR, label='ego estimate')[0]
+    # Velocity plot
+    ax_velocity = subfigs[0][1].add_subplot(111)
+    ax_velocity.plot(t_hist, [velocity_profile[idx] for idx in closest_idx_hist], label=r"$v_d$", color=TARGET_COLOR) # target velocity
+    ax_velocity.plot(t_hist, [p[3] for p in state_hist], label=r"$v$", color=EGO_COLOR) # velocity
+    ax_velocity.plot(t_hist, [p[3] for p in estimate_hist], label=r"$\hat{v}$", color=EGO_ESTIMATE_COLOR) # velocity estimate
+    ax_velocity.fill_between(t_hist, [p[3] - uncertainty_std*np.sqrt(ukf_P[3,3]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], [p[3] + uncertainty_std*np.sqrt(ukf_P[3,3]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], alpha=0.2, color=EGO_ESTIMATE_COLOR)
+    # Heading&Steering plot
+    ax_heading_steering = subfigs[1][0].subplots(2, 1, sharex=True)
+    ax_heading = ax_heading_steering[0]
+    ax_heading.plot(t_hist, np.unwrap([path_headings[idx] for idx in closest_idx_hist]), label=r"$\theta_d$", color=TARGET_COLOR) # target heading
+    ax_heading.plot(t_hist, np.unwrap([p[2] for p in state_hist]), label=r"$\theta$", color=EGO_COLOR) # heading
+    ax_heading.plot(t_hist, np.unwrap([p[2] for p in estimate_hist]), label=r"$\hat{\theta}$", color=EGO_ESTIMATE_COLOR) # heading estimate
+    ax_heading.fill_between(t_hist, np.unwrap([p[2] - uncertainty_std*np.sqrt(ukf_P[2,2]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)]), np.unwrap([p[2] + uncertainty_std*np.sqrt(ukf_P[2,2]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)]), alpha=0.2, color=EGO_ESTIMATE_COLOR)
+    ax_steering = ax_heading_steering[1]
+    ax_steering.plot(t_hist, [p[4] for p in state_hist], label=r"$\delta$", color=EGO_COLOR) # steering
+    ax_steering.plot(t_hist, [p[4] for p in estimate_hist], label=r"$\hat{\delta}$", color=EGO_ESTIMATE_COLOR) # steering estimate
+    ax_steering.fill_between(t_hist, [p[4] - uncertainty_std*np.sqrt(ukf_P[4,4]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], [p[4] + uncertainty_std*np.sqrt(ukf_P[4,4]) for p, ukf_P in zip(estimate_hist, ukf_P_hist)], alpha=0.2, color=EGO_ESTIMATE_COLOR)
+    # Control signals plot
+    axes_control = subfigs[1][1].subplots(2, 1, sharex=True)
+    axes_control[0].plot(t_hist, [u[0] for u in u_hist], label=r"$a$", color=EGO_ACTUATION_COLOR) # a
+    axes_control[1].plot(t_hist, [u[1] for u in u_hist], label=r"$\dot{\delta}$", color=EGO_ACTUATION_COLOR) # delta_dot
+
+    # # Plot covariance ellipses
+    # plt.sca(ax_bev)
+    # for est, ukf_P in zip(estimate_hist[::int(COV_INTERVAL_S/model_params['dt'])], ukf_P_hist[::int(COV_INTERVAL_S/model_params['dt'])]):
+    #     plot_covariance(est[:2], std=100, cov=ukf_P[0:2, 0:2], facecolor='none', edgecolor=EGO_ESTIMATE_COLOR)
+
+    # Finalize plots
+    ax_bev.axis('equal')
+    ax_bev.set_title('BEV')
+    ax_bev.legend(markerscale=50)
+    ax_velocity.set_title("Velocity over time")
+    ax_velocity.set_xlabel(r'Time ($s$)')
+    ax_velocity.set_ylabel(r'Velocity ($m/s$)')
+    ax_velocity.legend()
+    ax_heading.set_title("Heading and Steering over time")
+    ax_heading.set_ylabel(r'Heading ($rad$)')
+    ax_heading.legend()
+    ax_steering.set_xlabel(r'Time ($s$)')
+    ax_steering.set_ylabel(r'Steering ($rad$)')
+    ax_steering.legend()
+    axes_control[0].set_title("Control signals over time")
+    axes_control[0].set_ylabel(r'Acceleration ($m/s^2$)')
+    axes_control[0].legend()
+    axes_control[1].set_xlabel(r'Time ($s$)')
+    axes_control[1].set_ylabel(r'Steering rate ($rad/s$)')
+    axes_control[1].legend()
+
+    def generate_gif():
+        from matplotlib.animation import PillowWriter, FuncAnimation
+        ANIM_TITLE_FORMAT = 'Simulation Playback (Current time: ${:.2f}$ s)'
+
+        # add time cursors
+        time_cursors = []
+        time_cursors.append(ax_velocity.axvline(0, color='k'))
+        time_cursors.append(ax_heading.axvline(0, color='k'))
+        time_cursors.append(axes_control[0].axvline(0, color='k'))
+        time_cursors.append(axes_control[1].axvline(0, color='k'))
+        def animate(i):
+            # ================= Update title =================
+            suptitle.set_text(ANIM_TITLE_FORMAT.format(i * model_params['dt']))
+
+            # =============== Plot ego position ===============
+            # For a moving position, use this:
+            #ego_position.set_data(state_hist[i][0], state_hist[i][1])
+            # To plot the entire trajectory, use this:
+            ego_position.set_data([p[0] for p in state_hist[:i+1]], [p[1] for p in state_hist[:i+1]])
+            ego_position_estimate.set_data([p[0] for p in estimate_hist[:i+1]], [p[1] for p in estimate_hist[:i+1]])
+
+            # =============== Plot time cursors ===============
+            for time_cursor in time_cursors:
+                time_cursor.set_xdata([i * model_params['dt']])
+
+            return suptitle, ego_position, *time_cursors
+
+        anim_interval_ms = 2000 # the step size of the animation in milliseconds
+        anim_frames: list[Any] = list(range(0, num_steps, int(anim_interval_ms / 1000 / model_params['dt'])))
+        anim = FuncAnimation(fig, animate, frames=anim_frames, interval=anim_interval_ms)
+
+        start = time.perf_counter()
+        # anim.save('zero_state.gif', writer=PillowWriter(fps=1000/anim_interval_ms))
+
+        from IPython.core.display import HTML
+        html = HTML(anim.to_jshtml())
+        print(f"Animation generation took {time.perf_counter() - start:.2f} seconds")
+        plt.close(fig)
+
+        return html
+    
+    return generate_gif
+
