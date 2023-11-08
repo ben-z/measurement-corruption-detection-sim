@@ -24,7 +24,7 @@ import time
 from math import pi, sin, cos, atan2, sqrt
 from multiprocessing import Pool
 from numpy.typing import NDArray
-from typing import List, Tuple
+from typing import List, Tuple, Any
 from utils import (
     get_unpack_fn,
     generate_circle_approximation,
@@ -285,7 +285,8 @@ def estimate_state(
     setup = get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l)
 
     # eps = np.array([0.1]*2+[1e-2]+[1e-3]*3)
-    eps = np.array([1.0]*2+[0.3]+[1.5]+[0.05]*2)
+    # eps = np.array([1.0]*2+[0.3]+[1.5]+[0.05]*2)
+    eps = noise_std * 3 # 3 standard deviations captures 99.7% of the data
 
     start = time.perf_counter()
     optimizer_res = optimizer.optimize_l0_v4(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
@@ -342,7 +343,7 @@ def z_mean(sigmas, Wm):
     return z
 
 # Control the bicycle to follow the path
-simulation_seconds = 8.1
+simulation_seconds = 15
 num_steps = int(simulation_seconds / model_params['dt'])
 x0 = np.array([200,100, pi/4, 1, 0])
 state = x0
@@ -355,6 +356,7 @@ C = np.array([
     [0, 0, 0, 0, 1],
     [0, 0, 0, 0, 1],
 ])
+noise_std: NDArray[np.float64] = np.array([0.5,0.5,0.05,0.5,0.01,0.01])
 # TODO: tune the sigma points
 ukf_sigma_points = MerweScaledSigmaPoints(n=C.shape[1], alpha=0.3, beta=2, kappa=3-C.shape[1], subtract=subtract_states)
 ukf = UnscentedKalmanFilter(
@@ -371,7 +373,8 @@ ukf = UnscentedKalmanFilter(
 )
 ukf.x = x0
 ukf.P = np.diag([1,1,0.3,0.5,0.1]) # initial state covariance
-ukf.R = np.diag([0.2,0.2,0.02,0.5,0.0001,0.0001]) # measurement noise
+# ukf.R = np.diag([0.2,0.2,0.02,0.5,0.0001,0.0001]) # measurement noise
+ukf.R = np.diag(noise_std**2) # measurement noise
 ukf.Q = np.diag([0.1,0.1,0.01,0.1,0.001]) # process noise
 optimizer = Optimizer(N,C.shape[0],C.shape[1])
 state_hist = []
@@ -389,14 +392,14 @@ for i in range(num_steps):
     # measurement
     output = C @ state
     # Add noise
-    output += np.random.normal(0, [0.1,0.1,0.02,0.1,0.0001,0.0001])
+    output += np.random.normal(0, noise_std**2)
 
     # Add attack
     if i * model_params['dt'] > 8:
         pass
-        # output[2] += 1
-        output[3] += 10
-        # output[4] += 0.1
+        # output[2] += 0.5
+        # output[3] += 10
+        output[4] += 0.1
         # output[5] += 0.1
     output_hist.append(output)
 
@@ -543,8 +546,9 @@ def plot_quad():
 
             return suptitle, ego_position, *time_cursors
 
-        anim_interval_ms = 2000
-        anim = FuncAnimation(fig, animate, frames=list(range(0, num_steps, int(anim_interval_ms / 1000 / model_params['dt']))), interval=anim_interval_ms)
+        anim_interval_ms = 2000 # the step size of the animation in milliseconds
+        anim_frames: list[Any] = list(range(0, num_steps, int(anim_interval_ms / 1000 / model_params['dt'])))
+        anim = FuncAnimation(fig, animate, frames=anim_frames, interval=anim_interval_ms)
 
         start = time.perf_counter()
         # anim.save('zero_state.gif', writer=PillowWriter(fps=1000/anim_interval_ms))
