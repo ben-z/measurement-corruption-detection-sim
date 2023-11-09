@@ -80,51 +80,12 @@ model_params = {
     "min_linear_velocity": 0.1,  # m/s
 }
 
-
-def limit_difference(arr, max_diff):
-    # Calculate the differences
-    differences = np.clip(np.diff(arr), -max_diff, max_diff)
-
-    # Reconstruct the array
-    limited_arr = np.cumsum(np.insert(differences, 0, arr[0]))
-
-    return limited_arr
-
-
-def smooth_velocity_profile(velocity_profile, path_lengths, max_acc):
-    """
-    Smooths the velocity profile.
-    """
-    max_acc = np.broadcast_to(max_acc, len(velocity_profile))
-
-    # roll the arrays so that the smallest velocity is first
-    min_vel_idx = np.argmin(velocity_profile)
-    velocity_profile = np.roll(velocity_profile, -min_vel_idx)
-    max_acc = np.roll(max_acc, -min_vel_idx)
-    path_lengths = np.roll(path_lengths, -min_vel_idx)
-
-    for i in range(len(velocity_profile)):
-        v0 = velocity_profile[i]
-        vf = velocity_profile[(i + 1) % len(velocity_profile)]
-        d = path_lengths[i]
-
-        # Clamp the acceleration
-        a = np.clip((vf**2 - v0**2) / (2 * d), -max_acc[i], max_acc[i])
-        velocity_profile[(i + 1) % len(velocity_profile)] = np.sqrt(v0**2 + 2 * a * d)
-
-    # roll the array back
-    velocity_profile = np.roll(velocity_profile, min_vel_idx)
-
-    return velocity_profile
-
-
 def calculate_segment_lengths(points: List[Tuple[float, float]]) -> List[float]:
     """Calculate the lengths of each segment given a list of (x, y) tuples."""
     return [
         math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         for (x1, y1), (x2, y2) in zip(points, np.roll(points, -1, axis=0))
     ]
-
 
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 10, 5, 1000)
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_circle_approximation([-10, 0], 10, 1000)
@@ -154,12 +115,6 @@ velocity_profile_raw = np.sqrt(
 )
 velocity_profile = np.clip(
     velocity_profile_raw,
-    model_params["min_linear_velocity"],
-    model_params["max_linear_velocity"],
-)
-# velocity_profile = smooth_velocity_profile(velocity_profile, path_lengths, max_linear_acceleration)
-velocity_profile = np.clip(
-    velocity_profile,
     model_params["min_linear_velocity"],
     model_params["max_linear_velocity"],
 )
