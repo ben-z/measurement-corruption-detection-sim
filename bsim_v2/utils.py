@@ -860,7 +860,10 @@ def estimate_state(
 
     return x_hat, optimizer_res, metadata
 
-def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, path_curvatures, path_dcurvatures, velocity_profile, optimizer, model_params):
+def estimate_state_unpack(args):
+    return estimate_state(*args)
+
+def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, path_curvatures, path_dcurvatures, velocity_profile, optimizer, model_params, attack_generator):
     """
     Runs the simulation.
     """
@@ -948,12 +951,8 @@ def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, p
         output += np.random.normal(0, noise_std**2)
 
         # Add attack
-        if i * model_params['dt'] > 8:
-            pass
-            # output[2] += 0.5
-            # output[3] += 10
-            output[4] += 0.1
-            # output[5] += 0.1
+        output = attack_generator(i * model_params['dt'], output)
+
         output_hist.append(output)
 
         # fault-tolerant estimator
@@ -1108,4 +1107,44 @@ def plot_quad(t_hist, state_hist, output_hist, estimate_hist, u_hist, closest_id
         return html
     
     return generate_gif
+
+def find_corruption(output_hist, input_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocity_profile, Cs, N, starting_k, optimizer, model_params, noise_std):
+    # Run the solver from the beginning until we detect the corruption
+    ks = range(max(N,starting_k), len(output_hist)+1)
+    args_iterable = ((None, output_hist[k-N:k], input_hist[k-N:k-1], estimate_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, Cs, model_params['dt'], model_params['l'], N, True, optimizer, noise_std) for k in ks)
+
+    pool = None
+    res_iter = map(estimate_state_unpack, args_iterable)
+    # Optional parallelization
+    # pool = Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1))
+    # pool_chunksize = int(1/model_params['dt']) # set chunksize to be a deterministic number of seconds
+    # res_iter = pool.imap(estimate_state_unpack, args_iterable, chunksize=pool_chunksize)
+
+    try:
+        # Run the solver from the beginning until we detect the corruption
+        for k, (estm_res, optimizer_res, metadata) in zip(ks, res_iter):
+            # print(f"{k=} (t={k*model_params['dt']:.2f}s)")
+            if optimizer_res is None:
+                continue
+
+            soln, solns, optimizer_metadata = optimizer_res
+            if soln is None:
+                continue
+
+            x0_hat, prob, soln_metadata = soln
+            if len(soln_metadata['K']) > 0:
+                print(f"Found corruption at {k=} (t={k*model_params['dt']:.2f}s), K={soln_metadata['K']}, estimator/optimizer/solve time: {metadata['total_time']:.4f}/{metadata['optimizer_time']:.4f}/{optimizer_metadata['solve_time']:.4f}")
+                return {
+                    'k': k,
+                    't': k*model_params['dt'],
+                    'K': soln_metadata['K'],
+                    'metadata': metadata,
+                    'optimizer_metadata': optimizer_metadata,
+                }
+        else:
+            return None
+    finally:
+        if pool:
+            pool.terminate()
+            pool.join()
 
