@@ -130,8 +130,8 @@ velocity_profile = np.clip(
 
 
 # Control the bicycle to follow the path
-N = 10
 x0 = np.array([200, 100, pi / 4, 1, 0])
+N = x0.shape[0]
 C = np.array(
     [
         [1, 0, 0, 0, 0],
@@ -189,11 +189,14 @@ for attack_start_t in range(10, 50, 10):
         make_attack_generator(attack_start_t),
     )
 
-    generate_gif = plot_quad(t_hist, state_hist, output_hist, estimate_hist, u_hist, closest_idx_hist, ukf_P_hist, path_points, path_headings, velocity_profile, model_params)
-    plt.show()
+    # generate_gif = plot_quad(t_hist, state_hist, output_hist, estimate_hist, u_hist, closest_idx_hist, ukf_P_hist, path_points, path_headings, velocity_profile, model_params)
+    # plt.show()
 
     # Post-analysis
+    print("Finding corruption")
     corruption = find_corruption(output_hist, u_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocity_profile, [C]*N, N, 500, optimizer, model_params, noise_std)
+
+    # TODO: Use fault generators to test various scenarios
 
 
 # %%
