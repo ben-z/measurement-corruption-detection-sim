@@ -390,7 +390,7 @@ MyCvxpyProblem = namedtuple('MyCvxpyProblem', ['status', 'solver_stats', 'compil
 MyOptimizationCaseResult = Tuple[NDArray[np.float64] | None, MyCvxpyProblem, dict]
 MyOptimizerRes = Tuple[Optional[MyOptimizationCaseResult], List[MyOptimizationCaseResult], dict]
 
-def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, **_kwargs) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult], dict]:
+def optimize_l0_v2(Phi: np.ndarray, Y: np.ndarray, eps: NDArray[np.float64] | float = 1e-15, S_list: Optional[Iterable[Iterable[int]]] = None, solver_args: dict = {}, **_kwargs) -> MyOptimizerRes:
     r"""
     solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
     the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -508,7 +508,7 @@ class Optimizer:
         S_list: Optional[Iterable[Iterable[int]]] = None,
         solver_args: dict = {},
         early_exit: bool = True,
-    ) -> Tuple[MyOptimizationCaseResult | None, list[MyOptimizationCaseResult], dict]:
+    ) -> MyOptimizerRes:
         r"""
         solves the l0 minimization problem. i.e. attempt to explain the output $Y$ using the model $\Phi$ (`Phi`) and return
         the most-likely initial state $\hat{x}_0$ (`x0_hat`) and the corrupted sensors (`K`).
@@ -852,7 +852,7 @@ def estimate_state(
     eps = noise_std * 3 # 3 standard deviations captures 99.7% of the data
 
     start = time.perf_counter()
-    optimizer_res = optimizer.optimize_l0_v4(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
+    optimizer_res: MyOptimizerRes = optimizer.optimize_l0_v4(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
     # optimizer_res = optimize_l0_v2(setup['Phi'], setup['Y'], eps=eps, solver_args={'solver': cp.CLARABEL})
     end = end_e2e = time.perf_counter()
     metadata['optimizer_time'] = end - start
@@ -863,7 +863,7 @@ def estimate_state(
 def estimate_state_unpack(args):
     return estimate_state(*args)
 
-def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, path_curvatures, path_dcurvatures, velocity_profile, optimizer, model_params, attack_generator):
+def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, path_curvatures, path_dcurvatures, velocity_profile, optimizer, model_params, attack_generator, enable_fault_tolerance):
     """
     Runs the simulation.
     """
@@ -956,7 +956,13 @@ def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, p
         output_hist.append(output)
 
         # fault-tolerant estimator
-        (x_hat, y_hat, theta_hat, v_hat, delta_hat), _, _ = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=False, optimizer=optimizer, noise_std=noise_std)
+        (x_hat, y_hat, theta_hat, v_hat, delta_hat), optimizer_res, _ = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=enable_fault_tolerance, optimizer=optimizer, noise_std=noise_std)
+        # if optimizer_res is None:
+        #     print(f"k={i}: Optimizer not run")
+        # elif optimizer_res[0] is None:
+        #     print(f"k={i}: Optimizer failed")
+        # else:
+        #     print(f"k={i}: {optimizer_res[0][2]['K']} corrupted")
 
         estimate_hist.append([x_hat, y_hat, theta_hat, v_hat, delta_hat])
         ukf_P_hist.append(ukf.P.copy())
@@ -1133,7 +1139,6 @@ def find_corruption(output_hist, input_hist, estimate_hist, closest_idx_hist, pa
 
             x0_hat, prob, soln_metadata = soln
             if len(soln_metadata['K']) > 0:
-                print(f"Found corruption at {k=} (t={k*model_params['dt']:.2f}s), K={soln_metadata['K']}, estimator/optimizer/solve time: {metadata['total_time']:.4f}/{metadata['optimizer_time']:.4f}/{optimizer_metadata['solve_time']:.4f}")
                 return {
                     'k': k,
                     't': k*model_params['dt'],

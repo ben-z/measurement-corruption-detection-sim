@@ -3,6 +3,7 @@ matplotlib>=3.8.0
 numpy>=1.26.1
 scipy>=1.11.3
 filterpy>=1.4.5
+pandas>=2.1.2
 
 # Development tools
 ipykernel>=6.25.2
@@ -11,3 +12,4 @@ pytest>=7.4.2
 pandas>=2.1.2
 snakeviz>=2.2.0
 parameterized>=0.9.0
+dill>=0.3.7

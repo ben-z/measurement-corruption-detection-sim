@@ -15,6 +15,7 @@
 #! %autoreload 2
 
 import os
+
 # Disable multithreading for numpy. Must be done before importing numpy.
 # Disabling because numpy is slower with multithreading for this application on machines with high single-core performance.
 NUM_THREADS = "1"
@@ -62,6 +63,11 @@ from utils import (
     run_simulation,
     find_corruption,
 )
+from fault_generators import (
+    sensor_bias_fault,
+    intermittent_fault,
+    drift_fault,
+)
 
 plt.rcParams["text.usetex"] = True
 np.set_printoptions(suppress=True)
@@ -80,12 +86,14 @@ model_params = {
     "min_linear_velocity": 0.1,  # m/s
 }
 
+
 def calculate_segment_lengths(points: List[Tuple[float, float]]) -> List[float]:
     """Calculate the lengths of each segment given a list of (x, y) tuples."""
     return [
         math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         for (x1, y1), (x2, y2) in zip(points, np.roll(points, -1, axis=0))
     ]
+
 
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 10, 5, 1000)
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_circle_approximation([-10, 0], 10, 1000)
@@ -144,26 +152,19 @@ C = np.array(
 )
 noise_std: NDArray[np.float64] = np.array([0.5, 0.5, 0.05, 0.5, 0.01, 0.01])
 optimizer = Optimizer(N, C.shape[0], C.shape[1])
+real_time_fault_tolerance = False
 
-
-def make_attack_generator(start_t):
-    def attack_generator(t, output):
-        if t > start_t:
-            pass
-            # output[2] += 0.5
-            output[3] += 10
-            # output[4] += 0.1
-            # output[5] += 0.1
-        return output
-
-    return attack_generator
-
-
-for attack_start_t in range(10, 50, 10):
+# Run the attack detector out of the loop, after we record the data.
+for attack_start_t in [10]:
+    # for attack_start_t in range(10, 50, 10):
     print(f"Running simulation with attack starting at t={attack_start_t}")
 
-    simulation_seconds = attack_start_t + 10
+    simulation_seconds = attack_start_t + 30
     num_steps = int(simulation_seconds / model_params["dt"])
+
+    # fault = sensor_bias_fault(attack_start_t, 10, 3)
+    # fault = drift_fault(attack_start_t, -3, 3)
+    fault = drift_fault(attack_start_t, -0.05, 2)
 
     (
         t_hist,
@@ -186,17 +187,51 @@ for attack_start_t in range(10, 50, 10):
         velocity_profile,
         optimizer,
         model_params,
-        make_attack_generator(attack_start_t),
+        fault,
+        real_time_fault_tolerance,
     )
 
-    # generate_gif = plot_quad(t_hist, state_hist, output_hist, estimate_hist, u_hist, closest_idx_hist, ukf_P_hist, path_points, path_headings, velocity_profile, model_params)
-    # plt.show()
+    generate_gif = plot_quad(
+        t_hist,
+        state_hist,
+        output_hist,
+        estimate_hist,
+        u_hist,
+        closest_idx_hist,
+        ukf_P_hist,
+        path_points,
+        path_headings,
+        velocity_profile,
+        model_params,
+    )
+    plt.show()
 
     # Post-analysis
     print("Finding corruption")
-    corruption = find_corruption(output_hist, u_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocity_profile, [C]*N, N, 500, optimizer, model_params, noise_std)
-
-    # TODO: Use fault generators to test various scenarios
+    corruption = find_corruption(
+        output_hist,
+        u_hist,
+        estimate_hist,
+        closest_idx_hist,
+        path_points,
+        path_headings,
+        velocity_profile,
+        [C] * N,
+        N,
+        500,
+        optimizer,
+        model_params,
+        noise_std,
+    )
+    if corruption is None:
+        print("No corruption found")
+    else:
+        det_delay = corruption["t"] - attack_start_t
+        print(
+            f"Detected corruption {det_delay:.2f}s after injection at k={corruption['k']} (t={corruption['t']:.2f}s)"
+            + f", K={corruption['K']}"
+            + f", estimator/optimizer/solve time: {corruption['metadata']['total_time']:.4f}/{corruption['metadata']['optimizer_time']:.4f}/{corruption['optimizer_metadata']['solve_time']:.4f}s"
+        )
 
 
 # %%
