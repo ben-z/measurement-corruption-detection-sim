@@ -1170,7 +1170,6 @@ def find_corruption(output_hist, input_hist, estimate_hist, closest_idx_hist, pa
             pool.join()
 
 def run_experiment(
-    output_file,
     # Simulation parameters
     x0,
     C,
@@ -1231,20 +1230,8 @@ def run_experiment(
         noise_std,
     )
 
-    if corruption is None:
-        with open(output_file, 'a') as f:
-            f.write(json.dumps({
-                'fault_spec': fault_spec,
-                'corruption': None,
-            }, cls=NpEncoder)+"\n")
-    else:
-        det_delay = corruption["t"] - fault_spec['kwargs']['start_t']
-        with open(output_file, 'a') as f:
-            f.write(json.dumps({
-                'fault_spec': fault_spec,
-                'corruption': corruption,
-                'det_delay': det_delay,
-            }, cls=NpEncoder)+"\n")
+    return corruption
+
 
 def run_experiment_unpack(args):
     return run_experiment(*args)
@@ -1277,7 +1264,6 @@ def run_experiments(
     # Generate faults
     exp_args = (
         (
-            output_file,
             # Simulation parameters
             x0,
             C,
@@ -1299,13 +1285,26 @@ def run_experiments(
     
     # Parallelized
     pool = Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1))
-    res_iter = pool.imap_unordered(run_experiment_unpack, exp_args)
+    res_iter = zip(pool.imap(run_experiment_unpack, exp_args), fault_specs)
     # Single-threaded
     # pool = None
-    # res_iter = map(run_experiment_unpack, exp_args)
+    # res_iter = zip(map(run_experiment_unpack, exp_args), fault_specs)
     try:
-        for _ in tqdm(res_iter, total=len(fault_specs)):
-            pass
+        for corruption, fault_spec in tqdm(res_iter, total=len(fault_specs), smoothing=0):
+            if corruption is None:
+                with open(output_file, 'a') as f:
+                    f.write(json.dumps({
+                        'fault_spec': fault_spec,
+                        'corruption': None,
+                    }, cls=NpEncoder)+"\n")
+            else:
+                det_delay = corruption["t"] - fault_spec['kwargs']['start_t']
+                with open(output_file, 'a') as f:
+                    f.write(json.dumps({
+                        'fault_spec': fault_spec,
+                        'corruption': corruption,
+                        'det_delay': det_delay,
+                    }, cls=NpEncoder)+"\n")
     finally:
         if pool:
             pool.terminate()
