@@ -1,7 +1,9 @@
 import cvxpy as cp
 import numpy as np
+import json
 import os
 import time
+import fault_generators
 from collections import namedtuple
 from filterpy.kalman import UnscentedKalmanFilter, MerweScaledSigmaPoints
 from functools import wraps
@@ -13,9 +15,11 @@ from typing import TypeVar, Iterable, Tuple, Optional, List, Any
 from scipy.linalg import expm
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
+from pathlib import Path
+from tqdm import tqdm
 
 
-MAX_POOL_SIZE = 32
+MAX_POOL_SIZE = 100
 
 #################################################################
 # General utility functions
@@ -60,6 +64,18 @@ def format_floats(item, decimals=2):
         return vectorized_format(item)
     else:
         return item
+
+# Solves errors with JSON serialization such as "TypeError: Object of type 'int64' is not JSON serializable}"
+# Derived from https://stackoverflow.com/a/57915246/4527337
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)
 
 #################################################################
 # Models
@@ -1153,3 +1169,144 @@ def find_corruption(output_hist, input_hist, estimate_hist, closest_idx_hist, pa
             pool.terminate()
             pool.join()
 
+def run_experiment(
+    output_file,
+    # Simulation parameters
+    x0,
+    C,
+    noise_std,
+    num_steps,
+    N,
+    path_points,
+    path_headings,
+    path_curvatures,
+    path_dcurvatures,
+    velocity_profile,
+    optimizer,
+    model_params,
+    real_time_fault_tolerance,
+    # Fault specification
+    fault_spec,
+):
+    fault = getattr(fault_generators, fault_spec['fn'])(**fault_spec['kwargs'])
+    (
+        t_hist,
+        state_hist,
+        output_hist,
+        estimate_hist,
+        u_hist,
+        closest_idx_hist,
+        ukf_P_hist,
+    ) = run_simulation(
+        x0,
+        C,
+        noise_std,
+        num_steps,
+        N,
+        path_points,
+        path_headings,
+        path_curvatures,
+        path_dcurvatures,
+        velocity_profile,
+        optimizer,
+        model_params,
+        fault,
+        real_time_fault_tolerance,
+    )
+
+    # Post-analysis
+    corruption = find_corruption(
+        output_hist,
+        u_hist,
+        estimate_hist,
+        closest_idx_hist,
+        path_points,
+        path_headings,
+        velocity_profile,
+        [C] * N,
+        N,
+        500,
+        optimizer,
+        model_params,
+        noise_std,
+    )
+
+    if corruption is None:
+        with open(output_file, 'a') as f:
+            f.write(json.dumps({
+                'fault_spec': fault_spec,
+                'corruption': None,
+            }, cls=NpEncoder)+"\n")
+    else:
+        det_delay = corruption["t"] - fault_spec['kwargs']['start_t']
+        with open(output_file, 'a') as f:
+            f.write(json.dumps({
+                'fault_spec': fault_spec,
+                'corruption': corruption,
+                'det_delay': det_delay,
+            }, cls=NpEncoder)+"\n")
+
+def run_experiment_unpack(args):
+    return run_experiment(*args)
+
+def run_experiments(
+    output_path,
+    # Simulation parameters
+    x0,
+    C,
+    noise_std,
+    num_steps,
+    N,
+    path_points,
+    path_headings,
+    path_curvatures,
+    path_dcurvatures,
+    velocity_profile,
+    optimizer,
+    model_params,
+    real_time_fault_tolerance,
+    # Fault specification
+    fault_specs,
+
+):
+    # Create the output file
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.touch()
+
+    # Generate faults
+    exp_args = (
+        (
+            output_file,
+            # Simulation parameters
+            x0,
+            C,
+            noise_std,
+            num_steps,
+            N,
+            path_points,
+            path_headings,
+            path_curvatures,
+            path_dcurvatures,
+            velocity_profile,
+            optimizer,
+            model_params,
+            real_time_fault_tolerance,
+            # Fault specification
+            fault_spec,
+        ) for fault_spec in fault_specs
+    )
+    
+    # Parallelized
+    pool = Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1))
+    res_iter = pool.imap_unordered(run_experiment_unpack, exp_args)
+    # Single-threaded
+    # pool = None
+    # res_iter = map(run_experiment_unpack, exp_args)
+    try:
+        for _ in tqdm(res_iter, total=len(fault_specs)):
+            pass
+    finally:
+        if pool:
+            pool.terminate()
+            pool.join()

@@ -62,6 +62,7 @@ from utils import (
     estimate_state,
     run_simulation,
     find_corruption,
+    run_experiments,
 )
 from fault_generators import (
     sensor_bias_fault,
@@ -154,84 +155,120 @@ noise_std: NDArray[np.float64] = np.array([0.5, 0.5, 0.05, 0.5, 0.01, 0.01])
 optimizer = Optimizer(N, C.shape[0], C.shape[1])
 real_time_fault_tolerance = False
 
-# Run the attack detector out of the loop, after we record the data.
-for attack_start_t in [10]:
-    # for attack_start_t in range(10, 50, 10):
-    print(f"Running simulation with attack starting at t={attack_start_t}")
+# # Run the attack detector out of the loop, after we record the data.
+# for attack_start_t in [10]:
+#     # for attack_start_t in range(10, 50, 10):
+#     print(f"Running simulation with attack starting at t={attack_start_t}")
 
-    simulation_seconds = attack_start_t + 30
-    num_steps = int(simulation_seconds / model_params["dt"])
+#     simulation_seconds = attack_start_t + 30
+#     num_steps = int(simulation_seconds / model_params["dt"])
 
-    # fault = sensor_bias_fault(attack_start_t, 10, 3)
-    # fault = drift_fault(attack_start_t, -3, 3)
-    fault = drift_fault(attack_start_t, -0.05, 2)
+#     # fault = sensor_bias_fault(attack_start_t, 3, 10)
+#     # fault = drift_fault(attack_start_t, 3, -3)
+#     fault = drift_fault(attack_start_t, 2, -0.05)
 
-    (
-        t_hist,
-        state_hist,
-        output_hist,
-        estimate_hist,
-        u_hist,
-        closest_idx_hist,
-        ukf_P_hist,
-    ) = run_simulation(
-        x0,
-        C,
-        noise_std,
-        num_steps,
-        N,
-        path_points,
-        path_headings,
-        path_curvatures,
-        path_dcurvatures,
-        velocity_profile,
-        optimizer,
-        model_params,
-        fault,
-        real_time_fault_tolerance,
-    )
+#     (
+#         t_hist,
+#         state_hist,
+#         output_hist,
+#         estimate_hist,
+#         u_hist,
+#         closest_idx_hist,
+#         ukf_P_hist,
+#     ) = run_simulation(
+#         x0,
+#         C,
+#         noise_std,
+#         num_steps,
+#         N,
+#         path_points,
+#         path_headings,
+#         path_curvatures,
+#         path_dcurvatures,
+#         velocity_profile,
+#         optimizer,
+#         model_params,
+#         fault,
+#         real_time_fault_tolerance,
+#     )
 
-    generate_gif = plot_quad(
-        t_hist,
-        state_hist,
-        output_hist,
-        estimate_hist,
-        u_hist,
-        closest_idx_hist,
-        ukf_P_hist,
-        path_points,
-        path_headings,
-        velocity_profile,
-        model_params,
-    )
-    plt.show()
+#     generate_gif = plot_quad(
+#         t_hist,
+#         state_hist,
+#         output_hist,
+#         estimate_hist,
+#         u_hist,
+#         closest_idx_hist,
+#         ukf_P_hist,
+#         path_points,
+#         path_headings,
+#         velocity_profile,
+#         model_params,
+#     )
+#     plt.show()
 
-    # Post-analysis
-    print("Finding corruption")
-    corruption = find_corruption(
-        output_hist,
-        u_hist,
-        estimate_hist,
-        closest_idx_hist,
-        path_points,
-        path_headings,
-        velocity_profile,
-        [C] * N,
-        N,
-        500,
-        optimizer,
-        model_params,
-        noise_std,
-    )
-    if corruption is None:
-        print("No corruption found")
-    else:
-        det_delay = corruption["t"] - attack_start_t
-        print(
-            f"Detected corruption {det_delay:.2f}s after injection at k={corruption['k']} (t={corruption['t']:.2f}s)"
-            + f", K={corruption['K']}"
-            + f", estimator/optimizer/solve time: {corruption['metadata']['total_time']:.4f}/{corruption['metadata']['optimizer_time']:.4f}/{corruption['optimizer_metadata']['solve_time']:.4f}s"
-        )
+#     # Post-analysis
+#     print("Finding corruption")
+#     corruption = find_corruption(
+#         output_hist,
+#         u_hist,
+#         estimate_hist,
+#         closest_idx_hist,
+#         path_points,
+#         path_headings,
+#         velocity_profile,
+#         [C] * N,
+#         N,
+#         500,
+#         optimizer,
+#         model_params,
+#         noise_std,
+#     )
+#     if corruption is None:
+#         print("No corruption found")
+#     else:
+#         det_delay = corruption["t"] - attack_start_t
+#         print(
+#             f"Detected corruption {det_delay:.2f}s after injection at k={corruption['k']} (t={corruption['t']:.2f}s)"
+#             + f", K={corruption['K']}"
+#             + f", estimator/optimizer/solve time: {corruption['metadata']['total_time']:.4f}/{corruption['metadata']['optimizer_time']:.4f}/{corruption['optimizer_metadata']['solve_time']:.4f}s"
+#         )
+
+fault_specs = []
+
+# Corrupt the velocity sensor
+for bias in np.arange(-10, 10, 1):
+    for start_t in [10, 15, 20, 25, 30, 35, 40]:
+        fault_specs.append({"fn": "sensor_bias_fault", "kwargs": {"start_t": start_t, "sensor_idx": 3, "bias": bias}})
+
+# Corrupt the heading sensor
+for bias in np.arange(-1.5, 1.5, 0.1):
+    for start_t in [10, 15, 20, 25, 30, 35, 40]:
+        fault_specs.append({"fn": "sensor_bias_fault", "kwargs": {"start_t": start_t, "sensor_idx": 2, "bias": bias}})
+
+print(f"Running {len(fault_specs)} experiments")
+
+simulation_seconds = 50
+num_steps = int(simulation_seconds / model_params["dt"])
+
+run_experiments(
+    "./exp/test.jsonl",
+    x0,
+    C,
+    noise_std,
+    num_steps,
+    N,
+    path_points,
+    path_headings,
+    path_curvatures,
+    path_dcurvatures,
+    velocity_profile,
+    optimizer,
+    model_params,
+    real_time_fault_tolerance,
+    # Fault specification
+    fault_specs,
+)
 
 
 # %%
