@@ -1254,7 +1254,7 @@ def run_experiments(
     real_time_fault_tolerance,
     # Fault specification
     fault_specs,
-
+    extra_output_metadata={},
 ):
     # Create the output file
     output_file = Path(output_path)
@@ -1296,6 +1296,7 @@ def run_experiments(
                     f.write(json.dumps({
                         'fault_spec': fault_spec,
                         'corruption': None,
+                        **extra_output_metadata,
                     }, cls=NpEncoder)+"\n")
             else:
                 det_delay = corruption["t"] - fault_spec['kwargs']['start_t']
@@ -1304,6 +1305,7 @@ def run_experiments(
                         'fault_spec': fault_spec,
                         'corruption': corruption,
                         'det_delay': det_delay,
+                        **extra_output_metadata,
                     }, cls=NpEncoder)+"\n")
     finally:
         if pool:

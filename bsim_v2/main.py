@@ -155,6 +155,7 @@ noise_std: NDArray[np.float64] = np.array([0.5, 0.5, 0.05, 0.5, 0.01, 0.01])
 optimizer = Optimizer(N, C.shape[0], C.shape[1])
 real_time_fault_tolerance = False
 
+# start = time.perf_counter()
 # # Run the attack detector out of the loop, after we record the data.
 # for attack_start_t in [10]:
 #     # for attack_start_t in range(10, 50, 10):
@@ -234,15 +235,20 @@ real_time_fault_tolerance = False
 #             + f", estimator/optimizer/solve time: {corruption['metadata']['total_time']:.4f}/{corruption['metadata']['optimizer_time']:.4f}/{corruption['optimizer_metadata']['solve_time']:.4f}s"
 #         )
 
+# end = time.perf_counter()
+# print(f"Simulation took {end - start:.2f} seconds")
+
+# %%
+
 fault_specs = []
 
 # Corrupt the velocity sensor
-for bias in np.arange(-10, 10, 1):
+for bias in np.arange(-5, 5, 0.25):
     for start_t in [10, 15, 20, 25, 30, 35, 40]:
         fault_specs.append({"fn": "sensor_bias_fault", "kwargs": {"start_t": start_t, "sensor_idx": 3, "bias": bias}})
 
 # Corrupt the heading sensor
-for bias in np.arange(-1.5, 1.5, 0.1):
+for bias in np.arange(-0.5, 0.5, 0.025):
     for start_t in [10, 15, 20, 25, 30, 35, 40]:
         fault_specs.append({"fn": "sensor_bias_fault", "kwargs": {"start_t": start_t, "sensor_idx": 2, "bias": bias}})
 
@@ -251,24 +257,32 @@ print(f"Running {len(fault_specs)} experiments")
 simulation_seconds = 50
 num_steps = int(simulation_seconds / model_params["dt"])
 
-run_experiments(
-    "./exp/test.jsonl",
-    x0,
-    C,
-    noise_std,
-    num_steps,
-    N,
-    path_points,
-    path_headings,
-    path_curvatures,
-    path_dcurvatures,
-    velocity_profile,
-    optimizer,
-    model_params,
-    real_time_fault_tolerance,
-    # Fault specification
-    fault_specs,
-)
+for i in range(3):
+    print(f"Running experiment batch {i}")
+    start = time.perf_counter()
+    run_experiments(
+        "./exp/test.jsonl",
+        x0,
+        C,
+        noise_std,
+        num_steps,
+        N,
+        path_points,
+        path_headings,
+        path_curvatures,
+        path_dcurvatures,
+        velocity_profile,
+        optimizer,
+        model_params,
+        real_time_fault_tolerance,
+        # Fault specification
+        fault_specs,
+        extra_output_metadata={
+            'exp_name': 'fine-grained-bias-sweep',
+            'exp_batch': i,
+        }
+    )
+    print(f"Experiment batch {i} took {time.perf_counter() - start:.2f} seconds")
 
 
 # %%
