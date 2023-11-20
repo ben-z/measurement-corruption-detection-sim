@@ -1,27 +1,90 @@
 # %%
+# import dask
+# import dask.dataframe as dd
+# import dask.bag as db
 import json
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-import pathlib
+from pathlib import Path
 import seaborn as sns
+import time
+import hashlib
+import os
 
 
-# Loading the data
-def load_data(file_path):
-    data = []
-    with open(file_path, "r") as file:
+def sha256sum(filename):
+    """
+    Calculate the SHA256 checksum of a file.
+    Derived from https://stackoverflow.com/a/44873382
+    """
+    with open(filename, "rb", buffering=0) as f:
+        return hashlib.file_digest(f, "sha256").hexdigest() # type: ignore
+
+def preprocess_jsonl(filename):
+    """
+    Preprocess a JSONL file by running pd.json_normalize on each line and
+    returning a stream of DataFrames.
+    """
+    with open(filename, "r") as file:
         for line in file:
             json_obj = json.loads(line)
-            flattened_data = pd.json_normalize(json_obj)
-            data.append(flattened_data)
-    return pd.concat(data, ignore_index=True)
+            yield pd.json_normalize(json_obj)
+
+def load_data(filename):
+    """
+    Load a JSONL file into a Pandas DataFrame.
+    """
+    # Check if a cached version of the processed file exists
+    cache_file = Path(f"/tmp/{os.getlogin()}/bsim_v2_cache/{sha256sum(filename)}.pkl")
+    if cache_file.exists():
+        return pd.read_pickle(cache_file)
+    
+    # otherwise, preprocess the file and save it
+    data = pd.concat(preprocess_jsonl(filename), ignore_index=True)
+
+    # Create the cache directory if it doesn't exist
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    data.to_pickle(cache_file)
+    return data
+
+
+# # Loading the data
+# def load_data(file_path):
+#     data = []
+#     with open(file_path, "r") as file:
+#         for line in file:
+#             json_obj = json.loads(line)
+#             flattened_data = pd.json_normalize(json_obj)
+#             data.append(flattened_data)
+#     return pd.concat(data, ignore_index=True)
 
 
 # Replace null values in 'det_delay' with infinity
 def prepare_data(df):
-    df["det_delay"].replace({np.nan: np.inf}, inplace=True)
+    # df["det_delay"].replace({np.nan: np.inf}, inplace=True)
+    df["det_delay"] = df["det_delay"].fillna(np.inf)
     return df
+
+
+# @dask.delayed
+# def process_line(line):
+#     json_obj = json.loads(line)
+#     flattened_data = pd.json_normalize(json_obj)
+#     return flattened_data
+
+
+# def load_data_dask(file_path):
+#     # Read the file and create delayed tasks for each line
+#     tasks = []
+#     with open(file_path, "r") as file:
+#         for line in file:
+#             tasks.append(process_line(line))
+
+#     # Use dask.dataframe.from_delayed to create a Dask DataFrame
+#     dask_df = dd.from_delayed(tasks)
+
+#     return dask_df
 
 
 # Plotting function for scatter and marker plots
@@ -64,35 +127,53 @@ def calculate_and_plot_detection_percentage(df, sensor_idx):
     plt.xticks(range(len(labels)), labels, rotation=45)
     plt.show()
 
+
 # %%
 
-def main():
-    exp_path = pathlib.Path(__file__).parent.parent / "exp"
-    file_path = exp_path / "test.jsonl"
+# exp_path = pathlib.Path(__file__).parent.parent / "exp"
+# file_path = exp_path / "test.jsonl"
+file_path = "/run/user/1507/bsim_v2_exp/test.jsonl"
 
-    # data = []
-    # with open(file_path, "r") as file:
-    #     for line in file:
-    #         # Parse the JSON string
-    #         json_obj = json.loads(line)
-    #         # Flatten the JSON object and append to the list
-    #         flattened_data = pd.json_normalize(json_obj)
-    #         data.append(flattened_data)
+# data = []
+# with open(file_path, "r") as file:
+#     for line in file:
+#         # Parse the JSON string
+#         json_obj = json.loads(line)
+#         # Flatten the JSON object and append to the list
+#         flattened_data = pd.json_normalize(json_obj)
+#         data.append(flattened_data)
 
-    # # Concatenate all flattened data into a single DataFrame
-    # df = pd.concat(data, ignore_index=True)
+# # Concatenate all flattened data into a single DataFrame
+# df = pd.concat(data, ignore_index=True)
 
-    # # Display the DataFrame
-    # print(df)
+# # Display the DataFrame
+# print(df)
 
-    # Main analysis
-    df = load_data(file_path)
-    df = prepare_data(df)
+# Main analysis
+print("Loading data...")
+start = time.perf_counter()
+df_pd = load_data(file_path)
+# df = load_data_dask(file_path)
+# df_dd = dd.read_json(file_path)
+# bag = db.read_text(file_path).map(json.loads)
+# def flatten(record):
+#    return pd.json_normalize(record).to_dict()
+# df = bag.map(flatten).to_dataframe()
+print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
 
-    # Analysis for each sensor
-    for sensor_idx in df["fault_spec.kwargs.sensor_idx"].unique():
-        sensor_data = df[df["fault_spec.kwargs.sensor_idx"] == sensor_idx]
-        plot_sensor_data(sensor_data, sensor_idx)
-        calculate_and_plot_detection_percentage(df, sensor_idx)
 
-main()
+# %%
+
+print("Preparing data...")
+start = time.perf_counter()
+df = prepare_data(df_pd)
+print(f"Data prepared in {time.perf_counter() - start:.2f} seconds")
+
+# Analysis for each sensor
+for sensor_idx in [2, 3]:
+    # for sensor_idx in df["fault_spec.kwargs.sensor_idx"].unique():
+    sensor_data = df[df["fault_spec.kwargs.sensor_idx"] == sensor_idx]
+    plot_sensor_data(sensor_data, sensor_idx)
+    calculate_and_plot_detection_percentage(df, sensor_idx)
+
+# %%
