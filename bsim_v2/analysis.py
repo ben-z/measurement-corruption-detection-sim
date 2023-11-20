@@ -16,7 +16,8 @@ def sha256sum(filename):
     Derived from https://stackoverflow.com/a/44873382
     """
     with open(filename, "rb", buffering=0) as f:
-        return hashlib.file_digest(f, "sha256").hexdigest() # type: ignore
+        return hashlib.file_digest(f, "sha256").hexdigest()  # type: ignore
+
 
 def preprocess_jsonl(filename):
     """
@@ -28,6 +29,7 @@ def preprocess_jsonl(filename):
             json_obj = json.loads(line)
             yield pd.json_normalize(json_obj)
 
+
 def load_data(filename):
     """
     Load a JSONL file into a Pandas DataFrame.
@@ -36,7 +38,7 @@ def load_data(filename):
     cache_file = Path(f"/tmp/{os.getlogin()}/bsim_v2_cache/{sha256sum(filename)}.pkl")
     if cache_file.exists():
         return pd.read_pickle(cache_file)
-    
+
     # otherwise, preprocess the file and save it
     data = pd.concat(preprocess_jsonl(filename), ignore_index=True)
 
@@ -51,7 +53,6 @@ def prepare_data(df):
     # df["det_delay"].replace({np.nan: np.inf}, inplace=True)
     df["det_delay"] = df["det_delay"].fillna(np.inf)
     return df
-
 
 
 # Plotting function for scatter and marker plots
@@ -90,10 +91,15 @@ def calculate_and_plot_detection_percentage(df, sensor_idx):
     plt.title(f"Percentage of Successful Detections vs Bias for Sensor {sensor_idx}")
     plt.xlabel("Bias (fault_spec.kwargs.bias)")
     plt.ylabel("Percentage of Successful Detections (%)")
-    labels = [f"{label:.2f}" for label in detection_percentage.index]
-    plt.xticks(range(len(labels)), labels, rotation=45)
-    plt.show()
 
+    tick_labels = detection_percentage.index
+    total_ticks = len(tick_labels)
+    num_ticks = 11
+    tick_spacing = max(1, total_ticks // num_ticks)
+    selected_ticks = tick_labels[::tick_spacing]
+    plt.xticks(range(0, total_ticks, tick_spacing), [f"{label:.2f}" for label in selected_ticks], rotation=45)
+
+    plt.show()
 
 # %%
 
@@ -112,11 +118,12 @@ print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
 print("Preparing data...")
 start = time.perf_counter()
 df = prepare_data(df_pd)
+# use only specific experiments
+df = df[df["exp_name"].isin(["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"])]
 print(f"Data prepared in {time.perf_counter() - start:.2f} seconds")
 
 # Analysis for each sensor
-for sensor_idx in [2, 3]:
-    # for sensor_idx in df["fault_spec.kwargs.sensor_idx"].unique():
+for sensor_idx in df["fault_spec.kwargs.sensor_idx"].unique():
     sensor_data = df[df["fault_spec.kwargs.sensor_idx"] == sensor_idx]
     plot_sensor_data(sensor_data, sensor_idx)
     calculate_and_plot_detection_percentage(df, sensor_idx)
