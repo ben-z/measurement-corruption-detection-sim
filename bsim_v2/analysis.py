@@ -1,7 +1,4 @@
 # %%
-# import dask
-# import dask.dataframe as dd
-# import dask.bag as db
 import json
 import numpy as np
 import matplotlib.pyplot as plt
@@ -49,42 +46,12 @@ def load_data(filename):
     return data
 
 
-# # Loading the data
-# def load_data(file_path):
-#     data = []
-#     with open(file_path, "r") as file:
-#         for line in file:
-#             json_obj = json.loads(line)
-#             flattened_data = pd.json_normalize(json_obj)
-#             data.append(flattened_data)
-#     return pd.concat(data, ignore_index=True)
-
-
 # Replace null values in 'det_delay' with infinity
 def prepare_data(df):
     # df["det_delay"].replace({np.nan: np.inf}, inplace=True)
     df["det_delay"] = df["det_delay"].fillna(np.inf)
     return df
 
-
-# @dask.delayed
-# def process_line(line):
-#     json_obj = json.loads(line)
-#     flattened_data = pd.json_normalize(json_obj)
-#     return flattened_data
-
-
-# def load_data_dask(file_path):
-#     # Read the file and create delayed tasks for each line
-#     tasks = []
-#     with open(file_path, "r") as file:
-#         for line in file:
-#             tasks.append(process_line(line))
-
-#     # Use dask.dataframe.from_delayed to create a Dask DataFrame
-#     dask_df = dd.from_delayed(tasks)
-
-#     return dask_df
 
 
 # Plotting function for scatter and marker plots
@@ -130,35 +97,13 @@ def calculate_and_plot_detection_percentage(df, sensor_idx):
 
 # %%
 
-# exp_path = pathlib.Path(__file__).parent.parent / "exp"
-# file_path = exp_path / "test.jsonl"
-file_path = "/run/user/1507/bsim_v2_exp/test.jsonl"
-
-# data = []
-# with open(file_path, "r") as file:
-#     for line in file:
-#         # Parse the JSON string
-#         json_obj = json.loads(line)
-#         # Flatten the JSON object and append to the list
-#         flattened_data = pd.json_normalize(json_obj)
-#         data.append(flattened_data)
-
-# # Concatenate all flattened data into a single DataFrame
-# df = pd.concat(data, ignore_index=True)
-
-# # Display the DataFrame
-# print(df)
+exp_path = Path(__file__).parent.parent / "exp"
+file_path = exp_path / "test.jsonl"
 
 # Main analysis
 print("Loading data...")
 start = time.perf_counter()
 df_pd = load_data(file_path)
-# df = load_data_dask(file_path)
-# df_dd = dd.read_json(file_path)
-# bag = db.read_text(file_path).map(json.loads)
-# def flatten(record):
-#    return pd.json_normalize(record).to_dict()
-# df = bag.map(flatten).to_dataframe()
 print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
 
 
