@@ -6,6 +6,7 @@ filterpy>=1.4.5
 pandas>=2.1.2
 tqdm>=4.62.3
 seaborn>=0.13.0
+tabulate>=0.9.0 # for printing tables (e.g. using df.to_markdown())
 
 # Development tools
 ipykernel>=6.25.2

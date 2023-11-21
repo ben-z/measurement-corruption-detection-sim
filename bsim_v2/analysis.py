@@ -55,24 +55,6 @@ def prepare_data(df):
     df["det_delay"] = df["det_delay"].round(2)
     return df
 
-
-def bias_distribution(sensor_data, sensor_idx):
-    """
-    Plot the distribution of bias values for a given sensor.
-    """
-    sns.displot(
-        sensor_data,
-        x="fault_spec.kwargs.bias",
-        hue="det_delay",
-        kind="hist",
-        multiple="stack",
-    )
-    plt.title(f"Distribution of Bias Values for Sensor {sensor_idx}")
-    plt.xlabel("Bias (fault_spec.kwargs.bias)")
-    plt.ylabel("Number of Samples")
-    plt.show()
-
-
 # Plotting function for scatter and marker plots
 def plot_sensor_data(sensor_data, sensor_idx):
     detected_data = sensor_data[sensor_data["det_delay"] < np.inf]
@@ -141,10 +123,20 @@ df = prepare_data(df_pd)
 df = df[df["exp_name"].isin(["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"])]
 print(f"Data prepared in {time.perf_counter() - start:.2f} seconds")
 
+df.plot.hist(
+    column=["fault_spec.kwargs.bias"],
+    by="fault_spec.kwargs.sensor_idx",
+    bins=max(
+        df.groupby("fault_spec.kwargs.sensor_idx")["fault_spec.kwargs.bias"].nunique()
+    ),
+    title="Bias Distribution for Each Sensor",
+)
+plt.tight_layout()
+plt.show()
+
 # Analysis for each sensor
 for sensor_idx in df["fault_spec.kwargs.sensor_idx"].unique():
     sensor_data = df[df["fault_spec.kwargs.sensor_idx"] == sensor_idx]
-    bias_distribution(sensor_data, sensor_idx)
     plot_sensor_data(sensor_data, sensor_idx)
     calculate_and_plot_detection_percentage(df, sensor_idx)
 
