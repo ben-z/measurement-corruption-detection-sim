@@ -207,7 +207,7 @@ df_fault.plot.hist(
     bins=max(
         df_fault.groupby("fault_spec.kwargs.sensor_idx")[fault_conf_column].nunique()
     ),
-    title="Bias Distribution for Each Sensor",
+    title=f"{fault_name} Distribution for Each Sensor",
 )
 plt.tight_layout()
 plt.show()
