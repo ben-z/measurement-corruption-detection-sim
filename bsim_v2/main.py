@@ -291,7 +291,7 @@ simulation_seconds = 50
 num_steps = int(simulation_seconds / model_params["dt"])
 
 for i in range(num_passes):
-    print(f"Running experiment batch {i}")
+    print(f"Running experiment pass {i}")
     start = time.perf_counter()
     run_experiments(
         "./exp/test-spike.jsonl",
@@ -315,7 +315,7 @@ for i in range(num_passes):
             "exp_pass": i,
         },
     )
-    print(f"Experiment batch {i} took {time.perf_counter() - start:.2f} seconds")
+    print(f"Experiment pass {i} took {time.perf_counter() - start:.2f} seconds")
 
 
 # %%
