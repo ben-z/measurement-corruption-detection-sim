@@ -166,9 +166,14 @@ exp_path = Path(__file__).parent.parent / "exp"
 # fault_name = "Bias"
 # exp_names = ["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"]
 
-file_path = exp_path / "test-noise.jsonl"
-fault_conf_column = "fault_spec.kwargs.noise_level"
-fault_name = "Noise Level"
+# file_path = exp_path / "test-noise.jsonl"
+# fault_conf_column = "fault_spec.kwargs.noise_level"
+# fault_name = "Noise Level"
+# exp_names = []
+
+file_path = exp_path / "test-spike.jsonl"
+fault_conf_column = "fault_spec.kwargs.spike_value"
+fault_name = "Spike"
 exp_names = []
 
 # Main analysis
