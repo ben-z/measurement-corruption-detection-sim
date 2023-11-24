@@ -47,13 +47,66 @@ def load_data(filename):
     data.to_pickle(cache_file)
     return data
 
+def has_fault(df):
+    return ~(
+        (df["fault_spec.fn"] == "noop")
+        | ((df["fault_spec.fn"] == "sensor_bias_fault") & np.isclose(df["fault_spec.kwargs.bias"], 0))
+    )
 
-# Replace null values in 'det_delay' with infinity
 def prepare_data(df):
-    # df["det_delay"].replace({np.nan: np.inf}, inplace=True)
-    df["det_delay"] = df["det_delay"].fillna(np.inf)
-    df["det_delay"] = df["det_delay"].round(2)
+    # Drop legacy columns
+    df = df.drop(columns=["det_delay"])
+    df["has_detection"] = df["corruption.t"].notnull()
+
+    # Process data with fault and without fault separately
+    prepare_data_with_fault(df, has_fault(df))
+
     return df
+
+def prepare_data_with_fault(df, cond):
+    df.loc[cond & df["has_detection"], "successful_detection"] = df["fault_spec.kwargs.start_t"] <= df["corruption.t"]
+    df.loc[cond, "det_delay"] = df["corruption.t"] - df["fault_spec.kwargs.start_t"]
+    df.loc[cond, "det_delay"] = df["det_delay"].fillna(np.inf)
+    df.loc[cond, "det_delay"] = df["det_delay"].round(2)
+
+def plot_confusion_matrix(df):
+    """
+    Plot the confusion matrix for a DataFrame.
+    """
+
+    # True Positive: fault present and detected
+    # True Negative: fault not present and not detected
+    # False Positive: fault not present but detected
+    # False Negative: fault present but not detected
+    # TP = df["successful_detection"].sum()
+    TP = df[has_fault(df) & df["successful_detection"]].shape[0]
+    TN = df[~has_fault(df) & ~df["has_detection"]].shape[0]
+    FP = df[~has_fault(df) & df["has_detection"]].shape[0]
+    FN = df[has_fault(df) & ~(df["successful_detection"].fillna(False))].shape[0]
+
+    print(f"{TP=} {TN=} {FP=} {FN=}")
+
+    cm_df = pd.DataFrame(
+        [
+            [TP, FN],
+            [FP, TN]
+        ],
+        index=["Fault Present", "Fault Not Present"],
+        columns=["Fault Detected", "Fault Not Detected"],
+    )
+
+    # Plot the confusion matrix
+    plt.figure(figsize=(12, 6))
+    sns.heatmap(
+        # [[TP, FP], [FN, TN]],
+        cm_df,
+        annot=True,
+        fmt="d",
+        # xticklabels=["Fault Detected", "Fault Not Detected"],
+        # yticklabels=["Fault Present", "Fault Not Present"],
+    )
+    plt.title("Confusion Matrix")
+    plt.show()
 
 # Plotting function for scatter and marker plots
 def plot_sensor_data(sensor_data, sensor_idx):
@@ -110,7 +163,7 @@ file_path = exp_path / "test.jsonl"
 # Main analysis
 print("Loading data...")
 start = time.perf_counter()
-df_pd = load_data(file_path)
+df_raw = load_data(file_path)
 print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
 
 
@@ -118,16 +171,23 @@ print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
 
 print("Preparing data...")
 start = time.perf_counter()
-df = prepare_data(df_pd)
 # use only specific experiments
-df = df[df["exp_name"].isin(["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"])]
+df = df_raw[df_raw["exp_name"].isin(["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"])]
+df = prepare_data(df)
 print(f"Data prepared in {time.perf_counter() - start:.2f} seconds")
 
-df.plot.hist(
+df_fault = df.loc[df["fault_spec.fn"] != "noop"]
+
+# df_fault["has_detection"].value_counts().plot(kind='barh')
+# df_fault["successful_detection"].value_counts().plot(kind='barh')
+
+plot_confusion_matrix(df)
+
+df_fault.plot.hist(
     column=["fault_spec.kwargs.bias"],
     by="fault_spec.kwargs.sensor_idx",
     bins=max(
-        df.groupby("fault_spec.kwargs.sensor_idx")["fault_spec.kwargs.bias"].nunique()
+        df_fault.groupby("fault_spec.kwargs.sensor_idx")["fault_spec.kwargs.bias"].nunique()
     ),
     title="Bias Distribution for Each Sensor",
 )
@@ -135,9 +195,9 @@ plt.tight_layout()
 plt.show()
 
 # Analysis for each sensor
-for sensor_idx in df["fault_spec.kwargs.sensor_idx"].unique():
-    sensor_data = df[df["fault_spec.kwargs.sensor_idx"] == sensor_idx]
+for sensor_idx in df_fault["fault_spec.kwargs.sensor_idx"].unique():
+    sensor_data = df_fault[df_fault["fault_spec.kwargs.sensor_idx"] == sensor_idx]
     plot_sensor_data(sensor_data, sensor_idx)
-    calculate_and_plot_detection_percentage(df, sensor_idx)
+    calculate_and_plot_detection_percentage(df_fault, sensor_idx)
 
 # %%

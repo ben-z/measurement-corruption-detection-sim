@@ -1291,22 +1291,13 @@ def run_experiments(
     # res_iter = zip(map(run_experiment_unpack, exp_args), fault_specs)
     try:
         for corruption, fault_spec in tqdm(res_iter, total=len(fault_specs), smoothing=0):
-            if corruption is None:
-                with open(output_file, 'a') as f:
-                    f.write(json.dumps({
-                        'fault_spec': fault_spec,
-                        'corruption': None,
-                        **extra_output_metadata,
-                    }, cls=NpEncoder)+"\n")
-            else:
-                det_delay = corruption["t"] - fault_spec['kwargs']['start_t']
-                with open(output_file, 'a') as f:
-                    f.write(json.dumps({
-                        'fault_spec': fault_spec,
-                        'corruption': corruption,
-                        'det_delay': det_delay,
-                        **extra_output_metadata,
-                    }, cls=NpEncoder)+"\n")
+            # write results to file
+            with open(output_file, 'a') as f:
+                f.write(json.dumps({
+                    'fault_spec': fault_spec,
+                    'corruption': corruption,
+                    **extra_output_metadata,
+                }, cls=NpEncoder)+"\n")
     finally:
         if pool:
             pool.terminate()
