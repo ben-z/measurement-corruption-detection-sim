@@ -58,3 +58,8 @@ def spike_fault(start_t, sensor_idx, spike_value, duration):
         return output
 
     return attack_generator
+
+def noop():
+    def attack_generator(t, output):
+        return output
+    return attack_generator
