@@ -48,14 +48,17 @@ def load_data(filename):
     return data
 
 def has_fault(df):
-    return ~(
-        (df["fault_spec.fn"] == "noop")
-        | ((df["fault_spec.fn"] == "sensor_bias_fault") & np.isclose(df["fault_spec.kwargs.bias"], 0))
-    )
+    ret = ~(df["fault_spec.fn"] == "noop")
+    if "fault_spec.kwargs.bias" in df.columns:
+        ret &= ~((df["fault_spec.fn"] == "sensor_bias_fault") & np.isclose(df["fault_spec.kwargs.bias"], 0))
+    if "fault_spec.kwargs.noise_level" in df.columns:
+        ret &= ~((df["fault_spec.fn"] == "random_noise_fault") & np.isclose(df["fault_spec.kwargs.noise_level"], 0))
+
+    return ret
 
 def prepare_data(df):
     # Drop legacy columns
-    df = df.drop(columns=["det_delay"])
+    df = df.drop(columns=["det_delay"], errors="ignore")
     df["has_detection"] = df["corruption.t"].notnull()
 
     # Process data with fault and without fault separately
@@ -109,23 +112,23 @@ def plot_confusion_matrix(df):
     plt.show()
 
 # Plotting function for scatter and marker plots
-def plot_sensor_data(sensor_data, sensor_idx):
+def plot_sensor_data(sensor_data, sensor_idx, fault_name, fault_conf_column):
     detected_data = sensor_data[sensor_data["det_delay"] < np.inf]
     not_detected_data = sensor_data[sensor_data["det_delay"] == np.inf]
 
     plt.figure(figsize=(12, 6))
     sns.scatterplot(
-        x="fault_spec.kwargs.bias", y="det_delay", data=detected_data, label="Detected"
+        x=fault_conf_column, y="det_delay", data=detected_data, label="Detected"
     )
     plt.scatter(
-        not_detected_data["fault_spec.kwargs.bias"],
+        not_detected_data[fault_conf_column],
         [max(detected_data["det_delay"]) + 0.01] * len(not_detected_data),
         color="red",
         marker="x",
         label="Not Detected",
     )
-    plt.title(f"Detection Delay vs Bias for Sensor {sensor_idx}")
-    plt.xlabel("Bias (fault_spec.kwargs.bias)")
+    plt.title(f"Detection Delay vs {fault_name} for Sensor {sensor_idx}")
+    plt.xlabel(f"{fault_name} ({fault_conf_column})")
     plt.ylabel("Detection Delay (det_delay)")
     plt.ylim(bottom=0)
     plt.legend()
@@ -133,16 +136,16 @@ def plot_sensor_data(sensor_data, sensor_idx):
 
 
 # Function to calculate and plot detection percentage
-def calculate_and_plot_detection_percentage(df, sensor_idx):
+def calculate_and_plot_detection_percentage(df, sensor_idx, fault_name, fault_conf_column):
     sensor_data = df[df["fault_spec.kwargs.sensor_idx"] == sensor_idx]
-    detection_percentage = sensor_data.groupby("fault_spec.kwargs.bias")[
+    detection_percentage = sensor_data.groupby(fault_conf_column)[
         "det_delay"
     ].apply(lambda x: (x < np.inf).mean() * 100)
 
     plt.figure(figsize=(12, 6))
     detection_percentage.plot(kind="bar")
-    plt.title(f"Percentage of Successful Detections vs Bias for Sensor {sensor_idx}")
-    plt.xlabel("Bias (fault_spec.kwargs.bias)")
+    plt.title(f"Percentage of Successful Detections vs {fault_name} for Sensor {sensor_idx}")
+    plt.xlabel(f"{fault_name} ({fault_conf_column})")
     plt.ylabel("Percentage of Successful Detections (%)")
 
     tick_labels = detection_percentage.index
@@ -158,7 +161,15 @@ def calculate_and_plot_detection_percentage(df, sensor_idx):
 # %%
 
 exp_path = Path(__file__).parent.parent / "exp"
-file_path = exp_path / "test.jsonl"
+# file_path = exp_path / "test.jsonl"
+# fault_conf_column = "fault_spec.kwargs.bias"
+# fault_name = "Bias"
+# exp_names = ["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"]
+
+file_path = exp_path / "test-noise.jsonl"
+fault_conf_column = "fault_spec.kwargs.noise_level"
+fault_name = "Noise Level"
+exp_names = []
 
 # Main analysis
 print("Loading data...")
@@ -172,7 +183,9 @@ print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
 print("Preparing data...")
 start = time.perf_counter()
 # use only specific experiments
-df = df_raw[df_raw["exp_name"].isin(["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"])]
+df = df_raw
+if exp_names:
+    df = df[df["exp_name"].isin(exp_names)]
 df = prepare_data(df)
 print(f"Data prepared in {time.perf_counter() - start:.2f} seconds")
 
@@ -184,10 +197,10 @@ df_fault = df.loc[df["fault_spec.fn"] != "noop"]
 plot_confusion_matrix(df)
 
 df_fault.plot.hist(
-    column=["fault_spec.kwargs.bias"],
+    column=[fault_conf_column],
     by="fault_spec.kwargs.sensor_idx",
     bins=max(
-        df_fault.groupby("fault_spec.kwargs.sensor_idx")["fault_spec.kwargs.bias"].nunique()
+        df_fault.groupby("fault_spec.kwargs.sensor_idx")[fault_conf_column].nunique()
     ),
     title="Bias Distribution for Each Sensor",
 )
@@ -197,7 +210,7 @@ plt.show()
 # Analysis for each sensor
 for sensor_idx in df_fault["fault_spec.kwargs.sensor_idx"].unique():
     sensor_data = df_fault[df_fault["fault_spec.kwargs.sensor_idx"] == sensor_idx]
-    plot_sensor_data(sensor_data, sensor_idx)
-    calculate_and_plot_detection_percentage(df_fault, sensor_idx)
+    plot_sensor_data(sensor_data, sensor_idx, fault_name, fault_conf_column)
+    calculate_and_plot_detection_percentage(df_fault, sensor_idx, fault_name, fault_conf_column)
 
 # %%
