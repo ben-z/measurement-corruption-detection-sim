@@ -242,8 +242,7 @@ real_time_fault_tolerance = False
 # %%
 
 fault_specs = []
-num_passes = 10
-
+num_passes = 100
 
 # Corrupt the velocity sensor
 # for bias in np.arange(-5, 5, 0.05):
@@ -257,44 +256,71 @@ num_passes = 10
 
 # Inject fault at different points of the simulation
 for start_t in [10, 15, 20, 25, 30, 35, 40]:
-    for spike_value in np.arange(-20, 20 + sys.float_info.epsilon, 0.5):
-        for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
-            fault_specs.append(
-                {
-                    "fn": "spike_fault",
-                    "kwargs": {
-                        "start_t": start_t,
-                        "sensor_idx": 3,
-                        "spike_value": spike_value,
-                        "duration": duration,
-                    },
-                }
-            )
+    # for spike_value in np.arange(-20, 20 + sys.float_info.epsilon, 0.5):
+    #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+    #         fault_specs.append(
+    #             {
+    #                 "fn": "spike_fault",
+    #                 "kwargs": {
+    #                     "start_t": start_t,
+    #                     "sensor_idx": 3,
+    #                     "spike_value": spike_value,
+    #                     "duration": duration,
+    #                 },
+    #             }
+    #         )
 
-    for spike_value in np.arange(-np.pi, np.pi + sys.float_info.epsilon, 0.1):
-        for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
-            fault_specs.append(
-                {
-                    "fn": "spike_fault",
-                    "kwargs": {
-                        "start_t": start_t,
-                        "sensor_idx": 2,
-                        "spike_value": spike_value,
-                        "duration": duration,
-                    },
-                }
-            )
+    # for spike_value in np.arange(-np.pi, np.pi + sys.float_info.epsilon, 0.1):
+    #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+    #         fault_specs.append(
+    #             {
+    #                 "fn": "spike_fault",
+    #                 "kwargs": {
+    #                     "start_t": start_t,
+    #                     "sensor_idx": 2,
+    #                     "spike_value": spike_value,
+    #                     "duration": duration,
+    #                 },
+    #             }
+    #         )
+
+    for noise_level in np.arange(0, 20 + sys.float_info.epsilon, 0.5):
+        fault_specs.append(
+            {
+                "fn": "random_noise_fault",
+                "kwargs": {
+                    "start_t": start_t,
+                    "sensor_idx": 3,
+                    "noise_level": noise_level,
+                },
+            }
+        )
+    
+    for noise_level in np.arange(0, np.pi + sys.float_info.epsilon, 0.01):
+        fault_specs.append(
+            {
+                "fn": "random_noise_fault",
+                "kwargs": {
+                    "start_t": start_t,
+                    "sensor_idx": 2,
+                    "noise_level": noise_level,
+                },
+            }
+        )
 
 print(f"Running {len(fault_specs)} experiments for {num_passes} passes each. Total: {len(fault_specs) * num_passes} experiments")
+
+# For testing
+# sys.exit(0)
 
 simulation_seconds = 50
 num_steps = int(simulation_seconds / model_params["dt"])
 
-for i in range(num_passes):
-    print(f"Running experiment pass {i}")
+for i in range(1, num_passes+1):
+    print(f"Running experiment pass {i}/{num_passes}")
     start = time.perf_counter()
     run_experiments(
-        "./exp/test-spike.jsonl",
+        "./exp/test-noise.jsonl",
         x0,
         C,
         noise_std,
@@ -311,11 +337,11 @@ for i in range(num_passes):
         # Fault specification
         fault_specs,
         extra_output_metadata={
-            "exp_name": "spike-fault-sweep",
+            "exp_name": "noise-fault-sweep",
             "exp_pass": i,
         },
     )
-    print(f"Experiment pass {i} took {time.perf_counter() - start:.2f} seconds")
+    print(f"Experiment pass {i}/{num_passes} took {time.perf_counter() - start:.2f} seconds")
 
 
 # %%
