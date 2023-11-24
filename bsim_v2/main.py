@@ -242,7 +242,9 @@ real_time_fault_tolerance = False
 # %%
 
 fault_specs = []
-num_passes = 100
+num_passes = 50
+file_name = "./exp/test-noise.jsonl"
+exp_name = "noise-fault-sweep-try-2"
 
 # Corrupt the velocity sensor
 # for bias in np.arange(-5, 5, 0.05):
@@ -308,7 +310,9 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
             }
         )
 
-print(f"Running {len(fault_specs)} experiments for {num_passes} passes each. Total: {len(fault_specs) * num_passes} experiments")
+print(f"Experiment name: {exp_name}")
+print(f"Running {len(fault_specs)} experiments for {num_passes} passes. Total: {len(fault_specs) * num_passes} experiments")
+print(f"Saving to {file_name}")
 
 # For testing
 # sys.exit(0)
@@ -320,7 +324,7 @@ for i in range(1, num_passes+1):
     print(f"Running experiment pass {i}/{num_passes}")
     start = time.perf_counter()
     run_experiments(
-        "./exp/test-noise.jsonl",
+        file_name,
         x0,
         C,
         noise_std,
@@ -337,7 +341,7 @@ for i in range(1, num_passes+1):
         # Fault specification
         fault_specs,
         extra_output_metadata={
-            "exp_name": "noise-fault-sweep",
+            "exp_name": exp_name,
             "exp_pass": i,
         },
     )

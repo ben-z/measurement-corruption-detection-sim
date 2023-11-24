@@ -610,6 +610,8 @@ def optimize_l0_case(
         prob: MyCvxpyProblem - the optimization problem
         metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
     """
+    additional_metadata = {}
+
     # K is the sensors that can be corrupted (i.e. the sensors that are not in S)
     K = list(set(range(q)) - set(S))
 
@@ -618,7 +620,14 @@ def optimize_l0_case(
         can_corrupt.value[j] = False
 
     start = time.perf_counter()
-    prob.solve(**solver_args)
+    try:
+        prob.solve(**solver_args)
+    except cp.SolverError as e:
+        print(f"Solver error when solving for {S=}: {e}")
+        additional_metadata["solver_error"] = str(e)
+    except Exception as e:
+        print(f"Unknown error when solving for {S=}: {e}")
+        additional_metadata["solver_error"] = str(e)
     end = time.perf_counter()
 
     return x0_hat.value, MyCvxpyProblem(
@@ -631,6 +640,7 @@ def optimize_l0_case(
         'K': K,
         'S': S,
         'solve_time': end-start,
+        **additional_metadata,
     }
 
 def get_state_evolution_tensor(As: list[np.ndarray]):
