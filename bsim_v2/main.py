@@ -242,9 +242,9 @@ real_time_fault_tolerance = False
 # %%
 
 fault_specs = []
-num_passes = 100
-file_name = "./exp/test-noise-steering.jsonl"
-exp_name = "noise-fault-sweep-steering"
+num_passes = 50
+file_name = "./exp/test-spike-steering.jsonl"
+exp_name = "spike-fault-sweep-steering"
 
 # Corrupt the velocity sensor
 # for bias in np.arange(-5, 5, 0.05):
@@ -286,6 +286,34 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #             }
     #         )
 
+    for spike_value in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.1):
+        for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+            fault_specs.append(
+                {
+                    "fn": "spike_fault",
+                    "kwargs": {
+                        "start_t": start_t,
+                        "sensor_idx": 4,
+                        "spike_value": spike_value,
+                        "duration": duration,
+                    },
+                }
+            )
+
+    for spike_value in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.1):
+        for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+            fault_specs.append(
+                {
+                    "fn": "spike_fault",
+                    "kwargs": {
+                        "start_t": start_t,
+                        "sensor_idx": 5,
+                        "spike_value": spike_value,
+                        "duration": duration,
+                    },
+                }
+            )
+
     # for noise_level in np.arange(0, 20 + sys.float_info.epsilon, 0.5):
     #     fault_specs.append(
     #         {
@@ -310,29 +338,29 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #         }
     #     )
 
-    for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
-        fault_specs.append(
-            {
-                "fn": "random_noise_fault",
-                "kwargs": {
-                    "start_t": start_t,
-                    "sensor_idx": 4,
-                    "noise_level": noise_level,
-                },
-            }
-        )
+    # for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
+    #     fault_specs.append(
+    #         {
+    #             "fn": "random_noise_fault",
+    #             "kwargs": {
+    #                 "start_t": start_t,
+    #                 "sensor_idx": 4,
+    #                 "noise_level": noise_level,
+    #             },
+    #         }
+    #     )
 
-    for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
-        fault_specs.append(
-            {
-                "fn": "random_noise_fault",
-                "kwargs": {
-                    "start_t": start_t,
-                    "sensor_idx": 5,
-                    "noise_level": noise_level,
-                },
-            }
-        )
+    # for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
+    #     fault_specs.append(
+    #         {
+    #             "fn": "random_noise_fault",
+    #             "kwargs": {
+    #                 "start_t": start_t,
+    #                 "sensor_idx": 5,
+    #                 "noise_level": noise_level,
+    #             },
+    #         }
+    #     )
 
 print(f"Experiment name: {exp_name}")
 print(f"Running {len(fault_specs)} experiments for {num_passes} passes. Total: {len(fault_specs) * num_passes} experiments")
