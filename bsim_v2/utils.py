@@ -19,7 +19,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 
-MAX_POOL_SIZE = 100
+MAX_POOL_SIZE = 240
 
 #################################################################
 # General utility functions
