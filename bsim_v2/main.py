@@ -242,7 +242,7 @@ real_time_fault_tolerance = False
 # %%
 
 fault_specs = []
-num_passes = 50
+num_passes = 100
 file_name = "./exp/test-noise-steering.jsonl"
 exp_name = "noise-fault-sweep-steering"
 
@@ -310,7 +310,7 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #         }
     #     )
 
-    for noise_level in np.arange(0, np.pi + sys.float_info.epsilon, 0.01):
+    for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
         fault_specs.append(
             {
                 "fn": "random_noise_fault",
@@ -322,7 +322,7 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
             }
         )
 
-    for noise_level in np.arange(0, np.pi + sys.float_info.epsilon, 0.01):
+    for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
         fault_specs.append(
             {
                 "fn": "random_noise_fault",
