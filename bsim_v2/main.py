@@ -243,8 +243,8 @@ real_time_fault_tolerance = False
 
 fault_specs = []
 num_passes = 50
-file_name = "./exp/test-noise.jsonl"
-exp_name = "noise-fault-sweep-try-2"
+file_name = "./exp/test-noise-steering.jsonl"
+exp_name = "noise-fault-sweep-steering"
 
 # Corrupt the velocity sensor
 # for bias in np.arange(-5, 5, 0.05):
@@ -286,25 +286,49 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #             }
     #         )
 
-    for noise_level in np.arange(0, 20 + sys.float_info.epsilon, 0.5):
-        fault_specs.append(
-            {
-                "fn": "random_noise_fault",
-                "kwargs": {
-                    "start_t": start_t,
-                    "sensor_idx": 3,
-                    "noise_level": noise_level,
-                },
-            }
-        )
+    # for noise_level in np.arange(0, 20 + sys.float_info.epsilon, 0.5):
+    #     fault_specs.append(
+    #         {
+    #             "fn": "random_noise_fault",
+    #             "kwargs": {
+    #                 "start_t": start_t,
+    #                 "sensor_idx": 3,
+    #                 "noise_level": noise_level,
+    #             },
+    #         }
+    #     )
     
+    # for noise_level in np.arange(0, np.pi + sys.float_info.epsilon, 0.01):
+    #     fault_specs.append(
+    #         {
+    #             "fn": "random_noise_fault",
+    #             "kwargs": {
+    #                 "start_t": start_t,
+    #                 "sensor_idx": 2,
+    #                 "noise_level": noise_level,
+    #             },
+    #         }
+    #     )
+
     for noise_level in np.arange(0, np.pi + sys.float_info.epsilon, 0.01):
         fault_specs.append(
             {
                 "fn": "random_noise_fault",
                 "kwargs": {
                     "start_t": start_t,
-                    "sensor_idx": 2,
+                    "sensor_idx": 4,
+                    "noise_level": noise_level,
+                },
+            }
+        )
+
+    for noise_level in np.arange(0, np.pi + sys.float_info.epsilon, 0.01):
+        fault_specs.append(
+            {
+                "fn": "random_noise_fault",
+                "kwargs": {
+                    "start_t": start_t,
+                    "sensor_idx": 5,
                     "noise_level": noise_level,
                 },
             }
