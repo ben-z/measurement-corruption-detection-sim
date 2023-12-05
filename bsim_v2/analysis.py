@@ -8,9 +8,15 @@ import seaborn as sns
 import time
 import hashlib
 import os
+from multiprocessing import Pool
 
+MAX_POOL_SIZE = 240
+POOL_SIZE = min(MAX_POOL_SIZE, os.cpu_count() or 1)
 
-def sha256sum(filename):
+# Be nice to others on the system
+os.nice(5)
+
+def sha256sum_file(filename):
     """
     Calculate the SHA256 checksum of a file.
     Derived from https://stackoverflow.com/a/44873382
@@ -18,29 +24,37 @@ def sha256sum(filename):
     with open(filename, "rb", buffering=0) as f:
         return hashlib.file_digest(f, "sha256").hexdigest()  # type: ignore
 
+def preprocess_jsonl_line(line):
+    json_obj = json.loads(line)
+    return pd.json_normalize(json_obj)
 
 def preprocess_jsonl(filename):
     """
     Preprocess a JSONL file by running pd.json_normalize on each line and
     returning a stream of DataFrames.
     """
-    with open(filename, "r") as file:
-        for line in file:
-            json_obj = json.loads(line)
-            yield pd.json_normalize(json_obj)
-
+    with open(filename, "r") as file, Pool(POOL_SIZE) as pool:
+        print(f"Preprocessing {filename} with pool size {POOL_SIZE}")
+        for normalized in pool.imap(preprocess_jsonl_line, file, chunksize=2000):
+            yield normalized
 
 def load_data(filename):
     """
     Load a JSONL file into a Pandas DataFrame.
     """
     # Check if a cached version of the processed file exists
-    cache_file = Path(f"/tmp/{os.getlogin()}/bsim_v2_cache/{sha256sum(filename)}.pkl")
+    cache_file = Path(f"/tmp/{os.getlogin()}/bsim_v2_cache/{sha256sum_file(filename)}.pkl")
     if cache_file.exists():
         return pd.read_pickle(cache_file)
-
+    
     # otherwise, preprocess the file and save it
-    data = pd.concat(preprocess_jsonl(filename), ignore_index=True)
+    start = time.perf_counter()
+    preprocessed = list(preprocess_jsonl(filename))
+    print(f"load_data: JSONL processed in {time.perf_counter() - start:.2f} seconds")
+
+    start = time.perf_counter()
+    data = pd.concat(preprocessed, ignore_index=True)
+    print(f"load_data: Dataframe concatenated in {time.perf_counter() - start:.2f} seconds")
 
     # Create the cache directory if it doesn't exist
     cache_file.parent.mkdir(parents=True, exist_ok=True)
