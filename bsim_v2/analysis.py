@@ -67,6 +67,12 @@ def has_fault(df):
         ret &= ~((df["fault_spec.fn"] == "sensor_bias_fault") & np.isclose(df["fault_spec.kwargs.bias"], 0))
     if "fault_spec.kwargs.noise_level" in df.columns:
         ret &= ~((df["fault_spec.fn"] == "random_noise_fault") & np.isclose(df["fault_spec.kwargs.noise_level"], 0))
+    if "fault_spec.kwargs.spike_value" in df.columns:
+        ret &= ~((df["fault_spec.fn"] == "spike_fault") & np.isclose(df["fault_spec.kwargs.spike_value"], 0))
+    if "fault_spec.kwargs.drift_rate" in df.columns:
+        ret &= ~((df["fault_spec.fn"] == "drift_fault") & np.isclose(df["fault_spec.kwargs.drift_rate"], 0))
+    if "fault_spec.kwargs.duration" in df.columns:
+        ret &= ~((df["fault_spec.fn"] == "spike_fault") & np.isclose(df["fault_spec.kwargs.duration"], 0))
 
     return ret
 
