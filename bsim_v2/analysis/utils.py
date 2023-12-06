@@ -207,3 +207,18 @@ def calculate_and_plot_detection_percentage(
     )
 
     plt.show()
+
+
+def plot_fault_distribution(df, fault_conf_column, fault_name):
+    df.plot.hist(
+        column=[fault_conf_column],
+        by="fault_spec.kwargs.sensor_idx",
+        bins=max(
+            df.groupby("fault_spec.kwargs.sensor_idx")[
+                fault_conf_column
+            ].nunique()
+        ),
+        title=f"{fault_name} Distribution for Each Sensor",
+    )
+    plt.tight_layout()
+    plt.show()
