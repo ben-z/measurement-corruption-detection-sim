@@ -243,8 +243,8 @@ real_time_fault_tolerance = False
 
 fault_specs = []
 num_passes = 30
-file_name = "./exp/test-spike-steering.jsonl"
-exp_name = "spike-fault-sweep-steering-2"
+file_name = "./exp/test-drift-sensors-2-3.jsonl"
+exp_name = "drift-fault-sweep-sensors-2-3"
 
 # Corrupt the velocity sensor
 # for bias in np.arange(-5, 5, 0.05):
@@ -258,6 +258,10 @@ exp_name = "spike-fault-sweep-steering-2"
 
 # Inject fault at different points of the simulation
 for start_t in [10, 15, 20, 25, 30, 35, 40]:
+    #############################################
+    # Bias Faults
+    #############################################
+
     # for bias in np.arange(-np.pi/4, np.pi + sys.float_info.epsilon, 0.005):
     #     fault_specs.append(
     #         {
@@ -279,7 +283,11 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #             "kwargs": {"start_t": start_t, "sensor_idx": 5, "bias": bias},
     #         }
     #     )
-    
+
+    #############################################
+    # Spike Faults
+    #############################################
+
     # for spike_value in np.arange(-20, 20 + sys.float_info.epsilon, 0.5):
     #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
     #         fault_specs.append(
@@ -308,33 +316,37 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #             }
     #         )
 
-    for spike_value in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.1):
-        for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
-            fault_specs.append(
-                {
-                    "fn": "spike_fault",
-                    "kwargs": {
-                        "start_t": start_t,
-                        "sensor_idx": 4,
-                        "spike_value": spike_value,
-                        "duration": duration,
-                    },
-                }
-            )
+    # for spike_value in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.1):
+    #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+    #         fault_specs.append(
+    #             {
+    #                 "fn": "spike_fault",
+    #                 "kwargs": {
+    #                     "start_t": start_t,
+    #                     "sensor_idx": 4,
+    #                     "spike_value": spike_value,
+    #                     "duration": duration,
+    #                 },
+    #             }
+    #         )
 
-    for spike_value in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.1):
-        for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
-            fault_specs.append(
-                {
-                    "fn": "spike_fault",
-                    "kwargs": {
-                        "start_t": start_t,
-                        "sensor_idx": 5,
-                        "spike_value": spike_value,
-                        "duration": duration,
-                    },
-                }
-            )
+    # for spike_value in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.1):
+    #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+    #         fault_specs.append(
+    #             {
+    #                 "fn": "spike_fault",
+    #                 "kwargs": {
+    #                     "start_t": start_t,
+    #                     "sensor_idx": 5,
+    #                     "spike_value": spike_value,
+    #                     "duration": duration,
+    #                 },
+    #             }
+    #         )
+
+    #############################################
+    # Noise Faults
+    #############################################
 
     # for noise_level in np.arange(0, 20 + sys.float_info.epsilon, 0.5):
     #     fault_specs.append(
@@ -347,7 +359,7 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #             },
     #         }
     #     )
-    
+
     # for noise_level in np.arange(0, np.pi + sys.float_info.epsilon, 0.01):
     #     fault_specs.append(
     #         {
@@ -380,6 +392,58 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #                 "start_t": start_t,
     #                 "sensor_idx": 5,
     #                 "noise_level": noise_level,
+    #             },
+    #         }
+    #     )
+
+    #############################################
+    # Drift Faults
+    #############################################
+
+    for drift_rate in np.arange(-20, 20 + sys.float_info.epsilon, 0.5):
+        fault_specs.append(
+            {
+                "fn": "drift_fault",
+                "kwargs": {
+                    "start_t": start_t,
+                    "sensor_idx": 3,
+                    "drift_rate": drift_rate,
+                },
+            }
+        )
+
+    for drift_rate in np.arange(-np.pi, np.pi + sys.float_info.epsilon, 0.005):
+        fault_specs.append(
+            {
+                "fn": "drift_fault",
+                "kwargs": {
+                    "start_t": start_t,
+                    "sensor_idx": 2,
+                    "drift_rate": drift_rate,
+                },
+            }
+        )
+    
+    # for drift_rate in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.005):
+    #     fault_specs.append(
+    #         {
+    #             "fn": "drift_fault",
+    #             "kwargs": {
+    #                 "start_t": start_t,
+    #                 "sensor_idx": 4,
+    #                 "drift_rate": drift_rate,
+    #             },
+    #         }
+    #     )
+    
+    # for drift_rate in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.005):
+    #     fault_specs.append(
+    #         {
+    #             "fn": "drift_fault",
+    #             "kwargs": {
+    #                 "start_t": start_t,
+    #                 "sensor_idx": 5,
+    #                 "drift_rate": drift_rate,
     #             },
     #         }
     #     )
