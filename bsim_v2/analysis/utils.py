@@ -21,6 +21,23 @@ def sha256sum_file(filename):
     with open(filename, "rb", buffering=0) as f:
         return hashlib.file_digest(f, "sha256").hexdigest()  # type: ignore
 
+def load_and_prepare_data(file_path, exp_names=[]):
+    # Main analysis
+    print("Loading data...")
+    start = time.perf_counter()
+    df_raw = load_data(file_path)
+    print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
+
+    print("Preparing data...")
+    start = time.perf_counter()
+    # use only specific experiments
+    df = df_raw
+    if exp_names:
+        df = df[df["exp_name"].isin(exp_names)]
+    df = prepare_data(df)
+    print(f"Data prepared in {time.perf_counter() - start:.2f} seconds")
+
+    return df
 
 def preprocess_jsonl_line(line):
     json_obj = json.loads(line)
@@ -154,30 +171,38 @@ def plot_confusion_matrix(df):
     plt.show()
 
 
-# Plotting function for scatter and marker plots
-def plot_detection_delay(sensor_data, sensor_idx, fault_name, fault_conf_column):
-    detected_data = sensor_data[sensor_data["det_delay"] < np.inf]
-    not_detected_data = sensor_data[sensor_data["det_delay"] == np.inf]
+def plot_generic_detection_data(df, sensor_idx, fault_name, fault_conf_column, y_column_name, y_column):
+    detected_data = df[df[y_column] < np.inf]
+    not_detected_data = df[df[y_column] == np.inf]
 
     plt.figure(figsize=(12, 6))
     sns.scatterplot(
-        x=fault_conf_column, y="det_delay", data=detected_data, label="Detected"
+        x=fault_conf_column, y=y_column, data=detected_data, label="Detected"
     )
     plt.scatter(
         not_detected_data[fault_conf_column],
         # Show the not_detected points above the detected points
-        [max(detected_data["det_delay"]) * 1.1] * len(not_detected_data),
+        [max(detected_data[y_column]) * 1.1] * len(not_detected_data),
         color="red",
         marker="x",
         label="Not Detected",
     )
-    plt.title(f"Detection Delay vs {fault_name} for Sensor {sensor_idx}")
+    plt.title(f"{y_column_name} vs {fault_name} for Sensor {sensor_idx}")
     plt.xlabel(f"{fault_name} ({fault_conf_column})")
-    plt.ylabel("Detection Delay (det_delay)")
+    plt.ylabel(f"{y_column_name} ({y_column})")
     plt.ylim(bottom=0)
     plt.legend()
     plt.show()
 
+def plot_detection_delay(sensor_data, sensor_idx, fault_name, fault_conf_column):
+    plot_generic_detection_data(
+        sensor_data,
+        sensor_idx,
+        fault_name,
+        fault_conf_column,
+        "Detection Delay",
+        "det_delay",
+    )
 
 # Function to calculate and plot detection percentage
 def calculate_and_plot_detection_percentage(

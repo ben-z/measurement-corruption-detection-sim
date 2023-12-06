@@ -14,11 +14,11 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from analysis.utils import (
-    load_data,
-    prepare_data,
+    load_and_prepare_data,
     plot_confusion_matrix,
     plot_fault_distribution,
     plot_detection_delay,
+    plot_generic_detection_data,
     calculate_and_plot_detection_percentage,
 )
 
@@ -76,25 +76,13 @@ exp_names = []
 # fault_name = "Drift Rate"
 # exp_names = []
 
-# Main analysis
-print("Loading data...")
-start = time.perf_counter()
-df_raw = load_data(file_path)
-print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
 
 # %%
-
-print("Preparing data...")
-start = time.perf_counter()
-# use only specific experiments
-df = df_raw
-if exp_names:
-    df = df[df["exp_name"].isin(exp_names)]
-df = prepare_data(df)
-print(f"Data prepared in {time.perf_counter() - start:.2f} seconds")
+df = load_and_prepare_data(file_path, exp_names)
 
 df_fault = df.loc[df["fault_spec.fn"] != "noop"]
 
+# %%
 plot_confusion_matrix(df)
 plot_fault_distribution(df_fault, fault_conf_column, fault_name)
 
