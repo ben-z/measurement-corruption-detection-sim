@@ -13,9 +13,6 @@ from multiprocessing import Pool
 MAX_POOL_SIZE = 240
 POOL_SIZE = min(MAX_POOL_SIZE, os.cpu_count() or 1)
 
-# Be nice to others on the system
-os.nice(5)
-
 def sha256sum_file(filename):
     """
     Calculate the SHA256 checksum of a file.
@@ -24,9 +21,11 @@ def sha256sum_file(filename):
     with open(filename, "rb", buffering=0) as f:
         return hashlib.file_digest(f, "sha256").hexdigest()  # type: ignore
 
+
 def preprocess_jsonl_line(line):
     json_obj = json.loads(line)
     return pd.json_normalize(json_obj)
+
 
 def preprocess_jsonl(filename):
     """
@@ -38,15 +37,18 @@ def preprocess_jsonl(filename):
         for normalized in pool.imap(preprocess_jsonl_line, file, chunksize=2000):
             yield normalized
 
+
 def load_data(filename):
     """
     Load a JSONL file into a Pandas DataFrame.
     """
     # Check if a cached version of the processed file exists
-    cache_file = Path(f"/tmp/{os.getlogin()}/bsim_v2_cache/{sha256sum_file(filename)}.pkl")
+    cache_file = Path(
+        f"/tmp/{os.getlogin()}/bsim_v2_cache/{sha256sum_file(filename)}.pkl"
+    )
     if cache_file.exists():
         return pd.read_pickle(cache_file)
-    
+
     # otherwise, preprocess the file and save it
     start = time.perf_counter()
     preprocessed = list(preprocess_jsonl(filename))
@@ -54,27 +56,46 @@ def load_data(filename):
 
     start = time.perf_counter()
     data = pd.concat(preprocessed, ignore_index=True)
-    print(f"load_data: Dataframe concatenated in {time.perf_counter() - start:.2f} seconds")
+    print(
+        f"load_data: Dataframe concatenated in {time.perf_counter() - start:.2f} seconds"
+    )
 
     # Create the cache directory if it doesn't exist
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     data.to_pickle(cache_file)
     return data
 
+
 def has_fault(df):
     ret = ~(df["fault_spec.fn"] == "noop")
     if "fault_spec.kwargs.bias" in df.columns:
-        ret &= ~((df["fault_spec.fn"] == "sensor_bias_fault") & np.isclose(df["fault_spec.kwargs.bias"], 0))
+        ret &= ~(
+            (df["fault_spec.fn"] == "sensor_bias_fault")
+            & np.isclose(df["fault_spec.kwargs.bias"], 0)
+        )
     if "fault_spec.kwargs.noise_level" in df.columns:
-        ret &= ~((df["fault_spec.fn"] == "random_noise_fault") & np.isclose(df["fault_spec.kwargs.noise_level"], 0))
+        ret &= ~(
+            (df["fault_spec.fn"] == "random_noise_fault")
+            & np.isclose(df["fault_spec.kwargs.noise_level"], 0)
+        )
     if "fault_spec.kwargs.spike_value" in df.columns:
-        ret &= ~((df["fault_spec.fn"] == "spike_fault") & np.isclose(df["fault_spec.kwargs.spike_value"], 0))
+        ret &= ~(
+            (df["fault_spec.fn"] == "spike_fault")
+            & np.isclose(df["fault_spec.kwargs.spike_value"], 0)
+        )
     if "fault_spec.kwargs.drift_rate" in df.columns:
-        ret &= ~((df["fault_spec.fn"] == "drift_fault") & np.isclose(df["fault_spec.kwargs.drift_rate"], 0))
+        ret &= ~(
+            (df["fault_spec.fn"] == "drift_fault")
+            & np.isclose(df["fault_spec.kwargs.drift_rate"], 0)
+        )
     if "fault_spec.kwargs.duration" in df.columns:
-        ret &= ~((df["fault_spec.fn"] == "spike_fault") & np.isclose(df["fault_spec.kwargs.duration"], 0))
+        ret &= ~(
+            (df["fault_spec.fn"] == "spike_fault")
+            & np.isclose(df["fault_spec.kwargs.duration"], 0)
+        )
 
     return ret
+
 
 def prepare_data(df):
     # Drop legacy columns
@@ -86,11 +107,15 @@ def prepare_data(df):
 
     return df
 
+
 def prepare_data_with_fault(df, cond):
-    df.loc[cond & df["has_detection"], "successful_detection"] = df["fault_spec.kwargs.start_t"] <= df["corruption.t"]
+    df.loc[cond & df["has_detection"], "successful_detection"] = (
+        df["fault_spec.kwargs.start_t"] <= df["corruption.t"]
+    )
     df.loc[cond, "det_delay"] = df["corruption.t"] - df["fault_spec.kwargs.start_t"]
     df.loc[cond, "det_delay"] = df["det_delay"].fillna(np.inf)
     df.loc[cond, "det_delay"] = df["det_delay"].round(2)
+
 
 def plot_confusion_matrix(df):
     """
@@ -110,10 +135,7 @@ def plot_confusion_matrix(df):
     print(f"{TP=} {TN=} {FP=} {FN=}")
 
     cm_df = pd.DataFrame(
-        [
-            [TP, FN],
-            [FP, TN]
-        ],
+        [[TP, FN], [FP, TN]],
         index=["Fault Present", "Fault Not Present"],
         columns=["Fault Detected", "Fault Not Detected"],
     )
@@ -130,6 +152,7 @@ def plot_confusion_matrix(df):
     )
     plt.title("Confusion Matrix")
     plt.show()
+
 
 # Plotting function for scatter and marker plots
 def plot_sensor_data(sensor_data, sensor_idx, fault_name, fault_conf_column):
@@ -156,15 +179,19 @@ def plot_sensor_data(sensor_data, sensor_idx, fault_name, fault_conf_column):
 
 
 # Function to calculate and plot detection percentage
-def calculate_and_plot_detection_percentage(df, sensor_idx, fault_name, fault_conf_column):
+def calculate_and_plot_detection_percentage(
+    df, sensor_idx, fault_name, fault_conf_column
+):
     sensor_data = df[df["fault_spec.kwargs.sensor_idx"] == sensor_idx]
-    detection_percentage = sensor_data.groupby(fault_conf_column)[
-        "det_delay"
-    ].apply(lambda x: (x < np.inf).mean() * 100)
+    detection_percentage = sensor_data.groupby(fault_conf_column)["det_delay"].apply(
+        lambda x: (x < np.inf).mean() * 100
+    )
 
     plt.figure(figsize=(12, 6))
     detection_percentage.plot(kind="bar")
-    plt.title(f"Percentage of Successful Detections vs {fault_name} for Sensor {sensor_idx}")
+    plt.title(
+        f"Percentage of Successful Detections vs {fault_name} for Sensor {sensor_idx}"
+    )
     plt.xlabel(f"{fault_name} ({fault_conf_column})")
     plt.ylabel("Percentage of Successful Detections (%)")
 
@@ -173,105 +200,10 @@ def calculate_and_plot_detection_percentage(df, sensor_idx, fault_name, fault_co
     num_ticks = 11
     tick_spacing = max(1, total_ticks // num_ticks)
     selected_ticks = tick_labels[::tick_spacing]
-    plt.xticks(range(0, total_ticks, tick_spacing), [f"{label:.2f}" for label in selected_ticks], rotation=45)
+    plt.xticks(
+        range(0, total_ticks, tick_spacing),
+        [f"{label:.2f}" for label in selected_ticks],
+        rotation=45,
+    )
 
     plt.show()
-
-
-# %%
-
-exp_path = Path(__file__).parent.parent / "exp"
-
-# file_path = exp_path / "test.jsonl"
-# fault_conf_column = "fault_spec.kwargs.bias"
-# fault_name = "Bias"
-# exp_names = ["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"]
-
-# file_path = exp_path / "test-bias-angular.jsonl"
-# fault_conf_column = "fault_spec.kwargs.bias"
-# fault_name = "Bias"
-# exp_names = []
-
-# file_path = exp_path / "test-noise.jsonl"
-# fault_conf_column = "fault_spec.kwargs.noise_level"
-# fault_name = "Noise Level"
-# exp_names = []
-
-# file_path = exp_path / "test-noise-steering.jsonl"
-# fault_conf_column = "fault_spec.kwargs.noise_level"
-# fault_name = "Noise Level"
-# exp_names = []
-
-# file_path = exp_path / "test-spike.jsonl"
-# fault_conf_column = "fault_spec.kwargs.spike_value"
-# fault_name = "Spike value"
-# exp_names = []
-
-# file_path = exp_path / "test-spike.jsonl"
-# fault_conf_column = "fault_spec.kwargs.duration"
-# fault_name = "Spike duration"
-# exp_names = []
-
-# file_path = exp_path / "test-spike-steering.jsonl"
-# fault_conf_column = "fault_spec.kwargs.spike_value"
-# fault_name = "Spike value"
-# exp_names = []
-
-# file_path = exp_path / "test-spike-steering.jsonl"
-# fault_conf_column = "fault_spec.kwargs.duration"
-# fault_name = "Spike duration"
-# exp_names = []
-
-# file_path = exp_path / "test-drift-sensors-2-3.jsonl"
-# fault_conf_column = "fault_spec.kwargs.drift_rate"
-# fault_name = "Drift Rate"
-# exp_names = []
-
-file_path = exp_path / "test-drift-sensors-4-5.jsonl"
-fault_conf_column = "fault_spec.kwargs.drift_rate"
-fault_name = "Drift Rate"
-exp_names = []
-
-# Main analysis
-print("Loading data...")
-start = time.perf_counter()
-df_raw = load_data(file_path)
-print(f"Data loaded in {time.perf_counter() - start:.2f} seconds")
-
-
-# %%
-
-print("Preparing data...")
-start = time.perf_counter()
-# use only specific experiments
-df = df_raw
-if exp_names:
-    df = df[df["exp_name"].isin(exp_names)]
-df = prepare_data(df)
-print(f"Data prepared in {time.perf_counter() - start:.2f} seconds")
-
-df_fault = df.loc[df["fault_spec.fn"] != "noop"]
-
-# df_fault["has_detection"].value_counts().plot(kind='barh')
-# df_fault["successful_detection"].value_counts().plot(kind='barh')
-
-plot_confusion_matrix(df)
-
-df_fault.plot.hist(
-    column=[fault_conf_column],
-    by="fault_spec.kwargs.sensor_idx",
-    bins=max(
-        df_fault.groupby("fault_spec.kwargs.sensor_idx")[fault_conf_column].nunique()
-    ),
-    title=f"{fault_name} Distribution for Each Sensor",
-)
-plt.tight_layout()
-plt.show()
-
-# Analysis for each sensor
-for sensor_idx in df_fault["fault_spec.kwargs.sensor_idx"].unique():
-    sensor_data = df_fault[df_fault["fault_spec.kwargs.sensor_idx"] == sensor_idx]
-    plot_sensor_data(sensor_data, sensor_idx, fault_name, fault_conf_column)
-    calculate_and_plot_detection_percentage(df_fault, sensor_idx, fault_name, fault_conf_column)
-
-# %%
