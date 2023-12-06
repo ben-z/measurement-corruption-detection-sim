@@ -175,12 +175,23 @@ def calculate_and_plot_detection_percentage(df, sensor_idx, fault_name, fault_co
 # %%
 
 exp_path = Path(__file__).parent.parent / "exp"
+
 # file_path = exp_path / "test.jsonl"
 # fault_conf_column = "fault_spec.kwargs.bias"
 # fault_name = "Bias"
 # exp_names = ["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"]
 
+# file_path = exp_path / "test-bias-angular.jsonl"
+# fault_conf_column = "fault_spec.kwargs.bias"
+# fault_name = "Bias"
+# exp_names = []
+
 # file_path = exp_path / "test-noise.jsonl"
+# fault_conf_column = "fault_spec.kwargs.noise_level"
+# fault_name = "Noise Level"
+# exp_names = []
+
+# file_path = exp_path / "test-noise-steering.jsonl"
 # fault_conf_column = "fault_spec.kwargs.noise_level"
 # fault_name = "Noise Level"
 # exp_names = []
@@ -190,7 +201,17 @@ exp_path = Path(__file__).parent.parent / "exp"
 # fault_name = "Spike value"
 # exp_names = []
 
-file_path = exp_path / "test-spike.jsonl"
+# file_path = exp_path / "test-spike.jsonl"
+# fault_conf_column = "fault_spec.kwargs.duration"
+# fault_name = "Spike duration"
+# exp_names = []
+
+# file_path = exp_path / "test-spike-steering.jsonl"
+# fault_conf_column = "fault_spec.kwargs.spike_value"
+# fault_name = "Spike value"
+# exp_names = []
+
+file_path = exp_path / "test-spike-steering.jsonl"
 fault_conf_column = "fault_spec.kwargs.duration"
 fault_name = "Spike duration"
 exp_names = []
