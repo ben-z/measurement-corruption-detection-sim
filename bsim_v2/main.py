@@ -242,7 +242,7 @@ real_time_fault_tolerance = False
 # %%
 
 fault_specs = []
-num_passes = 30
+num_passes = 30 * 3
 file_name = "./exp/test-drift-sensors-4-5.jsonl"
 exp_name = "drift-fault-sweep-sensors-4-5"
 
@@ -424,7 +424,7 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
     #         }
     #     )
     
-    for drift_rate in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.005):
+    for drift_rate in np.arange(-np.pi/16, np.pi/16 + sys.float_info.epsilon, 0.005):
         fault_specs.append(
             {
                 "fn": "drift_fault",
@@ -436,7 +436,7 @@ for start_t in [10, 15, 20, 25, 30, 35, 40]:
             }
         )
     
-    for drift_rate in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.005):
+    for drift_rate in np.arange(-np.pi/16, np.pi/16 + sys.float_info.epsilon, 0.005):
         fault_specs.append(
             {
                 "fn": "drift_fault",
