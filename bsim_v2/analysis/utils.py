@@ -155,7 +155,7 @@ def plot_confusion_matrix(df):
 
 
 # Plotting function for scatter and marker plots
-def plot_sensor_data(sensor_data, sensor_idx, fault_name, fault_conf_column):
+def plot_detection_delay(sensor_data, sensor_idx, fault_name, fault_conf_column):
     detected_data = sensor_data[sensor_data["det_delay"] < np.inf]
     not_detected_data = sensor_data[sensor_data["det_delay"] == np.inf]
 
@@ -165,7 +165,8 @@ def plot_sensor_data(sensor_data, sensor_idx, fault_name, fault_conf_column):
     )
     plt.scatter(
         not_detected_data[fault_conf_column],
-        [max(detected_data["det_delay"]) + 0.01] * len(not_detected_data),
+        # Show the not_detected points above the detected points
+        [max(detected_data["det_delay"]) * 1.1] * len(not_detected_data),
         color="red",
         marker="x",
         label="Not Detected",

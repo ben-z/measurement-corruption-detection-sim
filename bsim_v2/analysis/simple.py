@@ -18,7 +18,7 @@ from analysis.utils import (
     prepare_data,
     plot_confusion_matrix,
     plot_fault_distribution,
-    plot_sensor_data,
+    plot_detection_delay,
     calculate_and_plot_detection_percentage,
 )
 
@@ -101,5 +101,5 @@ plot_fault_distribution(df_fault, fault_conf_column, fault_name)
 # Analysis for each sensor
 for sensor_idx in df_fault["fault_spec.kwargs.sensor_idx"].unique():
     sensor_data = df_fault[df_fault["fault_spec.kwargs.sensor_idx"] == sensor_idx]
-    plot_sensor_data(sensor_data, sensor_idx, fault_name, fault_conf_column)
+    plot_detection_delay(sensor_data, sensor_idx, fault_name, fault_conf_column)
     calculate_and_plot_detection_percentage(df_fault, sensor_idx, fault_name, fault_conf_column)
