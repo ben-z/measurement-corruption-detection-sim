@@ -883,6 +883,7 @@ def estimate_state(
     end = end_e2e = time.perf_counter()
     metadata['optimizer_time'] = end - start
     metadata['total_time'] = end_e2e - start_e2e
+    # print(f"Optimizer time: {metadata['optimizer_time']:.3f}s, Total time: {metadata['total_time']:.3f}s")
 
     return x_hat, optimizer_res, metadata
 
