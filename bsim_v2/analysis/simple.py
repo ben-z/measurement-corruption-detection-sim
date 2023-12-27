@@ -64,10 +64,10 @@ exp_path = Path(__file__).parent.parent.parent / "exp"
 # fault_name = "Spike duration"
 # exp_names = []
 
-file_path = exp_path / "test-drift-sensors-2-3.jsonl"
-fault_conf_column = "fault_spec.kwargs.drift_rate"
-fault_name = "Drift Rate"
-exp_names = []
+# file_path = exp_path / "test-drift-sensors-2-3.jsonl"
+# fault_conf_column = "fault_spec.kwargs.drift_rate"
+# fault_name = "Drift Rate"
+# exp_names = []
 
 # file_path = exp_path / "test-drift-sensors-4-5.jsonl"
 # fault_conf_column = "fault_spec.kwargs.drift_rate"

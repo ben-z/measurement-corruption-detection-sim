@@ -24,15 +24,15 @@ from analysis.utils import (
 
 exp_path = Path(__file__).parent.parent.parent / "exp"
 
-file_path = exp_path / "test-drift-sensors-2-3.jsonl"
-fault_conf_column = "fault_spec.kwargs.drift_rate"
-fault_name = "Drift Rate"
-exp_names = []
-
-# file_path = exp_path / "test-drift-sensors-4-5.jsonl"
+# file_path = exp_path / "test-drift-sensors-2-3.jsonl"
 # fault_conf_column = "fault_spec.kwargs.drift_rate"
 # fault_name = "Drift Rate"
 # exp_names = []
+
+file_path = exp_path / "test-drift-sensors-4-5.jsonl"
+fault_conf_column = "fault_spec.kwargs.drift_rate"
+fault_name = "Drift Rate"
+exp_names = []
 
 
 # %%
@@ -44,6 +44,7 @@ df_fault = df.loc[df["fault_spec.fn"] != "noop"]
 plot_confusion_matrix(df)
 plot_fault_distribution(df_fault, fault_conf_column, fault_name)
 
+# %%
 # Analysis for each sensor
 for sensor_idx in df_fault["fault_spec.kwargs.sensor_idx"].unique():
     sensor_data = df_fault[df_fault["fault_spec.kwargs.sensor_idx"] == sensor_idx]
