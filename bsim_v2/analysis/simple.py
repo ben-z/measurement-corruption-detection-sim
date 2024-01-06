@@ -29,10 +29,10 @@ exp_path = Path(__file__).parent.parent.parent / "exp"
 # fault_name = "Bias"
 # exp_names = ["fine-grained-bias-sweep-4", "fine-grained-bias-sweep-3"]
 
-# file_path = exp_path / "test-bias-angular.jsonl"
-# fault_conf_column = "fault_spec.kwargs.bias"
-# fault_name = "Bias"
-# exp_names = []
+file_path = exp_path / "test-bias-angular.jsonl"
+fault_conf_column = "fault_spec.kwargs.bias"
+fault_name = "Bias"
+exp_names = []
 
 # file_path = exp_path / "test-noise.jsonl"
 # fault_conf_column = "fault_spec.kwargs.noise_level"
@@ -69,10 +69,10 @@ exp_path = Path(__file__).parent.parent.parent / "exp"
 # fault_name = "Drift Rate"
 # exp_names = []
 
-file_path = exp_path / "test-drift-sensors-4-5.jsonl"
-fault_conf_column = "fault_spec.kwargs.drift_rate"
-fault_name = "Drift Rate"
-exp_names = []
+# file_path = exp_path / "test-drift-sensors-4-5.jsonl"
+# fault_conf_column = "fault_spec.kwargs.drift_rate"
+# fault_name = "Drift Rate"
+# exp_names = []
 
 
 # %%
