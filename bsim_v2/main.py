@@ -215,7 +215,6 @@ for attack_start_t in [10]:
     corruption = find_corruption(
         output_hist,
         u_hist,
-        estimate_hist,
         closest_idx_hist,
         path_points,
         path_headings,

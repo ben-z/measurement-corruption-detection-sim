@@ -800,7 +800,6 @@ def estimate_state(
     kf,
     output_hist,
     input_hist,
-    estimate_hist,
     closest_idx_hist,
     path_points,
     path_headings,
@@ -819,7 +818,7 @@ def estimate_state(
         kf: Optional[filterpy.kalman.UnscentedKalmanFilter] - the filter to use. If None, simply average the sensors.
         output_hist: list[float] - a list of N outputs
         input_hist: list[float] - a list of N-1 inputs
-        estimate_hist: list[float] - a list of N-1 estimates
+        closest_idx_hist: list[float] - a list of N-1 indices of the path where the vehicle was closest to at each time step
         path_points: list[tuple[float,float]] - a list of points on the path
         velocities: list[float] - a list of velocities at each point on the path
         dt: float - the time step
@@ -868,7 +867,7 @@ def estimate_state(
         return x_hat, None, metadata
 
     assert len(input_hist) == N-1, 'input_hist must be one shorter than output_hist'
-    assert len(estimate_hist) == N-1, 'estimate_hist must be one shorter than output_hist'
+    assert len(closest_idx_hist) == N-1, 'closest_idx_hist must be one shorter than output_hist'
     assert len(output_hist) == N, 'output_hist must be N long'
 
     setup = get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l)
@@ -983,7 +982,7 @@ def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, p
         output_hist.append(output)
 
         # fault-tolerant estimator
-        (x_hat, y_hat, theta_hat, v_hat, delta_hat), optimizer_res, _ = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], estimate_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=enable_fault_tolerance, optimizer=optimizer, noise_std=noise_std)
+        (x_hat, y_hat, theta_hat, v_hat, delta_hat), optimizer_res, _ = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=enable_fault_tolerance, optimizer=optimizer, noise_std=noise_std)
         # if optimizer_res is None:
         #     print(f"k={i}: Optimizer not run")
         # elif optimizer_res[0] is None:
@@ -1141,10 +1140,27 @@ def plot_quad(t_hist, state_hist, output_hist, estimate_hist, u_hist, closest_id
     
     return generate_gif
 
-def find_corruption(output_hist, input_hist, estimate_hist, closest_idx_hist, path_points, path_headings, velocity_profile, Cs, N, starting_k, optimizer, model_params, noise_std):
+def find_corruption(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocity_profile, Cs, N, starting_k, optimizer, model_params, noise_std):
+    """
+    Finds the corruption in the given data.
+
+    Parameters:
+        output_hist: list[np.ndarray] - a list of N outputs
+        input_hist: list[np.ndarray] - a list of N-1 inputs
+        closest_idx_hist: list[int] - a list of N-1 closest indices on the path
+        path_points: list[tuple[float,float]] - a list of points that describe the path
+        path_headings: list[float] - a list of headings at each point on the path
+        velocity_profile: list[float] - a list of velocities at each point on the path
+        Cs: list[np.ndarray] - a list of N output matrices
+        N: int - the time window
+        starting_k: int - the starting time step to search from
+        optimizer: MyOptimizer - the optimizer to use
+        model_params: dict - the model parameters
+        noise_std: float - the standard deviation of the measurement noise
+    """
     # Run the solver from the beginning until we detect the corruption
     ks = range(max(N,starting_k), len(output_hist)+1)
-    args_iterable = ((None, output_hist[k-N:k], input_hist[k-N:k-1], estimate_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, Cs, model_params['dt'], model_params['l'], N, True, optimizer, noise_std) for k in ks)
+    args_iterable = ((None, output_hist[k-N:k], input_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, Cs, model_params['dt'], model_params['l'], N, True, optimizer, noise_std) for k in ks)
 
     pool = None
     res_iter = map(estimate_state_unpack, args_iterable)
@@ -1228,7 +1244,6 @@ def run_experiment(
     corruption = find_corruption(
         output_hist,
         u_hist,
-        estimate_hist,
         closest_idx_hist,
         path_points,
         path_headings,
