@@ -155,6 +155,19 @@ def kinematic_bicycle_model_linearize(theta, v, delta, dt, l):
 
     return Ad, Bd
 
+def kinematic_bicycle_model_desired_state_at_idx(idx, path_points, path_headings, velocities):
+    return np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0])
+
+def kinematic_bicycle_model_normalize_output(output):
+    return [
+        output[0],
+        output[1],
+        wrap_to_pi(output[2]),
+        output[3],
+        wrap_to_pi(output[4]),
+        wrap_to_pi(output[5]),
+    ]
+
 def calc_input_effects_on_output(As, Bs, Cs, inputs):
     # calculates the input effects on the output
     # Parameters:
@@ -691,7 +704,7 @@ def get_output_evolution_tensor(Cs: list[np.ndarray], Evo: np.ndarray):
     
     return Phi
 
-def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l):
+def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l, model_at_idx, desired_output_fn, normalize_output):
     """
     Returns the precomputed data needed to solve for corrupted sensors.
     Parameters:
@@ -711,25 +724,32 @@ def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, pat
     x0_hat_closest_idx = closest_idx_hist[0]
 
     # Use walk_trajectory_by_durations to get the desired path indices at each time step
+    # TODO: exp:use-real-indices - use closest_idx_hist instead of desired_path_indices
     desired_path_indices = [x0_hat_closest_idx] + walk_trajectory_by_durations(path_points, velocities, x0_hat_closest_idx, [dt]*(N-1))
 
     # Generate the As and Bs for each time step
-    models = [kinematic_bicycle_model_linearize(path_headings[idx], velocities[idx], 0, dt, l) for idx in desired_path_indices]
+    # model_fn
+    # models = [kinematic_bicycle_model_linearize(path_headings[idx], velocities[idx], 0, dt, l) for idx in desired_path_indices]
+    models = [model_at_idx(idx) for idx in desired_path_indices]
     As = list(m[0] for m in models[:N-1])
     Bs = list(m[1] for m in models[:N-1])
     
     # List of desired outputs at the linearization points
-    desired_trajectory = [Cs[i] @ np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0]) for i, idx in enumerate(desired_path_indices)]
+    # desired_output_at_idx(idx)
+    # desired_trajectory = [Cs[i] @ np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0]) for i, idx in enumerate(desired_path_indices)]
+    desired_trajectory = [desired_output_fn(i, idx) for i, idx in enumerate(desired_path_indices)]
     
     # Calculate the effects on outputs due to inputs, then subtract them from the outputs.
     # Also subtract the desired outputs to get deviations.
     input_effects = calc_input_effects_on_output(As, Bs, Cs, input_hist)
     output_hist_no_input_effects = [output - input_effect - desired_output for output, input_effect, desired_output in zip(output_hist, input_effects, desired_trajectory)]
     # normalize angular measurements
-    for o in output_hist_no_input_effects:
-        o[2] = wrap_to_pi(o[2])
-        o[4] = wrap_to_pi(o[4])
-        o[5] = wrap_to_pi(o[5])
+    # normalize_output
+    for i in range(len(output_hist_no_input_effects)):
+        output_hist_no_input_effects[i] = normalize_output(output_hist_no_input_effects[i])
+        # o[2] = wrap_to_pi(o[2])
+        # o[4] = wrap_to_pi(o[4])
+        # o[5] = wrap_to_pi(o[5])
 
     # Solve for corrupted sensors
     Y = np.array(output_hist_no_input_effects)
@@ -740,7 +760,7 @@ def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, pat
         'Phi': Phi,
         'output_hist_no_input_effects': output_hist_no_input_effects,
     }
-        
+
 def get_s_sparse_observability(Cs, As, early_exit=False):
     """
     Returns the s-sparse observability for the given system.
@@ -811,6 +831,9 @@ def estimate_state(
     enable_fault_tolerance,
     optimizer,
     noise_std,
+    model_at_idx,
+    desired_output_fn,
+    normalize_output,
 ) -> Tuple[NDArray[np.float64], MyOptimizerRes | None, dict]:
     """
     Estimates the state of the vehicle.
@@ -870,7 +893,20 @@ def estimate_state(
     assert len(closest_idx_hist) == N-1, 'closest_idx_hist must be one shorter than output_hist'
     assert len(output_hist) == N, 'output_hist must be N long'
 
-    setup = get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocities, Cs, dt, l)
+    setup = get_solver_setup(
+        output_hist,
+        input_hist,
+        closest_idx_hist,
+        path_points,
+        path_headings,
+        velocities,
+        Cs,
+        dt,
+        l,
+        model_at_idx,
+        desired_output_fn,
+        normalize_output,
+    )
 
     # eps = np.array([0.1]*2+[1e-2]+[1e-3]*3)
     # eps = np.array([1.0]*2+[0.3]+[1.5]+[0.05]*2)
@@ -982,7 +1018,25 @@ def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, p
         output_hist.append(output)
 
         # fault-tolerant estimator
-        (x_hat, y_hat, theta_hat, v_hat, delta_hat), optimizer_res, _ = estimate_state(ukf, output_hist[-N:], u_hist[-(N-1):], closest_idx_hist[-(N-1):], path_points, path_headings, velocity_profile, [C]*N, dt=model_params['dt'], l=model_params['l'], N=N, enable_fault_tolerance=enable_fault_tolerance, optimizer=optimizer, noise_std=noise_std)
+        (x_hat, y_hat, theta_hat, v_hat, delta_hat), optimizer_res, _ = estimate_state(
+            ukf,
+            output_hist[-N:],
+            u_hist[-(N-1):],
+            closest_idx_hist[-(N-1):],
+            path_points,
+            path_headings,
+            velocity_profile,
+            [C]*N,
+            dt=model_params['dt'],
+            l=model_params['l'],
+            N=N,
+            enable_fault_tolerance=enable_fault_tolerance,
+            optimizer=optimizer,
+            noise_std=noise_std,
+            model_at_idx=lambda idx: kinematic_bicycle_model_linearize(path_headings[idx], velocity_profile[idx], 0, model_params['dt'], model_params['l']),
+            desired_output_fn=lambda i, idx: C @ kinematic_bicycle_model_desired_state_at_idx(idx, path_points, path_headings, velocity_profile),
+            normalize_output=kinematic_bicycle_model_normalize_output,
+        )
         # if optimizer_res is None:
         #     print(f"k={i}: Optimizer not run")
         # elif optimizer_res[0] is None:
@@ -1140,7 +1194,7 @@ def plot_quad(t_hist, state_hist, output_hist, estimate_hist, u_hist, closest_id
     
     return generate_gif
 
-def find_corruption(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocity_profile, Cs, N, starting_k, optimizer, model_params, noise_std):
+def find_corruption(output_hist, input_hist, closest_idx_hist, path_points, path_headings, velocity_profile, Cs, N, starting_k, optimizer, model_params, noise_std, model_at_idx, desired_output_fn, normalize_output):
     """
     Finds the corruption in the given data.
 
@@ -1160,7 +1214,28 @@ def find_corruption(output_hist, input_hist, closest_idx_hist, path_points, path
     """
     # Run the solver from the beginning until we detect the corruption
     ks = range(max(N,starting_k), len(output_hist)+1)
-    args_iterable = ((None, output_hist[k-N:k], input_hist[k-N:k-1], closest_idx_hist[k-N:k-1], path_points, path_headings, velocity_profile, Cs, model_params['dt'], model_params['l'], N, True, optimizer, noise_std) for k in ks)
+    args_iterable = (
+        (
+            None,
+            output_hist[k-N:k],
+            input_hist[k-N:k-1],
+            closest_idx_hist[k-N:k-1],
+            path_points,
+            path_headings,
+            velocity_profile,
+            Cs,
+            model_params['dt'],
+            model_params['l'],
+            N,
+            True,
+            optimizer,
+            noise_std,
+            model_at_idx,
+            desired_output_fn,
+            normalize_output,
+        )
+        for k in ks
+    )
 
     pool = None
     res_iter = map(estimate_state_unpack, args_iterable)

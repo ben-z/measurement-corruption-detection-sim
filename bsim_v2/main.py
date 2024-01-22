@@ -37,33 +37,15 @@ from multiprocessing import Pool
 from numpy.typing import NDArray
 from typing import List, Tuple, Any
 from utils import (
-    get_unpack_fn,
-    generate_circle_approximation,
     generate_figure_eight_approximation,
-    kinematic_bicycle_model,
-    PIDController,
-    closest_point_idx,
-    closest_point_idx_local,
-    get_lookahead_idx,
-    wrap_to_pi,
-    clamp,
-    walk_trajectory_by_durations,
-    kinematic_bicycle_model_linearize,
-    calc_input_effects_on_output,
-    get_output_evolution_tensor,
-    get_state_evolution_tensor,
-    optimize_l0_v2,
     Optimizer,
-    MyOptimizationCaseResult,
-    MyOptimizerRes,
-    format_floats,
-    MAX_POOL_SIZE,
-    get_solver_setup,
     plot_quad,
-    estimate_state,
     run_simulation,
     find_corruption,
     run_experiments,
+    kinematic_bicycle_model_linearize,
+    kinematic_bicycle_model_desired_state_at_idx,
+    kinematic_bicycle_model_normalize_output,
 )
 from fault_generators import (
     sensor_bias_fault,
@@ -225,6 +207,9 @@ for attack_start_t in [10]:
         optimizer,
         model_params,
         noise_std,
+        model_at_idx=lambda idx: kinematic_bicycle_model_linearize(path_headings[idx], velocity_profile[idx], 0, model_params['dt'], model_params['l']),
+        desired_output_fn=lambda i, idx: C @ kinematic_bicycle_model_desired_state_at_idx(idx, path_points, path_headings, velocity_profile),
+        normalize_output=kinematic_bicycle_model_normalize_output,
     )
     if corruption is None:
         print("No corruption found")
@@ -241,6 +226,8 @@ print(f"Simulation took {end - start:.2f} seconds")
 
 
 # %%
+
+# Batch experiments
 
 fault_specs = []
 num_passes = 30 * 3
