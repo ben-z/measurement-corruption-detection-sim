@@ -127,6 +127,9 @@ def kinematic_bicycle_model_linearize(theta, v, delta, dt, l):
     Returns:
         A: np.ndarray - the state transition matrix
         B: np.ndarray - the input matrix
+    Model:
+        State: [x, y, theta, v, delta]
+        Input: [a, delta_dot]
     """
     A = np.array([
         [0, 0, -v*np.sin(theta), np.cos(theta), 0],
@@ -355,7 +358,7 @@ def walk_trajectory_by_durations(path_points, velocities, starting_idx, duration
     Returns:
         indices: list[int] - list of indices of path points that were travelled to
     """
-    assert len(path_points) == len(velocities), "path_points and velocities must have the same length"
+    assert len(path_points) == len(velocities), f"path_points and velocities must have the same length. {len(path_points)=}, {len(velocities)=}"
     assert starting_idx >= 0 and starting_idx < len(path_points), "starting_idx must be a valid index"
     assert len(durations) > 0, "Must have a duration"
     assert all(d >= 0 for d in durations), "durations must be non-negative"
@@ -834,7 +837,8 @@ def estimate_state(
     model_at_idx,
     desired_output_fn,
     normalize_output,
-) -> Tuple[NDArray[np.float64], MyOptimizerRes | None, dict]:
+    enable_estimator = True,
+) -> Tuple[NDArray[np.float64] | None, MyOptimizerRes | None, dict]:
     """
     Estimates the state of the vehicle.
     Parameters:
@@ -863,8 +867,13 @@ def estimate_state(
 
     # This is the latest output
     output = output_hist[-1]
-    assert len(output) == 6, 'This function only works with output (x,y,theta,v,delta1,delta2)'
-    if kf is not None:
+    if enable_estimator:
+        assert len(output) == 6, 'The estimator currently only works with output (x,y,theta,v,delta1,delta2)'
+
+    if not enable_estimator:
+        # skip the estimator
+        x_hat = None
+    elif kf is not None:
         kf.update(output)
 
         x_hat = kf.x
@@ -1018,7 +1027,7 @@ def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, p
         output_hist.append(output)
 
         # fault-tolerant estimator
-        (x_hat, y_hat, theta_hat, v_hat, delta_hat), optimizer_res, _ = estimate_state(
+        estimator_res, optimizer_res, _ = estimate_state(
             ukf,
             output_hist[-N:],
             u_hist[-(N-1):],
@@ -1043,6 +1052,9 @@ def run_simulation(x0, C, noise_std, num_steps, N, path_points, path_headings, p
         #     print(f"k={i}: Optimizer failed")
         # else:
         #     print(f"k={i}: {optimizer_res[0][2]['K']} corrupted")
+
+        assert estimator_res is not None, 'Estimator returned None! This should not happen.'
+        x_hat, y_hat, theta_hat, v_hat, delta_hat = estimator_res
 
         estimate_hist.append([x_hat, y_hat, theta_hat, v_hat, delta_hat])
         ukf_P_hist.append(ukf.P.copy())
@@ -1223,7 +1235,7 @@ def find_corruption(output_hist, input_hist, closest_idx_hist, path_points, path
             path_points,
             path_headings,
             velocity_profile,
-            Cs,
+            Cs[k-N:k],
             model_params['dt'],
             model_params['l'],
             N,
@@ -1233,6 +1245,7 @@ def find_corruption(output_hist, input_hist, closest_idx_hist, path_points, path
             model_at_idx,
             desired_output_fn,
             normalize_output,
+            False, # disable estimator
         )
         for k in ks
     )
@@ -1329,6 +1342,9 @@ def run_experiment(
         optimizer,
         model_params,
         noise_std,
+        model_at_idx=lambda idx: kinematic_bicycle_model_linearize(path_headings[idx], velocity_profile[idx], 0, model_params['dt'], model_params['l']),
+        desired_output_fn=lambda i, idx: C @ kinematic_bicycle_model_desired_state_at_idx(idx, path_points, path_headings, velocity_profile),
+        normalize_output=kinematic_bicycle_model_normalize_output,
     )
 
     return corruption
