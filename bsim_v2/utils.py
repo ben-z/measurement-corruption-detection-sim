@@ -3,7 +3,9 @@ import numpy as np
 import json
 import os
 import time
+import traceback
 import fault_generators
+import math
 from collections import namedtuple
 from filterpy.kalman import UnscentedKalmanFilter, MerweScaledSigmaPoints
 from functools import wraps
@@ -562,7 +564,7 @@ class Optimizer:
         start = time.perf_counter()
 
         N, q, n = Phi.shape
-        assert Y.shape == (N, q)
+        assert Y.shape == (N, q), f"{Y.shape=} must be equal to {(N, q)=}"
         assert N == self.N, f"N must be equal to {self.N=}"
         assert q == self.q, f"q must be equal to {self.q=}"
         assert n == self.n, f"n must be equal to {self.n=}"
@@ -588,12 +590,16 @@ class Optimizer:
         # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
         #   soln_generator = pool.starmap(optimize_l0_case, zip(*map_args))
 
+        metadata['solutions_with_errors'] = []
+
         ret = None
         solns = []
         try:
             for s in soln_generator:
                 s_x0_hat, s_prob, s_metadata = s
                 solns.append(s)
+                if s_metadata.get('solver_error'):
+                    metadata['solutions_with_errors'].append(s_metadata)
                 if ret is None and s_prob.status in ["optimal", "optimal_inaccurate"]:
                     ret = (s_x0_hat, s_prob, s_metadata)
                     if early_exit:
@@ -1303,30 +1309,40 @@ def run_experiment(
     fault_spec,
 ):
     fault = getattr(fault_generators, fault_spec['fn'])(**fault_spec['kwargs'])
-    (
-        t_hist,
-        state_hist,
-        output_hist,
-        estimate_hist,
-        u_hist,
-        closest_idx_hist,
-        ukf_P_hist,
-    ) = run_simulation(
-        x0,
-        C,
-        noise_std,
-        num_steps,
-        N,
-        path_points,
-        path_headings,
-        path_curvatures,
-        path_dcurvatures,
-        velocity_profile,
-        optimizer,
-        model_params,
-        fault,
-        real_time_fault_tolerance,
-    )
+
+    simulation = {}
+    start = time.perf_counter()
+    try:
+        (
+            t_hist,
+            state_hist,
+            output_hist,
+            estimate_hist,
+            u_hist,
+            closest_idx_hist,
+            ukf_P_hist,
+        ) = run_simulation(
+            x0,
+            C,
+            noise_std,
+            num_steps,
+            N,
+            path_points,
+            path_headings,
+            path_curvatures,
+            path_dcurvatures,
+            velocity_profile,
+            optimizer,
+            model_params,
+            fault,
+            real_time_fault_tolerance,
+        )
+    except Exception as e:
+        simulation['error'] = str(e)
+        simulation['stacktrace'] = traceback.format_exc()
+        return simulation, None
+    finally:
+        simulation['duration'] = time.perf_counter() - start
 
     # Post-analysis
     corruption = find_corruption(
@@ -1336,7 +1352,7 @@ def run_experiment(
         path_points,
         path_headings,
         velocity_profile,
-        [C] * N,
+        [C] * len(output_hist),
         N,
         500,
         optimizer,
@@ -1347,7 +1363,7 @@ def run_experiment(
         normalize_output=kinematic_bicycle_model_normalize_output,
     )
 
-    return corruption
+    return simulation, corruption
 
 
 def run_experiment_unpack(args):
@@ -1407,11 +1423,12 @@ def run_experiments(
     # pool = None
     # res_iter = zip(map(run_experiment_unpack, exp_args), fault_specs)
     try:
-        for corruption, fault_spec in tqdm(res_iter, total=len(fault_specs), smoothing=0):
+        for (simulation, corruption), fault_spec in tqdm(res_iter, total=len(fault_specs), smoothing=0):
             # write results to file
             with open(output_file, 'a') as f:
                 f.write(json.dumps({
                     'fault_spec': fault_spec,
+                    'simulation': simulation,
                     'corruption': corruption,
                     **extra_output_metadata,
                 }, cls=NpEncoder)+"\n")

@@ -28,7 +28,6 @@ os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
 
 import cvxpy as cp
 import json
-import math
 import matplotlib.pyplot as plt
 import numpy as np
 import time
@@ -46,6 +45,7 @@ from utils import (
     kinematic_bicycle_model_linearize,
     kinematic_bicycle_model_desired_state_at_idx,
     kinematic_bicycle_model_normalize_output,
+    calculate_segment_lengths,
 )
 from fault_generators import (
     sensor_bias_fault,
@@ -69,15 +69,6 @@ model_params = {
     "max_linear_velocity": 300 / 3.6,  # m/s
     "min_linear_velocity": 0.1,  # m/s
 }
-
-
-def calculate_segment_lengths(points: List[Tuple[float, float]]) -> List[float]:
-    """Calculate the lengths of each segment given a list of (x, y) tuples."""
-    return [
-        math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-        for (x1, y1), (x2, y2) in zip(points, np.roll(points, -1, axis=0))
-    ]
-
 
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_figure_eight_approximation([0, 0], 10, 5, 1000)
 # path_points, path_headings, path_curvatures, path_dcurvatures = generate_circle_approximation([-10, 0], 10, 1000)
