@@ -79,6 +79,13 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NpEncoder, self).default(obj)
 
+def calculate_segment_lengths(points: List[Tuple[float, float]]) -> List[float]:
+    """Calculate the lengths of each segment given a list of (x, y) tuples."""
+    return [
+        math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        for (x1, y1), (x2, y2) in zip(points, np.roll(np.array(points), -1, axis=0))
+    ]
+
 #################################################################
 # Models
 #################################################################
