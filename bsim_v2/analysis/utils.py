@@ -12,6 +12,7 @@ from multiprocessing import Pool
 
 MAX_POOL_SIZE = 240
 POOL_SIZE = min(MAX_POOL_SIZE, os.cpu_count() or 1)
+CACHE_BASE_DIR = Path("/mnt/scratch") / os.getlogin() / "bsim_v2_cache"
 
 def sha256sum_file(filename):
     """
@@ -60,9 +61,7 @@ def load_data(filename):
     Load a JSONL file into a Pandas DataFrame.
     """
     # Check if a cached version of the processed file exists
-    cache_file = Path(
-        f"/tmp/{os.getlogin()}/bsim_v2_cache/{sha256sum_file(filename)}.pkl"
-    )
+    cache_file = CACHE_BASE_DIR / f"{sha256sum_file(filename)}.pkl"
     if cache_file.exists():
         return pd.read_pickle(cache_file)
 
