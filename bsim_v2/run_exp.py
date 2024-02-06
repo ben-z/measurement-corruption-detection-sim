@@ -166,171 +166,193 @@ def run(
         # Bias Faults
         #############################################
 
-        # for bias in np.arange(-np.pi/4, np.pi + sys.float_info.epsilon, 0.005):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "sensor_bias_fault",
-        #             "kwargs": {"start_t": start_t, "sensor_idx": 2, "bias": bias},
-        #         }
-        #     )
-        # for bias in np.arange(-np.pi/4, np.pi + sys.float_info.epsilon, 0.005):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "sensor_bias_fault",
-        #             "kwargs": {"start_t": start_t, "sensor_idx": 4, "bias": bias},
-        #         }
-        #     )
-        # for bias in np.arange(-np.pi/4, np.pi + sys.float_info.epsilon, 0.005):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "sensor_bias_fault",
-        #             "kwargs": {"start_t": start_t, "sensor_idx": 5, "bias": bias},
-        #         }
-        #     )
+        # heading sensor
+        for bias in np.arange(-np.pi/4, np.pi/4 + sys.float_info.epsilon, 0.005):
+            fault_specs.append(
+                {
+                    "fn": "sensor_bias_fault",
+                    "kwargs": {"start_t": start_t, "sensor_idx": 2, "bias": bias},
+                }
+            )
+        # velocity sensor
+        for bias in np.arange(-0.5, 0.5 + sys.float_info.epsilon, 0.005):
+            fault_specs.append(
+                {
+                    "fn": "sensor_bias_fault",
+                    "kwargs": {"start_t": start_t, "sensor_idx": 3, "bias": bias},
+                }
+            )
+        # steering angle sensor 1
+        for bias in np.arange(-np.pi/8, np.pi/8 + sys.float_info.epsilon, 0.005):
+            fault_specs.append(
+                {
+                    "fn": "sensor_bias_fault",
+                    "kwargs": {"start_t": start_t, "sensor_idx": 4, "bias": bias},
+                }
+            )
+        # steering angle sensor 2
+        for bias in np.arange(-np.pi/8, np.pi/8 + sys.float_info.epsilon, 0.005):
+            fault_specs.append(
+                {
+                    "fn": "sensor_bias_fault",
+                    "kwargs": {"start_t": start_t, "sensor_idx": 5, "bias": bias},
+                }
+            )
 
         #############################################
         # Spike Faults
         #############################################
 
-        # for spike_value in np.arange(-20, 20 + sys.float_info.epsilon, 0.5):
-        #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
-        #         fault_specs.append(
-        #             {
-        #                 "fn": "spike_fault",
-        #                 "kwargs": {
-        #                     "start_t": start_t,
-        #                     "sensor_idx": 3,
-        #                     "spike_value": spike_value,
-        #                     "duration": duration,
-        #                 },
-        #             }
-        #         )
 
-        # for spike_value in np.arange(-np.pi, np.pi + sys.float_info.epsilon, 0.1):
-        #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
-        #         fault_specs.append(
-        #             {
-        #                 "fn": "spike_fault",
-        #                 "kwargs": {
-        #                     "start_t": start_t,
-        #                     "sensor_idx": 2,
-        #                     "spike_value": spike_value,
-        #                     "duration": duration,
-        #                 },
-        #             }
-        #         )
+        # heading sensor
+        for spike_value in np.arange(-np.pi/4, np.pi/4 + sys.float_info.epsilon, 0.1):
+            for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+                fault_specs.append(
+                    {
+                        "fn": "spike_fault",
+                        "kwargs": {
+                            "start_t": start_t,
+                            "sensor_idx": 2,
+                            "spike_value": spike_value,
+                            "duration": duration,
+                        },
+                    }
+                )
 
-        # for spike_value in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.1):
-        #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
-        #         fault_specs.append(
-        #             {
-        #                 "fn": "spike_fault",
-        #                 "kwargs": {
-        #                     "start_t": start_t,
-        #                     "sensor_idx": 4,
-        #                     "spike_value": spike_value,
-        #                     "duration": duration,
-        #                 },
-        #             }
-        #         )
+        # velocity sensor
+        for spike_value in np.arange(-5, 5 + sys.float_info.epsilon, 0.5):
+            for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+                fault_specs.append(
+                    {
+                        "fn": "spike_fault",
+                        "kwargs": {
+                            "start_t": start_t,
+                            "sensor_idx": 3,
+                            "spike_value": spike_value,
+                            "duration": duration,
+                        },
+                    }
+                )
 
-        # for spike_value in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.1):
-        #     for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
-        #         fault_specs.append(
-        #             {
-        #                 "fn": "spike_fault",
-        #                 "kwargs": {
-        #                     "start_t": start_t,
-        #                     "sensor_idx": 5,
-        #                     "spike_value": spike_value,
-        #                     "duration": duration,
-        #                 },
-        #             }
-        #         )
+        # steering angle sensor 1
+        for spike_value in np.arange(-np.pi/8, np.pi/8 + sys.float_info.epsilon, 0.1):
+            for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+                fault_specs.append(
+                    {
+                        "fn": "spike_fault",
+                        "kwargs": {
+                            "start_t": start_t,
+                            "sensor_idx": 4,
+                            "spike_value": spike_value,
+                            "duration": duration,
+                        },
+                    }
+                )
+
+        # steering angle sensor 2
+        for spike_value in np.arange(-np.pi/8, np.pi/8 + sys.float_info.epsilon, 0.1):
+            for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+                fault_specs.append(
+                    {
+                        "fn": "spike_fault",
+                        "kwargs": {
+                            "start_t": start_t,
+                            "sensor_idx": 5,
+                            "spike_value": spike_value,
+                            "duration": duration,
+                        },
+                    }
+                )
 
         #############################################
         # Noise Faults
         #############################################
 
-        # for noise_level in np.arange(0, 20 + sys.float_info.epsilon, 0.5):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "random_noise_fault",
-        #             "kwargs": {
-        #                 "start_t": start_t,
-        #                 "sensor_idx": 3,
-        #                 "noise_level": noise_level,
-        #             },
-        #         }
-        #     )
+        # heading sensor
+        for noise_level in np.arange(0, np.pi/4 + sys.float_info.epsilon, 0.01):
+            fault_specs.append(
+                {
+                    "fn": "random_noise_fault",
+                    "kwargs": {
+                        "start_t": start_t,
+                        "sensor_idx": 2,
+                        "noise_level": noise_level,
+                    },
+                }
+            )
 
-        # for noise_level in np.arange(0, np.pi + sys.float_info.epsilon, 0.01):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "random_noise_fault",
-        #             "kwargs": {
-        #                 "start_t": start_t,
-        #                 "sensor_idx": 2,
-        #                 "noise_level": noise_level,
-        #             },
-        #         }
-        #     )
+        # velocity sensor
+        for noise_level in np.arange(0, 5 + sys.float_info.epsilon, 0.5):
+            fault_specs.append(
+                {
+                    "fn": "random_noise_fault",
+                    "kwargs": {
+                        "start_t": start_t,
+                        "sensor_idx": 3,
+                        "noise_level": noise_level,
+                    },
+                }
+            )
 
-        # for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "random_noise_fault",
-        #             "kwargs": {
-        #                 "start_t": start_t,
-        #                 "sensor_idx": 4,
-        #                 "noise_level": noise_level,
-        #             },
-        #         }
-        #     )
+        # steering angle sensor 1
+        for noise_level in np.arange(0, np.pi/8 + sys.float_info.epsilon, 0.01):
+            fault_specs.append(
+                {
+                    "fn": "random_noise_fault",
+                    "kwargs": {
+                        "start_t": start_t,
+                        "sensor_idx": 4,
+                        "noise_level": noise_level,
+                    },
+                }
+            )
 
-        # for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "random_noise_fault",
-        #             "kwargs": {
-        #                 "start_t": start_t,
-        #                 "sensor_idx": 5,
-        #                 "noise_level": noise_level,
-        #             },
-        #         }
-        #     )
+        # steering angle sensor 2
+        for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
+            fault_specs.append(
+                {
+                    "fn": "random_noise_fault",
+                    "kwargs": {
+                        "start_t": start_t,
+                        "sensor_idx": 5,
+                        "noise_level": noise_level,
+                    },
+                }
+            )
 
         #############################################
         # Drift Faults
         #############################################
 
-        # for drift_rate in np.arange(-20, 20 + sys.float_info.epsilon, 0.5):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "drift_fault",
-        #             "kwargs": {
-        #                 "start_t": start_t,
-        #                 "sensor_idx": 3,
-        #                 "drift_rate": drift_rate,
-        #             },
-        #         }
-        #     )
 
-        # for drift_rate in np.arange(-np.pi, np.pi + sys.float_info.epsilon, 0.005):
-        #     fault_specs.append(
-        #         {
-        #             "fn": "drift_fault",
-        #             "kwargs": {
-        #                 "start_t": start_t,
-        #                 "sensor_idx": 2,
-        #                 "drift_rate": drift_rate,
-        #             },
-        #         }
-        #     )
+        # heading sensor
+        for drift_rate in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.005):
+            fault_specs.append(
+                {
+                    "fn": "drift_fault",
+                    "kwargs": {
+                        "start_t": start_t,
+                        "sensor_idx": 2,
+                        "drift_rate": drift_rate,
+                    },
+                }
+            )
 
-        for drift_rate in np.arange(
-            -np.pi / 16, np.pi / 16 + sys.float_info.epsilon, 0.005
-        ):
+        # velocity sensor
+        for drift_rate in np.arange(-15, 15 + sys.float_info.epsilon, 0.5):
+            fault_specs.append(
+                {
+                    "fn": "drift_fault",
+                    "kwargs": {
+                        "start_t": start_t,
+                        "sensor_idx": 3,
+                        "drift_rate": drift_rate,
+                    },
+                }
+            )
+
+        # steering angle sensor 1
+        for drift_rate in np.arange(-np.pi / 16, np.pi / 16 + sys.float_info.epsilon, 0.005):
             fault_specs.append(
                 {
                     "fn": "drift_fault",
@@ -342,9 +364,8 @@ def run(
                 }
             )
 
-        for drift_rate in np.arange(
-            -np.pi / 16, np.pi / 16 + sys.float_info.epsilon, 0.005
-        ):
+        # steering angle sensor 2
+        for drift_rate in np.arange(-np.pi / 16, np.pi / 16 + sys.float_info.epsilon, 0.005):
             fault_specs.append(
                 {
                     "fn": "drift_fault",
