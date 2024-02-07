@@ -21,7 +21,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 
-MAX_POOL_SIZE = 240
+MAX_POOL_SIZE = int(os.environ.get('MAX_POOL_SIZE', 240))
 
 #################################################################
 # General utility functions

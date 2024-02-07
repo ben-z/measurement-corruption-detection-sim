@@ -52,6 +52,7 @@ from utils import (
     kinematic_bicycle_model_desired_state_at_idx,
     kinematic_bicycle_model_normalize_output,
     calculate_segment_lengths,
+    MAX_POOL_SIZE,
 )
 from fault_generators import (
     sensor_bias_fault,
@@ -380,6 +381,7 @@ def run(
     print(
         f"Running {len(fault_specs)} experiments for {num_passes} pass(es). Total: {len(fault_specs) * num_passes} experiments"
     )
+    print(f"{MAX_POOL_SIZE=}")
 
     simulation_seconds = 50
     num_steps = int(simulation_seconds / model_params["dt"])
