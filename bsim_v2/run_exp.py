@@ -176,7 +176,7 @@ def run(
                 }
             )
         # velocity sensor
-        for bias in np.arange(-0.5, 0.5 + sys.float_info.epsilon, 0.005):
+        for bias in np.arange(-5, 5 + sys.float_info.epsilon, 0.5):
             fault_specs.append(
                 {
                     "fn": "sensor_bias_fault",
@@ -203,7 +203,6 @@ def run(
         #############################################
         # Spike Faults
         #############################################
-
 
         # heading sensor
         for spike_value in np.arange(-np.pi/4, np.pi/4 + sys.float_info.epsilon, 0.1):
