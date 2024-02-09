@@ -196,7 +196,7 @@ def run(
                     )
             # velocity sensor
             if 3 in selected_sensors:
-                for bias in np.arange(-5, 5 + sys.float_info.epsilon, 0.5):
+                for bias in np.arange(-5, 5 + sys.float_info.epsilon, 0.1):
                     fault_specs.append(
                         {
                             "fn": "sensor_bias_fault",
