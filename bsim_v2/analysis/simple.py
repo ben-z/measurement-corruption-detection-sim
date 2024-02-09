@@ -48,11 +48,11 @@ exp_path = Path(__file__).parent.parent.parent / "exp"
 # exp_names = []
 # load_and_prepare_data(file_path, exp_names) # preload data into cache
 
-file_path = exp_path / "test-spike.jsonl"
-fault_conf_column = "fault_spec.kwargs.spike_value"
-fault_name = "Spike value"
-exp_names = []
-load_and_prepare_data(file_path, exp_names) # preload data into cache
+# file_path = exp_path / "test-spike.jsonl"
+# fault_conf_column = "fault_spec.kwargs.spike_value"
+# fault_name = "Spike value"
+# exp_names = []
+# load_and_prepare_data(file_path, exp_names) # preload data into cache
 
 # file_path = exp_path / "test-spike.jsonl"
 # fault_conf_column = "fault_spec.kwargs.duration"
@@ -84,9 +84,17 @@ load_and_prepare_data(file_path, exp_names) # preload data into cache
 # exp_names = []
 # load_and_prepare_data(file_path, exp_names) # preload data into cache
 
+file_path = exp_path / "comprehensive-nebula-new.jsonl"
+fault_fn = "sensor_bias_fault"
+fault_conf_column = "fault_spec.kwargs.bias"
+fault_name = "Bias"
+exp_names = []
+load_and_prepare_data(file_path, exp_names) # preload data into cache
 
 # %%
-df = load_and_prepare_data(file_path, exp_names)
+df_all = load_and_prepare_data(file_path, exp_names)
+# Select only the data with the specified fault
+df = df_all.loc[(df_all["fault_spec.fn"] == fault_fn) | (df_all["fault_spec.fn"] == "noop")]
 
 df_fault = df.loc[df["fault_spec.fn"] != "noop"]
 
@@ -99,3 +107,5 @@ for sensor_idx in df_fault["fault_spec.kwargs.sensor_idx"].unique():
     sensor_data = df_fault[df_fault["fault_spec.kwargs.sensor_idx"] == sensor_idx]
     plot_detection_delay(sensor_data, sensor_idx, fault_name, fault_conf_column)
     calculate_and_plot_detection_percentage(df_fault, sensor_idx, fault_name, fault_conf_column)
+
+# %%
