@@ -53,6 +53,7 @@ from utils import (
     kinematic_bicycle_model_normalize_output,
     calculate_segment_lengths,
     MAX_POOL_SIZE,
+    arange_inclusive,
 )
 from fault_generators import (
     sensor_bias_fault,
@@ -187,7 +188,7 @@ def run(
 
             # heading sensor
             if 2 in selected_sensors:
-                for bias in np.arange(-np.pi/4, np.pi/4 + sys.float_info.epsilon, 0.005):
+                for bias in arange_inclusive(-np.pi/4, np.pi/4, 0.005):
                     fault_specs.append(
                         {
                             "fn": "sensor_bias_fault",
@@ -196,7 +197,7 @@ def run(
                     )
             # velocity sensor
             if 3 in selected_sensors:
-                for bias in np.arange(-5, 5 + sys.float_info.epsilon, 0.1):
+                for bias in arange_inclusive(-5, 5, 0.1):
                     fault_specs.append(
                         {
                             "fn": "sensor_bias_fault",
@@ -206,7 +207,7 @@ def run(
 
             # steering angle sensor 1
             if 4 in selected_sensors:
-                for bias in np.arange(-np.pi/8, np.pi/8 + sys.float_info.epsilon, 0.005):
+                for bias in arange_inclusive(-np.pi/8, np.pi/8, 0.005):
                     fault_specs.append(
                         {
                             "fn": "sensor_bias_fault",
@@ -216,7 +217,7 @@ def run(
 
             # steering angle sensor 2
             if 5 in selected_sensors:
-                for bias in np.arange(-np.pi/8, np.pi/8 + sys.float_info.epsilon, 0.005):
+                for bias in arange_inclusive(-np.pi/8, np.pi/8, 0.005):
                     fault_specs.append(
                         {
                             "fn": "sensor_bias_fault",
@@ -231,8 +232,8 @@ def run(
 
             # heading sensor
             if 2 in selected_sensors:
-                for spike_value in np.arange(-np.pi/4, np.pi/4 + sys.float_info.epsilon, 0.1):
-                    for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+                for spike_value in arange_inclusive(-np.pi/4, np.pi/4, 0.1):
+                    for duration in arange_inclusive(0.1, 2, 0.1):
                         fault_specs.append(
                             {
                                 "fn": "spike_fault",
@@ -247,8 +248,8 @@ def run(
 
             # velocity sensor
             if 3 in selected_sensors:
-                for spike_value in np.arange(-5, 5 + sys.float_info.epsilon, 0.5):
-                    for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+                for spike_value in arange_inclusive(-5, 5, 0.5):
+                    for duration in arange_inclusive(0.1, 2, 0.1):
                         fault_specs.append(
                             {
                                 "fn": "spike_fault",
@@ -263,8 +264,8 @@ def run(
 
             # steering angle sensor 1
             if 4 in selected_sensors:
-                for spike_value in np.arange(-np.pi/8, np.pi/8 + sys.float_info.epsilon, 0.1):
-                    for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+                for spike_value in arange_inclusive(-np.pi/8, np.pi/8, 0.1):
+                    for duration in arange_inclusive(0.1, 2, 0.1):
                         fault_specs.append(
                             {
                                 "fn": "spike_fault",
@@ -279,8 +280,8 @@ def run(
 
             # steering angle sensor 2
             if 5 in selected_sensors:
-                for spike_value in np.arange(-np.pi/8, np.pi/8 + sys.float_info.epsilon, 0.1):
-                    for duration in np.arange(0.1, 2 + sys.float_info.epsilon, 0.1):
+                for spike_value in arange_inclusive(-np.pi/8, np.pi/8, 0.1):
+                    for duration in arange_inclusive(0.1, 2, 0.1):
                         fault_specs.append(
                             {
                                 "fn": "spike_fault",
@@ -300,7 +301,7 @@ def run(
 
             # heading sensor
             if 2 in selected_sensors:
-                for noise_level in np.arange(0, np.pi/4 + sys.float_info.epsilon, 0.01):
+                for noise_level in arange_inclusive(0, np.pi/4, 0.01):
                     fault_specs.append(
                         {
                             "fn": "random_noise_fault",
@@ -314,7 +315,7 @@ def run(
 
             # velocity sensor
             if 3 in selected_sensors:
-                for noise_level in np.arange(0, 5 + sys.float_info.epsilon, 0.5):
+                for noise_level in arange_inclusive(0, 5, 0.5):
                     fault_specs.append(
                         {
                             "fn": "random_noise_fault",
@@ -328,7 +329,7 @@ def run(
 
             # steering angle sensor 1
             if 4 in selected_sensors:
-                for noise_level in np.arange(0, np.pi/8 + sys.float_info.epsilon, 0.01):
+                for noise_level in arange_inclusive(0, np.pi/8, 0.01):
                     fault_specs.append(
                         {
                             "fn": "random_noise_fault",
@@ -342,7 +343,7 @@ def run(
 
             # steering angle sensor 2
             if 5 in selected_sensors:
-                for noise_level in np.arange(0, np.pi / 4 + sys.float_info.epsilon, 0.01):
+                for noise_level in arange_inclusive(0, np.pi / 4, 0.01):
                     fault_specs.append(
                         {
                             "fn": "random_noise_fault",
@@ -361,7 +362,7 @@ def run(
 
             # heading sensor
             if 2 in selected_sensors:
-                for drift_rate in np.arange(-np.pi/2, np.pi/2 + sys.float_info.epsilon, 0.005):
+                for drift_rate in arange_inclusive(-np.pi/2, np.pi/2, 0.005):
                     fault_specs.append(
                         {
                             "fn": "drift_fault",
@@ -375,7 +376,7 @@ def run(
 
             # velocity sensor
             if 3 in selected_sensors:
-                for drift_rate in np.arange(-15, 15 + sys.float_info.epsilon, 0.5):
+                for drift_rate in arange_inclusive(-15, 15, 0.5):
                     fault_specs.append(
                         {
                             "fn": "drift_fault",
@@ -389,7 +390,7 @@ def run(
 
             # steering angle sensor 1
             if 4 in selected_sensors:
-                for drift_rate in np.arange(-np.pi / 16, np.pi / 16 + sys.float_info.epsilon, 0.005):
+                for drift_rate in arange_inclusive(-np.pi / 16, np.pi / 16, 0.005):
                     fault_specs.append(
                         {
                             "fn": "drift_fault",
@@ -403,7 +404,7 @@ def run(
 
             # steering angle sensor 2
             if 5 in selected_sensors:
-                for drift_rate in np.arange(-np.pi / 16, np.pi / 16 + sys.float_info.epsilon, 0.005):
+                for drift_rate in arange_inclusive(-np.pi / 16, np.pi / 16, 0.005):
                     fault_specs.append(
                         {
                             "fn": "drift_fault",

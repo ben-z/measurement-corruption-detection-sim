@@ -1443,3 +1443,9 @@ def run_experiments(
         if pool:
             pool.terminate()
             pool.join()
+
+def arange_inclusive(start, stop, step):
+    """
+    Like np.arange, but includes the stop value.
+    """
+    return np.arange(start, stop + step, step)
