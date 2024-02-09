@@ -170,7 +170,7 @@ def run(
     if "all" in selected_faults:
         selected_faults = supported_faults
 
-    supported_sensors = set(range(6))
+    supported_sensors = set(range(2,6))
     if sensor_selection == "all":
         selected_sensors = supported_sensors
     else:
