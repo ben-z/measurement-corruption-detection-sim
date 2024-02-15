@@ -68,7 +68,7 @@ g = 9.81  # m/s^2
 
 model_params = {
     "dt": 0.01,
-    "l": 0.5,
+    "l": 4.094, # taken from the Indy racecar
     "max_linear_acceleration": 4 * g,  # m/s^2
     "max_steering_rate": 10,  # rad/s
     "max_linear_velocity": 300 / 3.6,  # m/s
