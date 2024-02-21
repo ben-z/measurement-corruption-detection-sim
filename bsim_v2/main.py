@@ -109,7 +109,7 @@ plt.plot([p[0] for p in path_points], [p[1] for p in path_points])
 plt.axis("equal")
 plt.xlabel("x (m)")
 plt.ylabel("y (m)")
-plt.plot(path_points[0][0], path_points[0][1], "ro", label="Path start")
+plt.plot(path_points[0][0], path_points[0][1], "ro")
 # Arrow indicating the initial heading of the path
 plt.arrow(
     path_points[0][0],
@@ -122,9 +122,14 @@ plt.arrow(
     fc="r",
     ec="r",
     zorder=10,  # Set a higher z-order to bring the arrow to the front
-    label="Direction of travel"
 )
-plt.legend()
+plt.legend(
+    [
+        plt.Line2D(range(1), range(1), color="white", marker="o", markerfacecolor="r"),
+        plt.Line2D([0], [0], color="r", lw=2, linestyle=(4, [0,4,4,4]), marker=">", markersize=6),
+    ],
+    ["Path start", "Direction of travel"],
+)
 # save to file (pdf)
 plt.savefig("figure-eight-path.pdf", format="pdf")
 plt.title("Path")
