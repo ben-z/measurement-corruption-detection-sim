@@ -92,9 +92,27 @@ exp_path = Path(__file__).parent.parent.parent / "exp"
 # load_and_prepare_data(file_path, exp_names) # preload data into cache
 
 file_path = exp_path / "comprehensive-racecar.jsonl"
-fault_fn = "sensor_bias_fault"
-fault_conf_column = "fault_spec.kwargs.bias"
-fault_name = "Bias"
+# bias
+# fault_fn = "sensor_bias_fault"
+# fault_conf_column = "fault_spec.kwargs.bias"
+# fault_name = "Bias"
+
+# spike
+# fault_fn = "spike_fault"
+# fault_conf_column = "fault_spec.kwargs.spike_value"
+# fault_name = "Spike value"
+
+# drift
+# fault_fn = "drift_fault"
+# fault_conf_column = "fault_spec.kwargs.drift_rate"
+# fault_name = "Drift Rate"
+
+# noise
+fault_fn = "random_noise_fault"
+fault_conf_column = "fault_spec.kwargs.noise_level"
+fault_name = "Noise Level"
+
+
 exp_names = []
 load_and_prepare_data(file_path, exp_names) # preload data into cache
 
