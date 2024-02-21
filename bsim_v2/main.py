@@ -54,6 +54,7 @@ from fault_generators import (
 )
 
 plt.rcParams["text.usetex"] = True
+plt.rcParams["font.family"] = "serif"
 np.set_printoptions(suppress=True)
 
 
@@ -102,15 +103,47 @@ velocity_profile = np.clip(
     model_params["max_linear_velocity"],
 )
 
-# # Plot the original velocity profile and the smoothed velocity profile
-# plt.figure()
-# plt.plot(velocity_profile, label='smoothed')
-# plt.plot(velocity_profile_raw, label='original')
-# plt.title('Velocity profile')
-# plt.ylim([0, 1.1 * max(velocity_profile)])
-# plt.legend()
-# plt.show()
+# Plot the path
+plt.figure()
+plt.plot([p[0] for p in path_points], [p[1] for p in path_points])
+plt.axis("equal")
+plt.xlabel("x (m)")
+plt.ylabel("y (m)")
+plt.plot(path_points[0][0], path_points[0][1], "ro", label="Path start")
+# Arrow indicating the initial heading of the path
+plt.arrow(
+    path_points[0][0],
+    path_points[0][1],
+    200 * cos(path_headings[0]),
+    200 * sin(path_headings[0]),
+    width=10,
+    head_width=20,
+    head_length=50,
+    fc="r",
+    ec="r",
+    zorder=10,  # Set a higher z-order to bring the arrow to the front
+    label="Direction of travel"
+)
+plt.legend()
+# save to file (pdf)
+plt.savefig("figure-eight-path.pdf", format="pdf")
+plt.title("Path")
+plt.show()
 
+
+# Plot the original velocity profile and the smoothed velocity profile
+plt.figure()
+plt.plot(np.cumsum(path_lengths), velocity_profile, label='smoothed')
+plt.ylim([0, 1.1 * max(velocity_profile)])
+plt.xlabel("Distance along path (m)")
+plt.ylabel("Velocity (m/s)")
+plt.savefig("velocity-profile.pdf", format="pdf")
+plt.title('Velocity profile')
+plt.plot(np.cumsum(path_lengths), velocity_profile_raw, label='original')
+plt.legend()
+plt.show()
+
+# %%
 
 # Control the system to follow the path
 x0 = np.array([200, 100, pi / 4, 1, 0])
