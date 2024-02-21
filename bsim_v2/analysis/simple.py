@@ -8,6 +8,9 @@
 # %%
 from pathlib import Path
 import sys
+import matplotlib.pyplot as plt
+import numpy as np
+from slugify import slugify
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -19,6 +22,10 @@ from analysis.utils import (
     plot_generic_detection_data,
     calculate_and_plot_detection_percentage,
 )
+
+plt.rcParams["text.usetex"] = True
+plt.rcParams["font.family"] = "serif"
+np.set_printoptions(suppress=True)
 
 # %%
 
@@ -102,16 +109,17 @@ file_path = exp_path / "comprehensive-racecar.jsonl"
 # fault_conf_column = "fault_spec.kwargs.spike_value"
 # fault_name = "Spike value"
 
-# drift
-# fault_fn = "drift_fault"
-# fault_conf_column = "fault_spec.kwargs.drift_rate"
-# fault_name = "Drift Rate"
-
 # noise
-fault_fn = "random_noise_fault"
-fault_conf_column = "fault_spec.kwargs.noise_level"
-fault_name = "Noise Level"
+# fault_fn = "random_noise_fault"
+# fault_conf_column = "fault_spec.kwargs.noise_level"
+# fault_name = "Noise Level"
 
+# drift
+fault_fn = "drift_fault"
+fault_conf_column = "fault_spec.kwargs.drift_rate"
+fault_name = "Drift Rate"
+
+sensor_indices = []
 
 exp_names = []
 load_and_prepare_data(file_path, exp_names) # preload data into cache
@@ -128,9 +136,15 @@ plot_confusion_matrix(df)
 plot_fault_distribution(df_fault, fault_conf_column, fault_name)
 
 # Analysis for each sensor
-for sensor_idx in sorted(df_fault["fault_spec.kwargs.sensor_idx"].unique()):
+for sensor_idx in sensor_indices or sorted(df_fault["fault_spec.kwargs.sensor_idx"].unique()):
     sensor_data = df_fault[df_fault["fault_spec.kwargs.sensor_idx"] == sensor_idx]
     plot_detection_delay(sensor_data, sensor_idx, fault_name, fault_conf_column)
+    plt.title("")
+    plt.savefig(slugify(f"detection_delay_{fault_name}_sensor_{sensor_idx}") + ".pdf", format="pdf")
+    plt.show()
     calculate_and_plot_detection_percentage(df_fault, sensor_idx, fault_name, fault_conf_column)
+    plt.title("")
+    plt.savefig(slugify(f"detection_percentage_{fault_name}_sensor_{sensor_idx}") + ".pdf", format="pdf")
+    plt.show()
 
 # %%

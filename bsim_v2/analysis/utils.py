@@ -191,7 +191,6 @@ def plot_generic_detection_data(df, sensor_idx, fault_name, fault_conf_column, y
     plt.ylabel(f"{y_column_name} ({y_column})")
     plt.ylim(bottom=0)
     plt.legend()
-    plt.show()
 
 def plot_detection_delay(sensor_data, sensor_idx, fault_name, fault_conf_column):
     plot_generic_detection_data(
@@ -230,8 +229,6 @@ def calculate_and_plot_detection_percentage(
         [f"{label:.2f}" for label in selected_ticks],
         rotation=45,
     )
-
-    plt.show()
 
 
 def plot_fault_distribution(df, fault_conf_column, fault_name):
