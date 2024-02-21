@@ -84,7 +84,14 @@ exp_path = Path(__file__).parent.parent.parent / "exp"
 # exp_names = []
 # load_and_prepare_data(file_path, exp_names) # preload data into cache
 
-file_path = exp_path / "comprehensive-nebula-new.jsonl"
+# file_path = exp_path / "comprehensive-nebula-new.jsonl"
+# fault_fn = "sensor_bias_fault"
+# fault_conf_column = "fault_spec.kwargs.bias"
+# fault_name = "Bias"
+# exp_names = []
+# load_and_prepare_data(file_path, exp_names) # preload data into cache
+
+file_path = exp_path / "comprehensive-racecar.jsonl"
 fault_fn = "sensor_bias_fault"
 fault_conf_column = "fault_spec.kwargs.bias"
 fault_name = "Bias"
