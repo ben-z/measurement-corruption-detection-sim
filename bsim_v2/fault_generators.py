@@ -52,9 +52,7 @@ def random_noise_fault(start_t, sensor_idx, noise_level):
 def spike_fault(start_t, sensor_idx, spike_value, duration):
     def attack_generator(t, output):
         if start_t <= t < start_t + duration:
-            if "spike_added" not in attack_generator.__dict__:
-                output[sensor_idx] += spike_value
-                attack_generator.spike_added = True
+            output[sensor_idx] += spike_value
         return output
 
     return attack_generator

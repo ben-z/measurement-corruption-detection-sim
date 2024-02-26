@@ -46,9 +46,10 @@ axs[0].set_title(f"Sensor Bias (magnitude = {bias_mag})")
 
 # Plot spike fault
 spike_mag = 2
-spike_generator = spike_fault(2, 0, spike_mag, 0.1)
+spike_duration = 2
+spike_generator = spike_fault(2, 0, spike_mag, spike_duration)
 axs[1].plot(ts, [spike_generator(t, [0])[0] for t in ts])
-axs[1].set_title(f"Spike Fault (magnitude = {spike_mag})")
+axs[1].set_title(f"Spike Fault (magnitude = {spike_mag}, duration = {spike_duration} s)")
 
 # Plot random noise fault
 noise_mag = 2
