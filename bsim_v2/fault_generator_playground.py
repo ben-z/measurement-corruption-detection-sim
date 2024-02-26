@@ -42,26 +42,26 @@ fig, axs = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
 bias_mag = 2
 bias_generator = sensor_bias_fault(2, 0, bias_mag)
 axs[0].plot(ts, [bias_generator(t, [0])[0] for t in ts])
-axs[0].set_title(f"Sensor Bias (magnitude = {bias_mag})")
+axs[0].set_title(f"Bias (magnitude = {bias_mag})")
 
 # Plot spike fault
 spike_mag = 2
-spike_duration = 2
+spike_duration = 0.1
 spike_generator = spike_fault(2, 0, spike_mag, spike_duration)
 axs[1].plot(ts, [spike_generator(t, [0])[0] for t in ts])
-axs[1].set_title(f"Spike Fault (magnitude = {spike_mag}, duration = {spike_duration} s)")
+axs[1].set_title(f"Spike (magnitude = {spike_mag}, duration = {spike_duration} s)")
 
 # Plot random noise fault
 noise_mag = 2
 noise_generator = random_noise_fault(2, 0, noise_mag)
 axs[2].plot(ts, [noise_generator(t, [0])[0] for t in ts])
-axs[2].set_title(f"Random Noise Fault (magnitude = {noise_mag})")
+axs[2].set_title(f"Random Noise (magnitude = {noise_mag})")
 
 # Plot drift fault
 drift_rate = 2
 drift_generator = drift_fault(2, 0, drift_rate)
 axs[3].plot(ts, [drift_generator(t, [0])[0] for t in ts])
-axs[3].set_title(f"Drift Fault (rate = {drift_rate})")
+axs[3].set_title(f"Drift (rate = {drift_rate})")
 
 plt.tight_layout()
 plt.xlabel("Time (s)")
