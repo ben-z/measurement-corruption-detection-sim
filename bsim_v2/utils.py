@@ -742,6 +742,7 @@ def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, pat
     # Use walk_trajectory_by_durations to get the desired path indices at each time step
     # TODO: exp:use-real-indices - use closest_idx_hist instead of desired_path_indices
     desired_path_indices = [x0_hat_closest_idx] + walk_trajectory_by_durations(path_points, velocities, x0_hat_closest_idx, [dt]*(N-1))
+    # desired_path_indices = closest_idx_hist + [closest_idx_hist[-1]]
 
     # Generate the As and Bs for each time step
     # model_fn
@@ -749,12 +750,12 @@ def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, pat
     models = [model_at_idx(idx) for idx in desired_path_indices]
     As = list(m[0] for m in models[:N-1])
     Bs = list(m[1] for m in models[:N-1])
-    
+
     # List of desired outputs at the linearization points
     # desired_output_at_idx(idx)
     # desired_trajectory = [Cs[i] @ np.array([path_points[idx][0], path_points[idx][1], path_headings[idx], velocities[idx], 0]) for i, idx in enumerate(desired_path_indices)]
     desired_trajectory = [desired_output_fn(i, idx) for i, idx in enumerate(desired_path_indices)]
-    
+
     # Calculate the effects on outputs due to inputs, then subtract them from the outputs.
     # Also subtract the desired outputs to get deviations.
     input_effects = calc_input_effects_on_output(As, Bs, Cs, input_hist)
