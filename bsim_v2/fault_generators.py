@@ -6,7 +6,7 @@ import random
 # Defining attack generators
 def sensor_bias_fault(start_t, sensor_idx, bias):
     def attack_generator(t, output):
-        if t > start_t:
+        if t >= start_t:
             output[sensor_idx] += bias
         return output
 
@@ -15,7 +15,7 @@ def sensor_bias_fault(start_t, sensor_idx, bias):
 
 def intermittent_fault(start_t, sensor_idx, anomaly_value, interval):
     def attack_generator(t, output):
-        if t > start_t and int(t) % interval == 0:
+        if t >= start_t and int(t - start_t) % interval == 0:
             output[sensor_idx] = anomaly_value
         return output
 
@@ -24,7 +24,7 @@ def intermittent_fault(start_t, sensor_idx, anomaly_value, interval):
 
 def complete_failure(start_t, sensor_idx, failure_value):
     def attack_generator(t, output):
-        if t > start_t:
+        if t >= start_t:
             output[sensor_idx] = failure_value
         return output
 
@@ -33,7 +33,7 @@ def complete_failure(start_t, sensor_idx, failure_value):
 
 def drift_fault(start_t, sensor_idx, drift_rate):
     def attack_generator(t, output):
-        if t > start_t:
+        if t >= start_t:
             output[sensor_idx] += drift_rate * (t - start_t)
         return output
 
@@ -42,7 +42,7 @@ def drift_fault(start_t, sensor_idx, drift_rate):
 
 def random_noise_fault(start_t, sensor_idx, noise_level):
     def attack_generator(t, output):
-        if t > start_t:
+        if t >= start_t:
             output[sensor_idx] += random.uniform(-noise_level, noise_level)
         return output
 
