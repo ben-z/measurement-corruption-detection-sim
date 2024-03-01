@@ -98,31 +98,39 @@ exp_path = Path(__file__).parent.parent.parent / "exp"
 # exp_names = []
 # load_and_prepare_data(file_path, exp_names) # preload data into cache
 
-file_path = exp_path / "comprehensive-racecar.jsonl"
+# file_path = exp_path / "comprehensive-racecar.jsonl"
+file_path = exp_path / "randomized-fixed.jsonl"
+
 # bias
 # fault_fn = "sensor_bias_fault"
 # fault_conf_column = "fault_spec.kwargs.bias"
 # fault_name = "Bias"
 
-# spike
+# spike value
 # fault_fn = "spike_fault"
 # fault_conf_column = "fault_spec.kwargs.spike_value"
 # fault_name = "Spike value"
 
+# spike duration
+# fault_fn = "spike_fault"
+# fault_conf_column = "fault_spec.kwargs.duration"
+# fault_name = "Spike duration"
+
 # noise
-# fault_fn = "random_noise_fault"
-# fault_conf_column = "fault_spec.kwargs.noise_level"
-# fault_name = "Noise Level"
+fault_fn = "random_noise_fault"
+fault_conf_column = "fault_spec.kwargs.noise_level"
+fault_name = "Noise Level"
 
 # drift
-fault_fn = "drift_fault"
-fault_conf_column = "fault_spec.kwargs.drift_rate"
-fault_name = "Drift Rate"
+# fault_fn = "drift_fault"
+# fault_conf_column = "fault_spec.kwargs.drift_rate"
+# fault_name = "Drift Rate"
+
+
 
 sensor_indices = []
 
 exp_names = []
-load_and_prepare_data(file_path, exp_names) # preload data into cache
 
 # %%
 df_all = load_and_prepare_data(file_path, exp_names)
@@ -132,19 +140,25 @@ df = df_all.loc[(df_all["fault_spec.fn"] == fault_fn) | (df_all["fault_spec.fn"]
 df_fault = df.loc[df["fault_spec.fn"] != "noop"]
 
 # %%
+# Plots
+
 plot_confusion_matrix(df)
-plot_fault_distribution(df_fault, fault_conf_column, fault_name)
+# plot_fault_distribution(df_fault, fault_conf_column, fault_name)
 
 # Analysis for each sensor
 for sensor_idx in sensor_indices or sorted(df_fault["fault_spec.kwargs.sensor_idx"].unique()):
     sensor_data = df_fault[df_fault["fault_spec.kwargs.sensor_idx"] == sensor_idx]
+
+    print(f"Detection delay for sensor {sensor_idx}")
     plot_detection_delay(sensor_data, sensor_idx, fault_name, fault_conf_column)
     plt.title("")
-    plt.savefig(slugify(f"detection_delay_{fault_name}_sensor_{sensor_idx}") + ".pdf", format="pdf")
+    plt.savefig(slugify(f"{file_path.stem}_detection_delay_{fault_name}_sensor_{sensor_idx}") + ".pdf", format="pdf")
     plt.show()
+
+    print(f"Detection percentage for sensor {sensor_idx}")
     calculate_and_plot_detection_percentage(df_fault, sensor_idx, fault_name, fault_conf_column)
     plt.title("")
-    plt.savefig(slugify(f"detection_percentage_{fault_name}_sensor_{sensor_idx}") + ".pdf", format="pdf")
+    plt.savefig(slugify(f"{file_path.stem}_detection_percentage_{fault_name}_sensor_{sensor_idx}") + ".pdf", format="pdf")
     plt.show()
 
 # %%
