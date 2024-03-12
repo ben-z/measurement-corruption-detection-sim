@@ -150,9 +150,9 @@ plt.show()
 
 # %%
 
-# Control the system to follow the path
+# Starting position
 x0 = np.array([200, 100, pi / 4, 1, 0])
-N = x0.shape[0]
+# Measurement matrix
 C = np.array(
     [
         [1, 0, 0, 0, 0],
@@ -163,8 +163,13 @@ C = np.array(
         [0, 0, 0, 0, 1],
     ]
 )
+# Noise standard deviation  
 noise_std: NDArray[np.float64] = np.array([0.5, 0.5, 0.05, 0.5, 0.01, 0.01])
+# Detector window size
+N = x0.shape[0]
+# Optimizer used in the detector
 optimizer = Optimizer(N, C.shape[0], C.shape[1])
+# Run the detector in the loop
 real_time_fault_tolerance = False
 
 start = time.perf_counter()
