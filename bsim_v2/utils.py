@@ -735,7 +735,7 @@ def get_solver_setup(output_hist, input_hist, closest_idx_hist, path_points, pat
     N = len(output_hist)
     assert len(input_hist) == N-1, 'input_hist must be one shorter than output_hist'
     assert len(closest_idx_hist) == N-1, 'closest_idx_hist must be one shorter than output_hist'
-    assert len(Cs) == N, 'Cs must be N long'
+    assert len(Cs) == N, f'{len(Cs)=} must be equal to {N=}'
 
     x0_hat_closest_idx = closest_idx_hist[0]
 

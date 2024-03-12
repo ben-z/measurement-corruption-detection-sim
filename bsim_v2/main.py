@@ -177,9 +177,9 @@ for attack_start_t in [10]:
     num_steps = int(simulation_seconds / model_params["dt"])
 
     # fault = sensor_bias_fault(attack_start_t, 3, 10)
-    # fault = sensor_bias_fault(attack_start_t, 2, 0.5)
+    fault = sensor_bias_fault(attack_start_t, 2, 0.5)
     # fault = drift_fault(attack_start_t, 3, -3)
-    fault = drift_fault(attack_start_t, 2, -0.05)
+    # fault = drift_fault(attack_start_t, 2, -0.05)
 
     (
         t_hist,
@@ -230,7 +230,7 @@ for attack_start_t in [10]:
         path_points,
         path_headings,
         velocity_profile,
-        [C] * N,
+        [C] * len(output_hist),
         N,
         500,
         optimizer,
