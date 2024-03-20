@@ -34,9 +34,12 @@ fault_generators = [
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
     # sensor_bias_fault(20, 2, 1),
-    # random_noise_fault(0, 0, 0.1),
-    # random_noise_fault(0, 1, 0.1),
-    random_noise_fault(0, 2, 0.1),
+    random_noise_fault(0, 0, 0.1),
+    random_noise_fault(0, 1, 0.1),
+    random_noise_fault(0, 2, 0.05),
+    random_noise_fault(0, 3, 0.3),
+    random_noise_fault(0, 4, 0.3),
+    random_noise_fault(0, 5, 0.01),
     # random_noise_fault(0, 3, 0.5),
     # random_noise_fault(0, 4, 0.05),
     # intermittent_fault(0, 2, 2, 10),
@@ -45,7 +48,7 @@ fault_generators = [
 
 # Estimator
 x0_hat = x0 + np.array([2, 2, 1, 0.1, 0.01])
-noise_std = np.array([0.5, 0.5, 0.1, 0.5, 0.5, 0.01])
+noise_std = np.array([0.5, 0.5, 0.1, 0.5, 0.5, 0.1])
 P = np.diag([1,1,0.3,0.5,0.1]) # initial state covariance
 R = np.diag(noise_std**2) # measurement noise
 Q = np.diag([0.1,0.1,0.01,0.1,0.001]) # process noise
