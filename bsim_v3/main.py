@@ -4,13 +4,31 @@
 #! %load_ext autoreload
 #! %autoreload 2
 
+import os
+
+# Disable multithreading for numpy. Must be done before importing numpy.
+# Disabling because numpy is slower with multithreading for this application on machines with high single-core performance.
+NUM_THREADS = "1"
+os.environ["OMP_NUM_THREADS"] = NUM_THREADS
+os.environ["OPENBLAS_NUM_THREADS"] = NUM_THREADS
+os.environ["MKL_NUM_THREADS"] = NUM_THREADS
+os.environ["VECLIB_MAXIMUM_THREADS"] = NUM_THREADS
+os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
+
 import matplotlib.pyplot as plt
 import numpy as np
-
-from lib.plants.kinematic_bicycle import KinematicBicycle5StateRearWheelRefPlant
-from lib.sensors.kinematic_bicycle_race_day import KinematicBicycleRaceDaySensor
 from lib.estimators.simple_ukf import SimpleUKF
-from lib.fault_generators import sensor_bias_fault, random_noise_fault, intermittent_fault
+from lib.fault_generators import (
+    complete_failure,
+    intermittent_fault,
+    random_noise_fault,
+    sensor_bias_fault,
+    spike_fault,
+)
+from lib.plants.kinematic_bicycle import \
+    KinematicBicycle5StateRearWheelRefPlant
+from lib.sensors.kinematic_bicycle_race_day import \
+    KinematicBicycleRaceDaySensor
 
 plt.rcParams.update({
     "text.usetex": True,
