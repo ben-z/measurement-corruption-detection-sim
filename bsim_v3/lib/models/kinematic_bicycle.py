@@ -35,13 +35,17 @@ class KinematicBicycle5StateRearWheelRefModel(BaseModel):
         self.L = L
         self.max_steer = max_steer
         self.max_speed = max_speed
+        self.max_accel = max_accel
+        self.max_steer_rate = max_steer_rate
 
     def next(self, state, dt, u):
         """
         Updates the state of the model.
         """
         x, y, theta, v, delta = state
-        a, delta_dot = u
+        a_raw, delta_dot_raw = u
+        a = np.clip(a_raw, -self.max_accel, self.max_accel)
+        delta_dot = np.clip(delta_dot_raw, -self.max_steer_rate, self.max_steer_rate)
 
         v = np.clip(v + a * dt, 0, self.max_speed)
         delta = np.clip(delta + delta_dot * dt, -self.max_steer, self.max_steer)

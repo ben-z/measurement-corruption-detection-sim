@@ -17,6 +17,8 @@ os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
 
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
+from lib.controller.pure_pursuit import KinematicBicycle5StatePurePursuitController
 from lib.estimators.simple_ukf import SimpleUKF
 from lib.fault_generators import (
     complete_failure,
@@ -25,6 +27,8 @@ from lib.fault_generators import (
     sensor_bias_fault,
     spike_fault,
 )
+from lib.planner.static import StaticFigureEightPlanner
+from lib.planner.utils import calc_target_velocity
 from lib.plants.kinematic_bicycle import \
     KinematicBicycle5StateRearWheelRefPlant
 from lib.sensors.kinematic_bicycle_race_day import \
@@ -37,7 +41,7 @@ plt.rcParams.update({
 })
 
 dt = 0.1
-x0 = np.array([0, 0, 0, 0, 0])
+x0 = np.array([200, 500, 0, 0, 0])
 plant = KinematicBicycle5StateRearWheelRefPlant(
     x0,
     dt,
@@ -65,12 +69,32 @@ fault_generators = [
 ]
 
 # Estimator
-x0_hat = x0 + np.array([2, 2, 1, 0.1, 0.01])
-noise_std = np.array([0.5, 0.5, 0.1, 0.5, 0.5, 0.1])
+x0_hat = x0 + np.array([2, 2, 1, 0.1, 0.01]) # initial state estimate
+noise_std = np.array([0.5, 0.5, 0.1, 0.5, 0.5, 0.1]) # measurement noise
 P = np.diag([1,1,0.3,0.5,0.1]) # initial state covariance
 R = np.diag(noise_std**2) # measurement noise
 Q = np.diag([0.1,0.1,0.01,0.1,0.001]) # process noise
 estimator = SimpleUKF(plant.model, sensor, dt, x0_hat, P, R, Q)
+
+# Planner
+planner = StaticFigureEightPlanner(
+    center=[0, 0],
+    length=2000,
+    width=1000,
+    num_points=100000,
+    target_velocity_fn=lambda _points, _headings, curvatures, _dK_ds_list: calc_target_velocity(
+        curvatures, plant.max_speed
+    ),
+)
+
+# Controller
+controller = KinematicBicycle5StatePurePursuitController(
+    L=plant.L,
+    max_steer_rate=plant.model.max_steer_rate,
+    max_accel=plant.model.max_accel,
+    lookahead_fn=lambda v: 0.5 * v,
+    dt=dt,
+)
 
 # Set the inputs
 plant.set_inputs([4*9.81, 0.01])
@@ -79,7 +103,9 @@ plant.set_inputs([4*9.81, 0.01])
 x = []
 z = []
 x_hat = []
-for k in range(100):
+u = []
+print("Starting simulation...")
+for k in tqdm(range(1000)):
     plant.next()
     state = plant.get_state()
     true_output = sensor.get_output(state)
@@ -87,10 +113,15 @@ for k in range(100):
     for fault in fault_generators:
         output = fault(k, output)
     estimate = estimator.estimate(output, plant.u, np.ones(sensor.num_outputs))
+    plan = planner.plan(estimate)
+    inp = controller.step(plan, estimate)
+    plant.set_inputs(inp)
 
     x.append(state)
     z.append(output)
     x_hat.append(estimate)
+    u.append(inp)
+
 
 x = np.array(x)
 
@@ -100,7 +131,9 @@ fig = plt.figure(figsize=(7.3, 7.3))
 ax = plt.subplot(221)
 ax.plot(x[:, 0], x[:, 1], label="True", linestyle="--")
 ax.plot([x_[0] for x_ in x_hat], [x_[1] for x_ in x_hat], label="Estimated")
-ax.plot([z_[0] for z_ in z], [z_[1] for z_ in z], label="Measured", linestyle=":")
+ax.plot(
+    [z_[0] for z_ in z], [z_[1] for z_ in z], label="Measured", linestyle=":", alpha=0.5
+)
 ax.set_xlabel("x [m]")
 ax.set_ylabel("y [m]")
 ax.set_title("Trajectory")
@@ -111,7 +144,7 @@ ax.legend()
 ax = plt.subplot(222)
 ax.plot(np.unwrap(x[:, 2]), label="True", linestyle="--")
 ax.plot(np.unwrap([x_[2] for x_ in x_hat]), label="Estimated")
-ax.plot(np.unwrap([z_[2] for z_ in z]), label="Measured", linestyle=":")
+ax.plot(np.unwrap([z_[2] for z_ in z]), label="Measured", linestyle=":", alpha=0.5)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Heading [rad]")
 ax.set_title("Heading")
@@ -121,8 +154,8 @@ ax.legend()
 ax = plt.subplot(223)
 ax.plot(x[:, 3], label="True", linestyle="--")
 ax.plot([x_[3] for x_ in x_hat], label="Estimated")
-ax.plot([z_[3] for z_ in z], label="Measured (v1)", linestyle=":")
-ax.plot([z_[4] for z_ in z], label="Measured (v2)", linestyle=":")
+ax.plot([z_[3] for z_ in z], label="Measured (v1)", linestyle=":", alpha=0.5)
+ax.plot([z_[4] for z_ in z], label="Measured (v2)", linestyle=":", alpha=0.5)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Velocity [m/s]")
 ax.set_title("Velocity")
@@ -132,7 +165,7 @@ ax.legend()
 ax = plt.subplot(224)
 ax.plot(x[:, 4], label="True", linestyle="--")
 ax.plot([x_[4] for x_ in x_hat], label="Estimated")
-ax.plot([z_[5] for z_ in z], label="Measured", linestyle=":")
+ax.plot([z_[5] for z_ in z], label="Measured", linestyle=":", alpha=0.5)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Steering angle [rad]")
 ax.set_title("Steering angle")
