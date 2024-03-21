@@ -2,8 +2,8 @@ from math import atan2, sin, sqrt
 
 import numpy as np
 
-from ..planner.base_planner import PlannerOutput
-from ..planner.utils import (closest_point_idx, closest_point_idx_local,
+from ..planners.base_planner import PlannerOutput
+from ..planners.utils import (closest_point_idx, closest_point_idx_local,
                              get_lookahead_idx)
 from .base_controller import BaseController
 from .pid import PIDController

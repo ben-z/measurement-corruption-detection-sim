@@ -1,4 +1,4 @@
-from ..planner.base_planner import PlannerOutput
+from ..planners.base_planner import PlannerOutput
 
 class BaseController:
     def step(self, plan: PlannerOutput, estimate):

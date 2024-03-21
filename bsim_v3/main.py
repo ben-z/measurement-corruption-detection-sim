@@ -18,7 +18,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-from lib.controller.pure_pursuit import KinematicBicycle5StatePurePursuitController
+from lib.controllers.pure_pursuit import KinematicBicycle5StatePurePursuitController
 from lib.estimators.simple_ukf import SimpleUKF
 from lib.fault_generators import (
     complete_failure,
@@ -27,8 +27,8 @@ from lib.fault_generators import (
     sensor_bias_fault,
     spike_fault,
 )
-from lib.planner.static import StaticFigureEightPlanner
-from lib.planner.utils import calc_target_velocity
+from lib.planners.static import StaticFigureEightPlanner
+from lib.planners.utils import calc_target_velocity
 from lib.plants.kinematic_bicycle import \
     KinematicBicycle5StateRearWheelRefPlant
 from lib.sensors.kinematic_bicycle_race_day import \
