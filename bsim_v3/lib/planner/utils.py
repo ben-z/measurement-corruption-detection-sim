@@ -30,23 +30,24 @@ def generate_figure_eight_approximation(center, length, width, num_points):
     a = length / 2
     b = width
 
-    points = []
-    headings = []
-    curvatures = []
-    dK_ds_list = []
+    points = np.zeros((num_points, 2))
+    headings = np.zeros(num_points)
+    curvatures = np.zeros(num_points)
+    dK_ds_list = np.zeros(num_points)
+
     for i in range(num_points):
         # t is an arbitrary parameter that is used to generate the points
         # The result is known as an arbitrary-speed curve
         t = 2 * pi * i / num_points
         x = center[0] + a * sin(t)
         y = center[1] + b * (sin(t * 2) / 2)
-        points.append([x, y])
-        headings.append(atan2(b * cos(t * 2), a * cos(t)))
-        curvatures.append(
+        points[i] = [x, y]
+        headings[i] = atan2(b * cos(t * 2), a * cos(t))
+        curvatures[i] = (
             (a * b * sin(t) * cos(2 * t) - 2 * a * b * sin(2 * t) * cos(t))
             / (a**2 * cos(t) ** 2 + b**2 * cos(2 * t) ** 2) ** (3 / 2)
         )
-        dK_ds_list.append(
+        dK_ds_list[i] = (
             (
                 -3
                 * a

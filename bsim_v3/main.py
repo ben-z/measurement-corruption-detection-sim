@@ -41,7 +41,7 @@ plt.rcParams.update({
 })
 
 dt = 0.1
-x0 = np.array([200, 500, 0, 0, 0])
+x0 = np.array([20, 50, 0, 0, 0])
 plant = KinematicBicycle5StateRearWheelRefPlant(
     x0,
     dt,
@@ -55,7 +55,8 @@ sensor = KinematicBicycleRaceDaySensor()
 fault_generators = [
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
-    # sensor_bias_fault(20, 2, 1),
+    # sensor_bias_fault(200, 2, 1),
+    # sensor_bias_fault(200, 3, -5),
     random_noise_fault(0, 0, 0.1),
     random_noise_fault(0, 1, 0.1),
     random_noise_fault(0, 2, 0.05),
@@ -79,9 +80,9 @@ estimator = SimpleUKF(plant.model, sensor, dt, x0_hat, P, R, Q)
 # Planner
 planner = StaticFigureEightPlanner(
     center=[0, 0],
-    length=2000,
-    width=1000,
-    num_points=100000,
+    length=200,
+    width=100,
+    num_points=10000,
     target_velocity_fn=lambda _points, _headings, curvatures, _dK_ds_list: calc_target_velocity(
         curvatures, plant.max_speed
     ),
@@ -104,8 +105,9 @@ x = []
 z = []
 x_hat = []
 u = []
+controller_meta = []
 print("Starting simulation...")
-for k in tqdm(range(1000)):
+for k in tqdm(range(400)):
     plant.next()
     state = plant.get_state()
     true_output = sensor.get_output(state)
@@ -114,13 +116,14 @@ for k in tqdm(range(1000)):
         output = fault(k, output)
     estimate = estimator.estimate(output, plant.u, np.ones(sensor.num_outputs))
     plan = planner.plan(estimate)
-    inp = controller.step(plan, estimate)
+    inp, ctrl_meta = controller.step(plan, estimate)
     plant.set_inputs(inp)
-
+    
     x.append(state)
     z.append(output)
     x_hat.append(estimate)
     u.append(inp)
+    controller_meta.append(ctrl_meta)
 
 
 x = np.array(x)
@@ -134,6 +137,7 @@ ax.plot([x_[0] for x_ in x_hat], [x_[1] for x_ in x_hat], label="Estimated")
 ax.plot(
     [z_[0] for z_ in z], [z_[1] for z_ in z], label="Measured", linestyle=":", alpha=0.5
 )
+ax.plot(planner.base_plan.points[:, 0], planner.base_plan.points[:, 1], label="Planned", alpha=0.8, zorder=-1)
 ax.set_xlabel("x [m]")
 ax.set_ylabel("y [m]")
 ax.set_title("Trajectory")
@@ -145,6 +149,7 @@ ax = plt.subplot(222)
 ax.plot(np.unwrap(x[:, 2]), label="True", linestyle="--")
 ax.plot(np.unwrap([x_[2] for x_ in x_hat]), label="Estimated")
 ax.plot(np.unwrap([z_[2] for z_ in z]), label="Measured", linestyle=":", alpha=0.5)
+ax.plot(np.unwrap([m["target_heading"] for m in controller_meta]), label="Target", alpha=0.8, zorder=-1)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Heading [rad]")
 ax.set_title("Heading")
@@ -156,6 +161,7 @@ ax.plot(x[:, 3], label="True", linestyle="--")
 ax.plot([x_[3] for x_ in x_hat], label="Estimated")
 ax.plot([z_[3] for z_ in z], label="Measured (v1)", linestyle=":", alpha=0.5)
 ax.plot([z_[4] for z_ in z], label="Measured (v2)", linestyle=":", alpha=0.5)
+ax.plot([m["target_velocity"] for m in controller_meta], label="Target", alpha=0.8, zorder=-1)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Velocity [m/s]")
 ax.set_title("Velocity")
@@ -166,6 +172,7 @@ ax = plt.subplot(224)
 ax.plot(x[:, 4], label="True", linestyle="--")
 ax.plot([x_[4] for x_ in x_hat], label="Estimated")
 ax.plot([z_[5] for z_ in z], label="Measured", linestyle=":", alpha=0.5)
+ax.plot([m["target_delta"] for m in controller_meta], label="Target", alpha=0.8, zorder=-1)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Steering angle [rad]")
 ax.set_title("Steering angle")

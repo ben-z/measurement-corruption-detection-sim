@@ -51,7 +51,15 @@ class KinematicBicycle5StatePurePursuitController(BaseController):
         a = np.clip(self.a_controller.step(target_velocity - v), -self.max_accel, self.max_accel)
         delta_dot = np.clip(self.delta_dot_controller.step(target_delta - delta), -self.max_steer_rate, self.max_steer_rate)
 
-        return np.array([a, delta_dot])
+        return np.array([a, delta_dot]), {
+            "target_point": target_point,
+            "target_heading": plan.headings[target_idx],
+            "target_velocity": target_velocity,
+            "target_idx": target_idx,
+            "dist_to_target": dist_to_target,
+            "angle_to_target": angle_to_target,
+            "target_delta": target_delta,
+        }
 
 
 

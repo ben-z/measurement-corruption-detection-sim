@@ -15,9 +15,7 @@ class StaticFigureEightPlanner(BasePlanner):
             self.points, self.headings, self.curvatures, self.dK_ds_list
         )
         self.plan_id = "figure_eight"
-
-    def plan(self, estimated_state):
-        return PlannerOutput(
+        self.planner_output = PlannerOutput(
             self.plan_id,
             self.points,
             self.headings,
@@ -25,3 +23,10 @@ class StaticFigureEightPlanner(BasePlanner):
             self.dK_ds_list,
             self.velocities,
         )
+
+    def plan(self, estimated_state):
+        return self.planner_output
+
+    @property
+    def base_plan(self):
+        return self.planner_output
