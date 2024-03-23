@@ -45,7 +45,7 @@ plt.rcParams.update({
 # %%
 
 dt = 0.1
-x0 = np.array([-500, -500, 0, 0, 0])
+x0 = np.array([0, 0, 0, 0, 0])
 plant = KinematicBicycle5StateRearWheelRefPlant(
     x0,
     dt,
@@ -57,16 +57,19 @@ plant = KinematicBicycle5StateRearWheelRefPlant(
 )
 sensor = KinematicBicycleRaceDaySensor()
 fault_generators = [
+    # Sensor noise
+    random_noise_fault(0, 0, 0.1),
+    random_noise_fault(0, 1, 0.1),
+    random_noise_fault(0, 2, 0.05),
+    random_noise_fault(0, 3, 0.3),
+    random_noise_fault(0, 4, 0.3),
+    random_noise_fault(0, 5, 0.01),
+
+    # Faults
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
-    # sensor_bias_fault(200, 2, -1),
-    sensor_bias_fault(50, 3, 40),
-    # random_noise_fault(0, 0, 0.1),
-    # random_noise_fault(0, 1, 0.1),
-    # random_noise_fault(0, 2, 0.05),
-    # random_noise_fault(0, 3, 0.3),
-    # random_noise_fault(0, 4, 0.3),
-    # random_noise_fault(0, 5, 0.01),
+    sensor_bias_fault(200, 2, -1),
+    # sensor_bias_fault(50, 3, 40),
     # random_noise_fault(0, 3, 0.5),
     # random_noise_fault(0, 4, 0.05),
     # intermittent_fault(0, 2, 2, 10),
@@ -116,7 +119,7 @@ plans = []
 controller_meta = []
 print("Starting simulation...")
 start = time.perf_counter()
-for k in tqdm(range(60)):
+for k in tqdm(range(210)):
     print(f"{k=}")
 
     state = plant.get_state()
