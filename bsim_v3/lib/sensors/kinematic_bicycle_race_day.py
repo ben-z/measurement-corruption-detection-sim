@@ -9,13 +9,17 @@ from ..utils import wrap_to_pi
 class KinematicBicycleRaceDaySensor(BaseSensor):
     _num_states = 5 # x, y, theta, v, delta
     _num_outputs = 6 # x, y, theta, v1, v2, delta
+    _C = np.array([
+        [1, 0, 0, 0, 0], # x
+        [0, 1, 0, 0, 0], # y
+        [0, 0, 1, 0, 0], # theta
+        [0, 0, 0, 1, 0], # v1
+        [0, 0, 0, 1, 0], # v2
+        [0, 0, 0, 0, 1], # delta
+    ])
 
     def get_output(self, state):
-        assert len(state) == self._num_states
-
-        x, y, theta, v, delta = state
-
-        return np.array([x, y, theta, v, v, delta])
+        return self._C @ state
 
     def output_mean(self, sigmas, Wm):
         z = np.zeros(6)
@@ -42,3 +46,11 @@ class KinematicBicycleRaceDaySensor(BaseSensor):
             o1_v2 - o2_v2,
             wrap_to_pi(o1_delta - o2_delta),
         ])
+    
+    def get_output_matrix(self):
+        return self._C
+    
+    def normalize_output(self, o):
+        o[2] = wrap_to_pi(o[2])
+        o[5] = wrap_to_pi(o[5])
+        return o

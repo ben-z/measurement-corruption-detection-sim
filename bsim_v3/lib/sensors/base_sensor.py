@@ -16,3 +16,6 @@ class BaseSensor:
     
     def output_mean(self, sigmas, Wm):
         raise NotImplementedError("output_mean method not implemented")
+
+    def get_output_matrix(self):
+        raise NotImplementedError("get_output_matrix method not implemented")

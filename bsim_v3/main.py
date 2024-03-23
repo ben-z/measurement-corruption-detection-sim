@@ -17,8 +17,10 @@ os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
 
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 from tqdm import tqdm
 from lib.controllers.pure_pursuit import KinematicBicycle5StatePurePursuitController
+from lib.detectors.detector import Detector, LookAheadDetector
 from lib.estimators.simple_ukf import SimpleUKF
 from lib.fault_generators import (
     complete_failure,
@@ -40,8 +42,10 @@ plt.rcParams.update({
     "font.serif": ["Computer Modern"],
 })
 
+# %%
+
 dt = 0.1
-x0 = np.array([20, 50, 0, 0, 0])
+x0 = np.array([-500, -500, 0, 0, 0])
 plant = KinematicBicycle5StateRearWheelRefPlant(
     x0,
     dt,
@@ -55,14 +59,14 @@ sensor = KinematicBicycleRaceDaySensor()
 fault_generators = [
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
-    # sensor_bias_fault(200, 2, 1),
-    # sensor_bias_fault(200, 3, -5),
-    random_noise_fault(0, 0, 0.1),
-    random_noise_fault(0, 1, 0.1),
-    random_noise_fault(0, 2, 0.05),
-    random_noise_fault(0, 3, 0.3),
-    random_noise_fault(0, 4, 0.3),
-    random_noise_fault(0, 5, 0.01),
+    # sensor_bias_fault(200, 2, -1),
+    sensor_bias_fault(50, 3, 40),
+    # random_noise_fault(0, 0, 0.1),
+    # random_noise_fault(0, 1, 0.1),
+    # random_noise_fault(0, 2, 0.05),
+    # random_noise_fault(0, 3, 0.3),
+    # random_noise_fault(0, 4, 0.3),
+    # random_noise_fault(0, 5, 0.01),
     # random_noise_fault(0, 3, 0.5),
     # random_noise_fault(0, 4, 0.05),
     # intermittent_fault(0, 2, 2, 10),
@@ -80,9 +84,9 @@ estimator = SimpleUKF(plant.model, sensor, dt, x0_hat, P, R, Q)
 # Planner
 planner = StaticFigureEightPlanner(
     center=[0, 0],
-    length=200,
-    width=100,
-    num_points=10000,
+    length=2000,
+    width=1000,
+    num_points=100000,
     target_velocity_fn=lambda _points, _headings, curvatures, _dK_ds_list: calc_target_velocity(
         curvatures, plant.max_speed
     ),
@@ -97,33 +101,51 @@ controller = KinematicBicycle5StatePurePursuitController(
     dt=dt,
 )
 
-# Set the inputs
-plant.set_inputs([4*9.81, 0.01])
+# Detector
+N = plant.model.num_states
+detector_class = Detector
+# detector_class = LookAheadDetector
+detector = detector_class(plant.model, sensor, N, dt, noise_std * 3)
 
 # Simulate the plant
 x = []
 z = []
 x_hat = []
 u = []
+plans = []
 controller_meta = []
 print("Starting simulation...")
-for k in tqdm(range(400)):
-    plant.next()
+start = time.perf_counter()
+for k in tqdm(range(60)):
+    print(f"{k=}")
+
     state = plant.get_state()
     true_output = sensor.get_output(state)
     output = true_output
     for fault in fault_generators:
         output = fault(k, output)
-    estimate = estimator.estimate(output, plant.u, np.ones(sensor.num_outputs))
+
+    validity = detector.calc_validity()
+    estimate = estimator.estimate(output, plant.u, validity)
     plan = planner.plan(estimate)
     inp, ctrl_meta = controller.step(plan, estimate)
+
+    # We don't need inp at this time step,
+    # but we will store it for the next time step 
+    detector.step(output, estimate, plan, inp)
+
     plant.set_inputs(inp)
+    plant.next()
     
     x.append(state)
     z.append(output)
     x_hat.append(estimate)
     u.append(inp)
+    plans.append(plan)
     controller_meta.append(ctrl_meta)
+
+end = time.perf_counter()
+print(f"Simulation complete in {end - start:.2f} s")
 
 
 x = np.array(x)
@@ -180,3 +202,5 @@ ax.legend()
 
 fig.tight_layout()
 fig.show()
+
+# %%
