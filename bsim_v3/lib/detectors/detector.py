@@ -24,6 +24,7 @@ class Detector:
         self.ys = []
         self.estimates = []
         self.plans = []
+        self.validity = np.ones(self.sensor.num_outputs, dtype=bool)
 
     def step(self, y_k, estimate_k, plan_k, u_k):
         """
@@ -110,8 +111,8 @@ class Detector:
 
         start = time.perf_counter()
         if len(self.Cs) < self.N:
-            # All sensors are valid if we don't have enough data
-            return np.ones(self.sensor.num_outputs)
+            # Not enough data to run the detector
+            return self.validity
 
         Phi, Y = self.get_optimizer_params()
 
@@ -125,9 +126,15 @@ class Detector:
             prob = optimizer_res.soln.prob
             res_metadata = optimizer_res.soln.metadata
             optimizer_metadata = optimizer_res.metadata
-            print(f"{prob.status}, K={res_metadata.get('K')}, total took {end-start:.4f} s, optimizer took {optimizer_metadata['solve_time']:.4f} s")
+            print(f"{prob.status}, K={res_metadata['K']}, total took {end-start:.4f} s, optimizer took {optimizer_metadata['solve_time']:.4f} s")
 
-        return np.ones(self.sensor.num_outputs)
+            validity = np.ones(self.sensor.num_outputs, dtype=bool)
+            validity[res_metadata["K"]] = False
+            self.validity = validity
+
+
+
+        return self.validity
 
 class LookAheadDetector(Detector):
     """

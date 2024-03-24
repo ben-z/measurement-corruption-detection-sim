@@ -147,3 +147,29 @@ def get_output_evolution_tensor(Cs: list[np.ndarray], Evo: np.ndarray):
         Phi[i] = np.matmul(Cs[i], Evo[i])
 
     return Phi
+
+def calc_invalid_spans(validities, idx):
+    """
+    Given a list of validities, returns the spans of invalid values.
+    Parameters:
+        validities: list[bool] - list of validities
+        idx: int - the index to check
+    Returns:
+        spans: list[tuple[int, int]] - list of tuples of start and end indices of invalid spans
+    """
+    ret = []
+
+    start = None
+    for i, v in enumerate(validities):
+        if v[idx] == False:
+            if start is None:
+                start = i
+        else:
+            if start is not None:
+                ret.append((start, i))
+                start = None
+    if start is not None:
+        ret.append((start, len(validities)))
+
+    return ret
+

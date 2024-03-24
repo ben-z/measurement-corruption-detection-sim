@@ -53,9 +53,9 @@ class SimpleUKF(BaseEstimator):
         self.ukf = ukf
 
     def estimate(self, z: np.ndarray, u: np.ndarray, validity: np.ndarray):
-        assert z.shape == (self.sensor.num_outputs,), f"{z.shape} != {(self.sensor.num_outputs,)=}"
-        assert u.shape == (self.model.num_inputs,), f"{u.shape} != {(self.model.num_inputs,)=}"
-        assert validity.shape == (self.sensor.num_outputs,), f"{validity.shape} != {(self.sensor.num_outputs,)=}"
+        assert z.shape == (self.sensor.num_outputs,), f"{z.shape=} != {(self.sensor.num_outputs,)=}"
+        assert u.shape == (self.model.num_inputs,), f"{u.shape=} != {(self.model.num_inputs,)=}"
+        assert validity.shape == (self.sensor.num_outputs,), f"{validity.shape=} != {(self.sensor.num_outputs,)=}"
 
         self.ukf.predict(u=u)
         self.ukf.update(z)

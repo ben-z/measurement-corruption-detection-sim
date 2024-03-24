@@ -21,6 +21,7 @@ import time
 from tqdm import tqdm
 from lib.controllers.pure_pursuit import KinematicBicycle5StatePurePursuitController
 from lib.detectors.detector import Detector, LookAheadDetector
+from lib.detectors.utils import calc_invalid_spans
 from lib.estimators.simple_ukf import SimpleUKF
 from lib.fault_generators import (
     complete_failure,
@@ -68,9 +69,9 @@ fault_generators = [
     # Faults
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
-    sensor_bias_fault(200, 2, -1),
-    # sensor_bias_fault(50, 3, 40),
-    # random_noise_fault(0, 3, 0.5),
+    sensor_bias_fault(40, 2, -1),
+    # sensor_bias_fault(40, 3, 40),
+    # random_noise_fault(40, 3, 20),
     # random_noise_fault(0, 4, 0.05),
     # intermittent_fault(0, 2, 2, 10),
     # intermittent_fault(0, 3, 2, 10),
@@ -113,13 +114,14 @@ detector = detector_class(plant.model, sensor, N, dt, noise_std * 3)
 # Simulate the plant
 x = []
 z = []
+validities = []
 x_hat = []
 u = []
 plans = []
 controller_meta = []
 print("Starting simulation...")
 start = time.perf_counter()
-for k in tqdm(range(210)):
+for k in tqdm(range(50)):
     print(f"{k=}")
 
     state = plant.get_state()
@@ -142,6 +144,7 @@ for k in tqdm(range(210)):
     
     x.append(state)
     z.append(output)
+    validities.append(validity)
     x_hat.append(estimate)
     u.append(inp)
     plans.append(plan)
@@ -175,6 +178,8 @@ ax.plot(np.unwrap(x[:, 2]), label="True", linestyle="--")
 ax.plot(np.unwrap([x_[2] for x_ in x_hat]), label="Estimated")
 ax.plot(np.unwrap([z_[2] for z_ in z]), label="Measured", linestyle=":", alpha=0.5)
 ax.plot(np.unwrap([m["target_heading"] for m in controller_meta]), label="Target", alpha=0.8, zorder=-1)
+for s, e in calc_invalid_spans(validities, 2):
+    ax.axvspan(s, e, color="red", alpha=0.2)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Heading [rad]")
 ax.set_title("Heading")
@@ -187,6 +192,10 @@ ax.plot([x_[3] for x_ in x_hat], label="Estimated")
 ax.plot([z_[3] for z_ in z], label="Measured (v1)", linestyle=":", alpha=0.5)
 ax.plot([z_[4] for z_ in z], label="Measured (v2)", linestyle=":", alpha=0.5)
 ax.plot([m["target_velocity"] for m in controller_meta], label="Target", alpha=0.8, zorder=-1)
+for s, e in calc_invalid_spans(validities, 3):
+    ax.axvspan(s, e, color="red", alpha=0.2)
+for s, e in calc_invalid_spans(validities, 4):
+    ax.axvspan(s, e, color="orange", alpha=0.2)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Velocity [m/s]")
 ax.set_title("Velocity")
@@ -198,6 +207,8 @@ ax.plot(x[:, 4], label="True", linestyle="--")
 ax.plot([x_[4] for x_ in x_hat], label="Estimated")
 ax.plot([z_[5] for z_ in z], label="Measured", linestyle=":", alpha=0.5)
 ax.plot([m["target_delta"] for m in controller_meta], label="Target", alpha=0.8, zorder=-1)
+for s, e in calc_invalid_spans(validities, 5):
+    ax.axvspan(s, e, color="red", alpha=0.2)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Steering angle [rad]")
 ax.set_title("Steering angle")
