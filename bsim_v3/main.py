@@ -20,7 +20,7 @@ import numpy as np
 import time
 from tqdm import tqdm
 from lib.controllers.pure_pursuit import KinematicBicycle5StatePurePursuitController
-from lib.detectors.detector import Detector, LookAheadDetector
+from lib.detectors.detector import Detector, LookAheadDetector, CalcValidityMetadata
 from lib.detectors.utils import calc_invalid_spans
 from lib.estimators.simple_ukf import SimpleUKF
 from lib.fault_generators import (
@@ -30,6 +30,7 @@ from lib.fault_generators import (
     sensor_bias_fault,
     spike_fault,
 )
+from lib.planners.base_planner import PlannerOutput
 from lib.planners.static import StaticFigureEightPlanner
 from lib.planners.utils import calc_target_velocity
 from lib.plants.kinematic_bicycle import \
@@ -112,17 +113,18 @@ detector_class = Detector
 detector = detector_class(plant.model, sensor, N, dt, noise_std * 3)
 
 # Simulate the plant
-x = []
-z = []
-validities = []
-x_hat = []
-u = []
-plans = []
-controller_meta = []
+x_list: list[np.ndarray] = []
+z_list: list[np.ndarray] = []
+validity_list: list[np.ndarray] = []
+x_hat_list: list[np.ndarray] = []
+u_list: list[np.ndarray] = []
+plans: list[PlannerOutput] = []
+controller_meta: list[dict] = []
+calc_validity_meta: list[CalcValidityMetadata] = []
 print("Starting simulation...")
 start = time.perf_counter()
 for k in tqdm(range(50)):
-    print(f"{k=}")
+    # print(f"{k=}")
 
     state = plant.get_state()
     true_output = sensor.get_output(state)
@@ -130,7 +132,7 @@ for k in tqdm(range(50)):
     for fault in fault_generators:
         output = fault(k, output)
 
-    validity = detector.calc_validity()
+    validity, cv_meta = detector.calc_validity()
     estimate = estimator.estimate(output, plant.u, validity)
     plan = planner.plan(estimate)
     inp, ctrl_meta = controller.step(plan, estimate)
@@ -142,24 +144,29 @@ for k in tqdm(range(50)):
     plant.set_inputs(inp)
     plant.next()
     
-    x.append(state)
-    z.append(output)
-    validities.append(validity)
-    x_hat.append(estimate)
-    u.append(inp)
+    x_list.append(state)
+    z_list.append(output)
+    validity_list.append(validity)
+    x_hat_list.append(estimate)
+    u_list.append(inp)
     plans.append(plan)
     controller_meta.append(ctrl_meta)
+    calc_validity_meta.append(cv_meta)
 
 end = time.perf_counter()
 print(f"Simulation complete in {end - start:.2f} s")
 
 
-x = np.array(x)
+x = np.array(x_list)
+x_hat = np.array(x_hat_list)
+z = np.array(z_list)
+validities = np.array(validity_list)
 
+# %%
 # Plot the results
 # BEV
 fig = plt.figure(figsize=(7.3, 7.3))
-ax = plt.subplot(221)
+ax = plt.subplot(321)
 ax.plot(x[:, 0], x[:, 1], label="True", linestyle="--")
 ax.plot([x_[0] for x_ in x_hat], [x_[1] for x_ in x_hat], label="Estimated")
 ax.plot(
@@ -171,9 +178,10 @@ ax.set_ylabel("y [m]")
 ax.set_title("Trajectory")
 ax.axis("equal")
 ax.legend()
+ax.grid()
 
 # Heading
-ax = plt.subplot(222)
+ax = plt.subplot(322)
 ax.plot(np.unwrap(x[:, 2]), label="True", linestyle="--")
 ax.plot(np.unwrap([x_[2] for x_ in x_hat]), label="Estimated")
 ax.plot(np.unwrap([z_[2] for z_ in z]), label="Measured", linestyle=":", alpha=0.5)
@@ -184,9 +192,10 @@ ax.set_xlabel("Time step")
 ax.set_ylabel("Heading [rad]")
 ax.set_title("Heading")
 ax.legend()
+ax.grid()
 
 # Velocity
-ax = plt.subplot(223)
+ax = plt.subplot(323)
 ax.plot(x[:, 3], label="True", linestyle="--")
 ax.plot([x_[3] for x_ in x_hat], label="Estimated")
 ax.plot([z_[3] for z_ in z], label="Measured (v1)", linestyle=":", alpha=0.5)
@@ -200,9 +209,10 @@ ax.set_xlabel("Time step")
 ax.set_ylabel("Velocity [m/s]")
 ax.set_title("Velocity")
 ax.legend()
+ax.grid()
 
 # Steering angle
-ax = plt.subplot(224)
+ax = plt.subplot(324)
 ax.plot(x[:, 4], label="True", linestyle="--")
 ax.plot([x_[4] for x_ in x_hat], label="Estimated")
 ax.plot([z_[5] for z_ in z], label="Measured", linestyle=":", alpha=0.5)
@@ -213,6 +223,31 @@ ax.set_xlabel("Time step")
 ax.set_ylabel("Steering angle [rad]")
 ax.set_title("Steering angle")
 ax.legend()
+ax.grid()
+
+# Sensor validity (horizontal stacked bar chart)
+ax = plt.subplot(325)
+ax.invert_yaxis()
+colors = {True: "tab:green", False: "tab:red"}
+for i in range(validities.shape[1]):
+    for j in range(validities.shape[0]):
+        ax.barh(i + 1, 1, left=j, color=colors[validities[j, i]])
+ax.set_yticks(np.arange(validities.shape[1]) + 1)
+ax.set_xlabel("Time step")
+ax.set_ylabel("Sensor")
+ax.set_title("Sensor validity")
+ax.grid(axis="x")
+
+# Detector runtime
+ax = plt.subplot(326)
+ax.plot([m.total_time for m in calc_validity_meta], label="Total time")
+ax.plot([m.optimizer_metadata.setup_time if m.optimizer_metadata else np.nan for m in calc_validity_meta], label="Setup time")
+ax.plot([m.optimizer_metadata.solve_time if m.optimizer_metadata else np.nan for m in calc_validity_meta], label="Solve time")
+ax.set_xlabel("Time step")
+ax.set_ylabel("Time [s]")
+ax.set_title("Detector runtime")
+ax.legend()
+ax.grid()
 
 fig.tight_layout()
 fig.show()

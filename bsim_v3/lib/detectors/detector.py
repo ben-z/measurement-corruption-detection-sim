@@ -2,11 +2,17 @@ import time
 
 import cvxpy as cp
 import numpy as np
+from typing import NamedTuple, Optional
 
 from ..planners.utils import closest_point_idx, closest_point_idx_local
-from .optimizer import Optimizer
+from .optimizer import Optimizer, OptimizerMetadata
 from .utils import (calc_input_effects_on_output, get_output_evolution_tensor,
                     get_state_evolution_tensor, walk_trajectory_by_durations)
+
+class CalcValidityMetadata(NamedTuple):
+    total_time: float
+    prob_status: Optional[str]
+    optimizer_metadata: Optional[OptimizerMetadata]
 
 
 class Detector:
@@ -104,15 +110,16 @@ class Detector:
 
         return Phi, Y
 
-    def calc_validity(self):
+    def calc_validity(self) -> tuple[np.ndarray, CalcValidityMetadata]:
         """
         Run the detector and return the validity of the sensor outputs.
         """
 
-        start = time.perf_counter()
         if len(self.Cs) < self.N:
             # Not enough data to run the detector
-            return self.validity
+            return self.validity, CalcValidityMetadata(total_time=0, prob_status=None, optimizer_metadata=None)
+
+        start = time.perf_counter()
 
         Phi, Y = self.get_optimizer_params()
 
@@ -124,17 +131,23 @@ class Detector:
 
         if optimizer_res.soln is not None:
             prob = optimizer_res.soln.prob
+            prob_status = prob.status
             res_metadata = optimizer_res.soln.metadata
             optimizer_metadata = optimizer_res.metadata
-            print(f"{prob.status}, K={res_metadata['K']}, total took {end-start:.4f} s, optimizer took {optimizer_metadata['solve_time']:.4f} s")
+            # print(f"{prob_status}, K={res_metadata['K']}, total took {end-start:.4f} s, optimizer took {optimizer_metadata['solve_time']:.4f} s")
 
             validity = np.ones(self.sensor.num_outputs, dtype=bool)
-            validity[res_metadata["K"]] = False
+            validity[res_metadata.K] = False
             self.validity = validity
+        else:
+            prob_status = None
+            optimizer_metadata = None
 
-
-
-        return self.validity
+        return self.validity, CalcValidityMetadata(
+            total_time=end - start,
+            prob_status=prob_status,
+            optimizer_metadata=optimizer_metadata,
+        )
 
 class LookAheadDetector(Detector):
     """

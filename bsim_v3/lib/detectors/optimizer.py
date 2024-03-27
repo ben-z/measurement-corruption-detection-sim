@@ -1,6 +1,6 @@
 import time
 from itertools import repeat
-from typing import Any, Iterable, List, NamedTuple, Optional, Tuple
+from typing import Any, Iterable, List, NamedTuple, Optional, Tuple, Iterator
 
 import cvxpy as cp
 import numpy as np
@@ -20,21 +20,30 @@ class CvxpyProblem(NamedTuple):
     solve_time: float | None
     value: Any
 
+class OptimizerCaseMetadata(NamedTuple):
+    K: List[int]
+    S: List[int]
+    solve_time: float
+    solver_error: Optional[str]
 
 class OptimizerCaseResult(NamedTuple):
-    x0_hat: NDArray[np.float64] | None
+    x0_hat: Optional[NDArray[np.float64]]
     prob: CvxpyProblem
-    metadata: dict
+    metadata: OptimizerCaseMetadata
 
+class OptimizerMetadata(NamedTuple):
+    setup_time: float
+    solve_time: float # total time to solve all cases
+    solutions_with_errors: List[OptimizerCaseResult] # list of solutions that had errors
 
 class OptimizerOutput(NamedTuple):
     soln: Optional[OptimizerCaseResult]
     solns: List[OptimizerCaseResult]
-    metadata: dict
+    metadata: OptimizerMetadata
 
 
 def optimize_l0_case(
-    S: Iterable[int],
+    S: List[int],
     q: int,
     prob: cp.Problem,
     x0_hat: cp.Variable,
@@ -44,7 +53,7 @@ def optimize_l0_case(
     r"""
     Solves the l0 minimization problem for a given set of uncorrupted sensors $S$.
     Parameters:
-        S: Iterable[int] - the set of uncorrupted sensors
+        S: List[int] - the set of uncorrupted sensors
         q: int - the number of outputs
         prob: cp.Problem - the optimization problem
         x0_hat: cp.Variable - the variable to optimize
@@ -64,15 +73,16 @@ def optimize_l0_case(
     for j in S:
         can_corrupt.value[j] = False
 
+    solver_error = None
     start = time.perf_counter()
     try:
         prob.solve(**solver_args)
     except cp.SolverError as e:
         print(f"Solver error when solving for {S=}: {e}")
-        additional_metadata["solver_error"] = str(e)
+        solver_error = str(e)
     except Exception as e:
         print(f"Unknown error when solving for {S=}: {e}")
-        additional_metadata["solver_error"] = str(e)
+        solver_error = str(e)
     end = time.perf_counter()
 
     return OptimizerCaseResult(
@@ -84,12 +94,12 @@ def optimize_l0_case(
             solve_time=prob._solve_time,
             value=prob.value,
         ),
-        metadata={
-            "K": K,
-            "S": S,
-            "solve_time": end - start,
-            **additional_metadata,
-        },
+        metadata=OptimizerCaseMetadata(
+            K=K,
+            S=S,
+            solve_time=end - start,
+            solver_error=solver_error,
+        ),
     )
 
 
@@ -149,7 +159,6 @@ class Optimizer:
             metadata: dict - metadata about the optimization problem. Please see the code for the exact contents.
             solns: list - list of solutions for each possible set of corrupted sensors that was tried
         """
-        metadata = {}
         start = time.perf_counter()
 
         N, q, n = Phi.shape
@@ -175,7 +184,7 @@ class Optimizer:
         self.cvx_Phi_param.value = cvx_Phi
 
         end = time.perf_counter()
-        metadata["setup_time"] = end - start
+        setup_time = end - start
 
         start = time.perf_counter()
         map_args = [
@@ -186,30 +195,34 @@ class Optimizer:
             repeat(self.can_corrupt),
             repeat({"solver": self.solver, **solver_args}),
         ]
-        soln_generator = map(optimize_l0_case, *map_args)
+        soln_iterator: Iterator[OptimizerCaseResult] = map(optimize_l0_case, *map_args)
         # with Pool(min(MAX_POOL_SIZE, os.cpu_count() or 1)) as pool:
-        #   soln_generator = pool.starmap(optimize_l0_case, zip(*map_args))
+        #   soln_iterator: Iterator[OptimizerCaseResult] = pool.starmap(optimize_l0_case, zip(*map_args))
 
-        metadata["solutions_with_errors"] = []
+        solutions_with_errors: List[OptimizerCaseResult] = []
 
         ret = None
         solns = []
         try:
-            for s in soln_generator:
+            for s in soln_iterator:
                 s_x0_hat, s_prob, s_metadata = s
                 solns.append(s)
-                if s_metadata.get("solver_error"):
-                    metadata["solutions_with_errors"].append(s_metadata)
+                if s_metadata.solver_error is not None:
+                    solutions_with_errors.append(s)
                 if ret is None and s_prob.status in ["optimal", "optimal_inaccurate"]:
                     ret = s
                     if early_exit:
                         break
         finally:
             end = time.perf_counter()
-            metadata["solve_time"] = end - start
+            solve_time = end - start
 
         return OptimizerOutput(
             soln=ret,
             solns=solns,
-            metadata=metadata,
+            metadata=OptimizerMetadata(
+                setup_time=setup_time,
+                solve_time=solve_time,
+                solutions_with_errors=solutions_with_errors,
+            ),
         )
