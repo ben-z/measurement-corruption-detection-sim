@@ -108,8 +108,8 @@ controller = KinematicBicycle5StatePurePursuitController(
 
 # Detector
 N = plant.model.num_states
-detector_class = Detector
-# detector_class = LookAheadDetector
+# detector_class = Detector
+detector_class = LookAheadDetector
 detector = detector_class(plant.model, sensor, N, dt, noise_std * 3)
 
 # Simulate the plant
