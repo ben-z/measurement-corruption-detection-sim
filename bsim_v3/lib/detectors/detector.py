@@ -154,12 +154,21 @@ class LookAheadDetector(Detector):
     A detector that uses a plan look-ahead approach (based on the estimate atthe beginning of the window)
     to generate linearization points.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._prev_closest_idx = None
+
     def get_linearization_points(self):
         """
         Generate linearization points for the optimizer.
         """
         initial_estimate = self.estimates[0]
-        initial_closest_idx = closest_point_idx(self.plans[0].points, initial_estimate[0], initial_estimate[1])
+        if self._prev_closest_idx is None:
+            initial_closest_idx = closest_point_idx(self.plans[0].points, initial_estimate[0], initial_estimate[1])
+        else:
+            initial_closest_idx = closest_point_idx_local(self.plans[0].points, initial_estimate[0], initial_estimate[1], self._prev_closest_idx)
+        
+        self._prev_closest_idx = initial_closest_idx
 
         desired_path_indices = [initial_closest_idx] + walk_trajectory_by_durations(
             self.plans[0].points, self.plans[0].velocities, initial_closest_idx, [self.dt] * (self.N - 1)
