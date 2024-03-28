@@ -70,8 +70,8 @@ fault_generators = [
     # Faults
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
-    # sensor_bias_fault(18 / dt, 2, -1),
-    sensor_bias_fault(18 / dt, 3, 40),
+    sensor_bias_fault(18 / dt, 2, -1),
+    # sensor_bias_fault(18 / dt, 3, 40),
     # random_noise_fault(4 / dt, 3, 5),
     ## faults from the beginning
     # sensor_bias_fault(0, 2, -1),
