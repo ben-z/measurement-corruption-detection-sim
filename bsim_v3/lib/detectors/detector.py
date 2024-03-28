@@ -72,7 +72,7 @@ class Detector:
             prev_plan = plan
             prev_closest_idx = idx
 
-            linearization_point = np.array([
+            linearization_state = np.array([
                 plan.points[idx][0],
                 plan.points[idx][1],
                 plan.headings[idx],
@@ -81,7 +81,7 @@ class Detector:
             ])
 
             # To stay on the path, we apply zero acceleration and zero steering
-            yield linearization_point, np.array([0,0])
+            yield linearization_state, np.array([0,0])
 
     def get_optimizer_params(self):
         """
@@ -149,6 +149,83 @@ class Detector:
             optimizer_metadata=optimizer_metadata,
         )
 
+class EveryEstimateDetector(Detector):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._desired_outputs = []
+        self._As = []
+        self._Bs = []
+        self._prev_closest_idx = None
+        self._prev_plan = None
+
+    def step(self, y_k, estimate_k, plan_k, u_k):
+        super().step(y_k, estimate_k, plan_k, u_k)
+
+        prev_closest_idx = self._prev_closest_idx
+        prev_plan = self._prev_plan
+        plan = plan_k
+        estimate = estimate_k
+
+        if prev_plan is not None and plan.id == prev_plan.id:
+            # The plan hasn't changed, so we can localize using
+            # the previous closest point index.
+            idx = closest_point_idx_local(plan.points, estimate[0], estimate[1], prev_closest_idx)
+        else:
+            idx = closest_point_idx(plan.points, estimate[0], estimate[1])
+
+        self._prev_plan = plan
+        self._prev_closest_idx = idx
+
+        linearization_state = np.array([
+            plan.points[idx][0],
+            plan.points[idx][1],
+            plan.headings[idx],
+            plan.velocities[idx],
+            0.0
+        ])
+        # assuming straight line segments
+        linearization_input = np.array([0,0])
+
+        desired_output = self.sensor.get_output(linearization_state)
+        A, B = self.model.linearize(linearization_state, linearization_input, self.dt)
+
+        self._desired_outputs.append(desired_output)
+        self._As.append(A)
+        self._Bs.append(B)
+
+        if len(self._desired_outputs) > self.N:
+            self._desired_outputs.pop(0)
+            self._As.pop(0)
+            self._Bs.pop(0)
+
+    def get_linearization_points(self):
+        raise NotImplementedError("This class does not use the get_linearization_points method.")
+
+    def get_optimizer_params(self):
+        """
+        Get the parameters for the optimizer.
+        Override this method to use custom methods for generating the optimizer parameters.
+        """
+
+        As = self._As[:-1]
+        Bs = self._Bs[:-1]
+        desired_output_trajectory = self._desired_outputs
+
+        input_effects = calc_input_effects_on_output(As, Bs, self.Cs, self.us[:-1])
+
+        output_hist_no_input_effects = [
+            self.sensor.normalize_output(output - input_effect - desired_output)
+            for output, input_effect, desired_output in zip(
+                self.ys, input_effects, desired_output_trajectory
+            )
+        ]
+
+        Y = np.array(output_hist_no_input_effects)
+        Phi = get_output_evolution_tensor(self.Cs, get_state_evolution_tensor(As))
+
+        return Phi, Y
+
 class LookAheadDetector(Detector):
     """
     A detector that uses a plan look-ahead approach (based on the estimate atthe beginning of the window)
@@ -176,7 +253,7 @@ class LookAheadDetector(Detector):
 
         for idx in desired_path_indices:
             plan = self.plans[0]
-            linearization_point = np.array([
+            linearization_state = np.array([
                 plan.points[idx][0],
                 plan.points[idx][1],
                 plan.headings[idx],
@@ -185,4 +262,4 @@ class LookAheadDetector(Detector):
             ])
 
             # To stay on the path, we apply zero acceleration and zero steering
-            yield linearization_point, np.array([0,0])
+            yield linearization_state, np.array([0,0])

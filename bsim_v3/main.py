@@ -20,7 +20,7 @@ import numpy as np
 import time
 from tqdm import tqdm
 from lib.controllers.pure_pursuit import KinematicBicycle5StatePurePursuitController
-from lib.detectors.detector import Detector, LookAheadDetector, CalcValidityMetadata
+from lib.detectors.detector import Detector, EveryEstimateDetector, LookAheadDetector, CalcValidityMetadata
 from lib.detectors.utils import calc_invalid_spans
 from lib.estimators.simple_ukf import SimpleUKF
 from lib.fault_generators import (
@@ -113,6 +113,7 @@ N = plant.model.num_states
 # N = plant.model.num_states * 2
 # detector_class = Detector
 detector_class = LookAheadDetector
+# detector_class = EveryEstimateDetector
 detector = detector_class(plant.model, sensor, N, dt, noise_std * 3)
 
 # Simulate the plant
@@ -249,6 +250,7 @@ ax = plt.subplot(326)
 ax.plot([m.total_time for m in calc_validity_meta], label="Total time")
 ax.plot([m.optimizer_metadata.setup_time if m.optimizer_metadata else np.nan for m in calc_validity_meta], label="Setup time")
 ax.plot([m.optimizer_metadata.solve_time if m.optimizer_metadata else np.nan for m in calc_validity_meta], label="Solve time")
+ax.set_ylim(0, 0.02)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Time [s]")
 ax.set_title("Detector runtime")
