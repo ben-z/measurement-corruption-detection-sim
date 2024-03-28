@@ -46,7 +46,7 @@ plt.rcParams.update({
 
 # %%
 
-dt = 0.1
+dt = 0.01
 x0 = np.array([0, 0, 0, 0, 0])
 plant = KinematicBicycle5StateRearWheelRefPlant(
     x0,
@@ -70,9 +70,11 @@ fault_generators = [
     # Faults
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
-    sensor_bias_fault(40, 2, -1),
-    # sensor_bias_fault(40, 3, 40),
-    # random_noise_fault(40, 3, 20),
+    # sensor_bias_fault(18 / dt, 2, -1),
+    sensor_bias_fault(18 / dt, 3, 40),
+    # random_noise_fault(4 / dt, 3, 5),
+    ## faults from the beginning
+    # sensor_bias_fault(0, 2, -1),
     # random_noise_fault(0, 4, 0.05),
     # intermittent_fault(0, 2, 2, 10),
     # intermittent_fault(0, 3, 2, 10),
@@ -108,6 +110,7 @@ controller = KinematicBicycle5StatePurePursuitController(
 
 # Detector
 N = plant.model.num_states
+# N = plant.model.num_states * 2
 # detector_class = Detector
 detector_class = LookAheadDetector
 detector = detector_class(plant.model, sensor, N, dt, noise_std * 3)
@@ -123,7 +126,7 @@ controller_meta: list[dict] = []
 calc_validity_meta: list[CalcValidityMetadata] = []
 print("Starting simulation...")
 start = time.perf_counter()
-for k in tqdm(range(50)):
+for k in tqdm(range(int(20 / dt))):
     # print(f"{k=}")
 
     state = plant.get_state()
@@ -162,10 +165,13 @@ x_hat = np.array(x_hat_list)
 z = np.array(z_list)
 validities = np.array(validity_list)
 
+print("Invalid sensors:")
+print(np.array((validities != True).nonzero()).transpose())
+
 # %%
 # Plot the results
 # BEV
-fig = plt.figure(figsize=(7.3, 7.3))
+fig = plt.figure(figsize=(7.3*1.5, 7.3*1.5))
 ax = plt.subplot(321)
 ax.plot(x[:, 0], x[:, 1], label="True", linestyle="--")
 ax.plot([x_[0] for x_ in x_hat], [x_[1] for x_ in x_hat], label="Estimated")
