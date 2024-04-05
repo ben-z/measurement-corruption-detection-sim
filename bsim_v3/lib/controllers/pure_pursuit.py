@@ -18,7 +18,7 @@ class KinematicBicycle5StatePurePursuitController(BaseController):
         self._last_plan_id = None
         self._prev_closest_idx = 0
 
-        self.a_controller = PIDController(2, 0.0, 0.0, dt)
+        self.a_controller = PIDController(5, 0.0, 0.0, dt)
         self.delta_dot_controller = PIDController(5, 0.0, 0.0, dt)
 
     def step(self, plan: PlannerOutput, estimate):
