@@ -38,10 +38,19 @@ from lib.plants.kinematic_bicycle import \
 from lib.sensors.kinematic_bicycle_race_day import \
     KinematicBicycleRaceDaySensor
 
+# check if the pdflatex binary is available
+if os.system("pdflatex -v > /dev/null 2>&1") == 0:
+    usetex = True
+    font_serif = "Computer Modern"
+else:
+    print("WARNING: pdflatex not available. Not using LaTeX for plots.")
+    usetex = False
+    font_serif = "DejaVu Serif"
+
 plt.rcParams.update({
-    "text.usetex": True,
+    "text.usetex": usetex,
     "font.family": "serif",
-    "font.serif": ["Computer Modern"],
+    "font.serif": font_serif,
 })
 
 # %%
