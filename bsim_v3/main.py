@@ -61,10 +61,11 @@ plant = KinematicBicycle5StateRearWheelRefPlant(
     x0,
     dt,
     L=4.094, # m, taken from the racecar
-    max_steer=0.5, # rad
-    max_speed=300 / 3.6, # m/s
-    max_accel=4 * 9.81, # m/s^2
-    max_steer_rate=10, # rad/s
+    max_steer=0.59, # rad
+    max_speed=107.29, # m/s
+    # TODO: add max deceleration
+    max_accel=3.3 * 9.81, # m/s^2
+    max_steer_rate=np.inf, # rad/s
 )
 sensor = KinematicBicycleRaceDaySensor()
 fault_generators = [
