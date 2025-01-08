@@ -56,7 +56,7 @@ plt.rcParams.update({
 # %%
 
 dt = 0.01
-x0 = np.array([0, 0, 0, 0, 0])
+x0 = np.array([100, 200, 0, 0, 0])
 plant = KinematicBicycle5StateRearWheelRefPlant(
     x0,
     dt,
@@ -69,17 +69,17 @@ plant = KinematicBicycle5StateRearWheelRefPlant(
 sensor = KinematicBicycleRaceDaySensor()
 fault_generators = [
     # Sensor noise
-    random_noise_fault(0, 0, 0.1),
-    random_noise_fault(0, 1, 0.1),
-    random_noise_fault(0, 2, 0.05),
-    random_noise_fault(0, 3, 0.3),
-    random_noise_fault(0, 4, 0.3),
-    random_noise_fault(0, 5, 0.01),
+    # random_noise_fault(0, 0, 0.1),
+    # random_noise_fault(0, 1, 0.1),
+    # random_noise_fault(0, 2, 0.05),
+    # random_noise_fault(0, 3, 0.3),
+    # random_noise_fault(0, 4, 0.3),
+    # random_noise_fault(0, 5, 0.01),
 
     # Faults
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
-    sensor_bias_fault(18 / dt, 2, -1),
+    # sensor_bias_fault(18 / dt, 2, -1),
     # sensor_bias_fault(18 / dt, 3, 40),
     # random_noise_fault(4 / dt, 3, 5),
     ## faults from the beginning
@@ -93,7 +93,7 @@ fault_generators = [
 x0_hat = x0 + np.array([2, 2, 1, 0.1, 0.01]) # initial state estimate
 noise_std = np.array([0.5, 0.5, 0.1, 0.5, 0.5, 0.1]) # measurement noise
 P = np.diag([1,1,0.3,0.5,0.1]) # initial state covariance
-R = np.diag(noise_std**2) # measurement noise
+R = np.diag((noise_std)**2) # measurement noise
 Q = np.diag([0.1,0.1,0.01,0.1,0.001]) # process noise
 estimator = SimpleUKF(plant.model, sensor, dt, x0_hat, P, R, Q)
 
@@ -113,7 +113,7 @@ controller = KinematicBicycle5StatePurePursuitController(
     L=plant.L,
     max_steer_rate=plant.model.max_steer_rate,
     max_accel=plant.model.max_accel,
-    lookahead_fn=lambda v: 0.5 * v,
+    lookahead_fn=lambda v: 0.25 * v,
     dt=dt,
 )
 
@@ -175,7 +175,7 @@ x_hat = np.array(x_hat_list)
 z = np.array(z_list)
 validities = np.array(validity_list)
 
-print("Invalid sensors:")
+print("Invalid sensors (time step, sensor idx)")
 print(np.array((validities != True).nonzero()).transpose())
 
 # %%
@@ -259,7 +259,7 @@ ax = plt.subplot(326)
 ax.plot([m.total_time for m in calc_validity_meta], label="Total time")
 ax.plot([m.optimizer_metadata.setup_time if m.optimizer_metadata else np.nan for m in calc_validity_meta], label="Setup time")
 ax.plot([m.optimizer_metadata.solve_time if m.optimizer_metadata else np.nan for m in calc_validity_meta], label="Solve time")
-ax.set_ylim(0, 0.02)
+ax.set_ylim(0, np.max([m.total_time for m in calc_validity_meta] + [0.02]) * 1.1)
 ax.set_xlabel("Time step")
 ax.set_ylabel("Time [s]")
 ax.set_title("Detector runtime")
