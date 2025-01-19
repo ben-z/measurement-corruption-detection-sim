@@ -24,7 +24,7 @@ from tqdm import tqdm
 MAX_POOL_SIZE = int(os.environ.get('MAX_POOL_SIZE', 240))
 
 #################################################################
-# General utility functions
+# MARK: General utility functions
 #################################################################
 
 def wrap_to_pi(x):
@@ -87,7 +87,7 @@ def calculate_segment_lengths(points: List[Tuple[float, float]]) -> List[float]:
     ]
 
 #################################################################
-# Models
+# MARK: Models
 #################################################################
 
 # Kinematic bicycle model
@@ -215,7 +215,7 @@ def calc_input_effects_on_output(As, Bs, Cs, inputs):
     return output_effects
 
 #################################################################
-# Paths
+# MARK: Paths
 #################################################################
 
 # Derived from research-jackal
@@ -297,7 +297,7 @@ def generate_figure_eight_approximation(center, length, width, num_points):
     return points, headings, curvatures, dK_ds_list
 
 #################################################################
-# Path Helper Functions
+# MARK: Path Helper Functions
 #################################################################
 
 def closest_point_idx(points, x, y):
@@ -402,7 +402,7 @@ def walk_trajectory_by_durations(path_points, velocities, starting_idx, duration
     return indices
 
 #################################################################
-# Controllers
+# MARK: Controllers
 #################################################################
 
 class PIDController:
@@ -423,7 +423,7 @@ class PIDController:
         return self.kp * error + self.ki * self.integral + self.kd * derivative
 
 #################################################################
-# Research Functions
+# MARK: Research Functions
 #################################################################
 
 # Stripped down cvxpy.Problem that is serializable
@@ -906,7 +906,7 @@ def estimate_state(
         return x_hat, None, metadata
 
     ###########################################################################
-    # Fault detection
+    # MARK: estimate_state: Fault detection
     ###########################################################################
     if len(output_hist) < N:
         print(f"Insufficient data to solve for corrupt sensors. Need {N} outputs, only have {len(output_hist)}")
