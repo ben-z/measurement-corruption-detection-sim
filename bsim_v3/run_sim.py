@@ -298,8 +298,11 @@ def run_multiple(
                 actual_fault_type = random.choice(list(FAULT_RANGES.keys()))
             else:
                 actual_fault_type = fault_type
-            fault_fn_factory, fault_params = create_fault_fn(actual_fault_type, sensor_idx)
+            fault_fn_factory, params = create_fault_fn(actual_fault_type, sensor_idx)
             fault_func = fault_fn_factory(fault_start_time)
+
+            fault_types.append(actual_fault_type)
+            fault_params.append(params)
             fault_functions.append(fault_func)
 
         # Determine detector eps
@@ -371,6 +374,7 @@ def _post_process(df_runs):
     fault_start_times = grouped["fault_start_time"].first()
 
     num_faulty_sensors = grouped["num_faulty_sensors"].first()
+    fault_params_0 = grouped["fault_params_0"].first()
 
     # fault_types = []
     # fault_params = []
