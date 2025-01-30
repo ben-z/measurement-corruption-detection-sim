@@ -1,30 +1,31 @@
+import glob
 import os
-import time
 import random
+import time
+from pathlib import Path
+from typing import List
+
 import numpy as np
 import pandas as pd
 import typer
-from tqdm import tqdm
-
 # ----- Local imports (your existing modules) -----
-from lib.controllers.pure_pursuit import KinematicBicycle5StatePurePursuitController
-from lib.detectors.detector import LookAheadDetector, CalcValidityMetadata
+from lib.controllers.pure_pursuit import \
+    KinematicBicycle5StatePurePursuitController
+from lib.detectors.detector import CalcValidityMetadata, LookAheadDetector
 from lib.estimators.simple_ukf import SimpleUKF
-from lib.fault_generators import (
-    sensor_bias_fault,
-    spike_fault,
-    random_noise_fault,
-    # if you have an intermittent_fault or complete_failure in your pipeline,
-    # you can import them as well
-)
+from lib.fault_generators import (drift_fault, random_noise_fault,
+                                  sensor_bias_fault, spike_fault)
 from lib.planners.static import StaticFigureEightPlanner
 from lib.planners.utils import calc_target_velocity
-from lib.plants.kinematic_bicycle import KinematicBicycle5StateRearWheelRefPlant
-from lib.sensors.kinematic_bicycle_race_day import KinematicBicycleRaceDaySensor
+from lib.plants.kinematic_bicycle import \
+    KinematicBicycle5StateRearWheelRefPlant
+from lib.sensors.kinematic_bicycle_race_day import \
+    KinematicBicycleRaceDaySensor
+from tqdm import tqdm
 
 # ----- CLI setup with Typer -----
 app = typer.Typer(
-    help="Run multiple experiments with a chosen fault type and save to Parquet."
+    help="Run multiple simulations with a chosen fault type and save to Parquet."
 )
 
 # ----- Disable multithreading for numpy (optional) -----
@@ -34,27 +35,6 @@ os.environ["OPENBLAS_NUM_THREADS"] = NUM_THREADS
 os.environ["MKL_NUM_THREADS"] = NUM_THREADS
 os.environ["VECLIB_MAXIMUM_THREADS"] = NUM_THREADS
 os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
-
-
-# -----------------------------------------------------------------------------
-# Custom drift fault, if needed
-# -----------------------------------------------------------------------------
-def drift_fault(tstart, sensor_idx, drift_rate):
-    """
-    A fault function that adds a linearly increasing offset
-    (i.e., drift) to the given sensor after tstart.
-    drift = drift_rate * (k - tstart) for k >= tstart.
-    """
-
-    def fault_fn(k, z):
-        if k < tstart:
-            return z
-        corrupted = z.copy()
-        steps_since_start = k - tstart
-        corrupted[sensor_idx] += drift_rate * steps_since_start
-        return corrupted
-
-    return fault_fn
 
 
 # -----------------------------------------------------------------------------
@@ -82,10 +62,11 @@ FAULT_RANGES = {
         "steering": (-np.pi / 16, np.pi / 16),  # rad/s
     },
 }
+FAULT_TYPES = list(FAULT_RANGES.keys())
 
 # Direct mapping from sensor_idx to the type in FAULT_RANGES
 PARAM_RANGE_KEY = {
-    0: None,  # x-position (no injection or treat as steering if you prefer)
+    0: None,  # x-position
     1: None,  # y-position
     2: "heading",
     3: "velocity",
@@ -93,16 +74,31 @@ PARAM_RANGE_KEY = {
     5: "steering",
 }
 
+flatten = lambda t: [item for sublist in t for item in sublist]
+
+def expand_glob(
+    ctx: typer.Context, param: typer.CallbackParam, values: List[Path]
+) -> List[Path]:
+    expanded_files = []
+    for value in values:
+        if (
+            "*" in value.as_posix()
+            or "?" in value.as_posix()
+            or "[" in value.as_posix()
+        ):
+            expanded_files.extend(Path().glob(value.as_posix()))
+        else:
+            expanded_files.append(value.resolve())
+
+    return expanded_files
+
 
 def create_fault_fn(fault_type, sensor_idx):
     """
     Given a fault type (bias, spike, noise, drift) and a sensor index,
     return a function that, given tstart, produces the final fault function.
-    If `fault_type` is "random", pick from {bias, spike, noise, drift}.
+    Also returns the fault parameters.
     """
-    if fault_type == "random":
-        fault_type = random.choice(["bias", "spike", "noise", "drift"])
-
     # Determine the parameter-range key from the dictionary
     fkey = PARAM_RANGE_KEY.get(sensor_idx)
     # If None, fallback to "steering" or skip entirely.
@@ -113,16 +109,16 @@ def create_fault_fn(fault_type, sensor_idx):
     param = random.uniform(low, high)
 
     if fault_type == "bias":
-        return lambda tstart: sensor_bias_fault(tstart, sensor_idx, bias=param)
+        return lambda tstart: sensor_bias_fault(tstart, sensor_idx, bias=param), {"bias": param}
     elif fault_type == "spike":
         duration = random.randint(1, 10)
         return lambda tstart: spike_fault(
             tstart, sensor_idx, amplitude=param, duration=duration
-        )
+        ), {"amplitude": param, "duration": duration}
     elif fault_type == "noise":
-        return lambda tstart: random_noise_fault(tstart, sensor_idx, amplitude=param)
+        return lambda tstart: random_noise_fault(tstart, sensor_idx, amplitude=param), {"amplitude": param}
     elif fault_type == "drift":
-        return lambda tstart: drift_fault(tstart, sensor_idx, drift_rate=param)
+        return lambda tstart: drift_fault(tstart, sensor_idx, drift_rate=param), {"drift_rate": param}
     else:
         raise ValueError(f"Unknown fault type: {fault_type}")
 
@@ -260,30 +256,30 @@ def run_single_simulation(dt, fault_generators, detector_eps, sim_time=65.0):
 
 
 # -----------------------------------------------------------------------------
-# Main function to run multiple experiments
+# Main function to run multiple simulations
 # -----------------------------------------------------------------------------
 @app.command()
-def run_experiments(
-    out_file: str = typer.Option(
+def run_multiple(
+    out_file: Path = typer.Option(
         "results.csv", help="Path to output file."
     ),
-    num_experiments: int = typer.Option(5, help="Number of experiments to run."),
+    num_simulations: int = typer.Option(5, help="Number of simulations to run."),
     fault_type: str = typer.Option(
         "random",
-        help="Choose fault type: 'bias', 'spike', 'noise', 'drift', or 'random'.",
+        help="Choose fault type: " + ", ".join(FAULT_TYPES) + ", or random.",
     ),
     dt: float = typer.Option(0.01, help="Time step (s)."),
     time_per_sim: float = typer.Option(65.0, help="Simulation time (s)."),
 ):
     """
-    Run multiple experiments, each injecting faults of a specified or random type,
+    Run multiple simulations, each injecting faults of a specified or random type,
     and save all results in a single Parquet file.
     """
 
     # We will store each experiment's DataFrame in a list
     all_dfs = []
 
-    for exp_id in tqdm(range(num_experiments), desc="Experiments"):
+    for exp_id in tqdm(range(num_simulations), desc="Simulations"):
         # Decide how many sensors to fault (1 or 2 for demonstration)
         num_faulty_sensors = random.choice([1, 2])
 
@@ -292,11 +288,17 @@ def run_experiments(
         faulty_sensors = random.sample(possible_sensors, k=num_faulty_sensors)
 
         # Build fault generator functions
+        fault_start_time = random.randint(1, int(time_per_sim / dt))  # same random start time for all sensors
         fault_functions = []
+        fault_types = []
+        fault_params = []
         for sensor_idx in faulty_sensors:
             # This picks the user-specified (or random) fault type for each sensor
-            fault_fn_factory = create_fault_fn(fault_type, sensor_idx)
-            fault_start_time = random.randint(1, int(time_per_sim / dt))  # random start time
+            if fault_type == "random":
+                actual_fault_type = random.choice(list(FAULT_RANGES.keys()))
+            else:
+                actual_fault_type = fault_type
+            fault_fn_factory, fault_params = create_fault_fn(actual_fault_type, sensor_idx)
             fault_func = fault_fn_factory(fault_start_time)
             fault_functions.append(fault_func)
 
@@ -308,27 +310,83 @@ def run_experiments(
         df_run = run_single_simulation(dt, fault_functions, detector_eps, sim_time=time_per_sim)
 
         # Tag metadata
-        df_run["experiment_id"] = exp_id
-        df_run["faulty_sensors"] = str(faulty_sensors)
-        df_run["fault_type"] = fault_type
+        df_run["sim_id"] = exp_id
         df_run["eps_scaler"] = eps_scaler
+        df_run["fault_start_time"] = fault_start_time
+        
+        df_run["num_faulty_sensors"] = num_faulty_sensors
+        for i, sensor_idx in enumerate(faulty_sensors):
+            df_run[f"faulty_sensor_{i}"] = sensor_idx
+        
+        for i, (t, p) in enumerate(zip(fault_types, fault_params)):
+            df_run[f"fault_type_{i}"] = t
+            df_run[f"fault_params_{i}"] = str(p)
 
         all_dfs.append(df_run)
 
-    # Combine all experiments into a single DataFrame
+    # Combine all simulations into a single DataFrame
     df_all = pd.concat(all_dfs, ignore_index=True)
 
     # Save to Parquet
-    if out_file.endswith(".parquet"):
+    if out_file.suffix == ".parquet":
         df_all.to_parquet(out_file)
-    elif out_file.endswith(".csv"):
+    elif out_file.suffix == ".csv":
         df_all.to_csv(out_file, index=False)
-    typer.echo(f"Saved {num_experiments} experiments to {out_file}")
+    else:
+        print(f"WARNING: Unknown file extension: {out_file.suffix}. Saving as CSV instead.")
+        df_all.to_csv(out_file.with_suffix(".csv"), index=False)
 
+    typer.echo(f"Saved {num_simulations} simulations to {out_file}")
 
-def main():
-    app()
+@app.command()
+def post_process(results_files: List[Path] = typer.Argument(..., callback=expand_glob, help="Path to results file(s).")):
+    dfs = []
+    for results_file in results_files:
+        if results_file.suffix == ".parquet":
+            df = pd.read_parquet(results_file)
+        elif results_file.suffix == ".csv":
+            df = pd.read_csv(results_file)
+        
+        if "sim_id" not in df.columns:
+            print("WARNING: sim_id not found in DataFrame. Treating as a single simulation.")
+            df["sim_id"] = f"{results_file.stem}-0"
+        else:
+            df["sim_id"] = f"{results_file.stem}-" + df['sim_id'].astype(str)
+        
+        dfs.append(df)
+
+    _post_process(pd.concat(dfs, ignore_index=True))
+
+def _post_process(df_runs):
+    validity_columns = [col for col in df_runs.columns if col.startswith("valid_sensor_")]
+
+    grouped = df_runs.groupby("sim_id")
+
+    detected_faults = grouped[validity_columns].any().apply(lambda x: not x.all(), axis=1)
+
+    assert (grouped["eps_scaler"].nunique() == 1).all(), f"Multiple eps_scalers detected: {grouped['eps_scaler'].unique()}"
+    eps_scalers = grouped["eps_scaler"].first()
+
+    assert (grouped["fault_start_time"].nunique() == 1).all(), f"Multiple fault_start_times detected: {grouped['fault_start_time'].unique()}"
+    fault_start_times = grouped["fault_start_time"].first()
+
+    num_faulty_sensors = grouped["num_faulty_sensors"].first()
+
+    # fault_types = []
+    # fault_params = []
+    # faulty_sensors = []
+    # for i in range(num_faulty_sensors):
+    #     if f"faulty_sensor_{i}" in df_runs.columns:
+    #         faulty_sensors.append(grouped[f"faulty_sensor_{i}"].first())
+    #         fault_types.append(grouped[f"fault_type_{i}"].first())
+    #         fault_params.append(grouped[f"fault_params_{i}"].first())
+    #     else:
+    #         faulty_sensors.append(None)
+    #         fault_types.append(None)
+    #         fault_params.append(None)
+
+    import pdb; pdb.set_trace()
 
 
 if __name__ == "__main__":
-    main()
+    app()

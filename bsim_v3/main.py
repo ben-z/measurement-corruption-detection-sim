@@ -81,7 +81,7 @@ fault_generators = [
     # sensor_bias_fault(0, 0, 10),
     # sensor_bias_fault(0, 1, 10),
     # sensor_bias_fault(18 / dt, 2, -1),
-    # sensor_bias_fault(18 / dt, 3, 40),
+    sensor_bias_fault(18 / dt, 3, 5),
     # random_noise_fault(4 / dt, 3, 5),
     ## faults from the beginning
     # sensor_bias_fault(0, 2, -1),
@@ -137,7 +137,7 @@ controller_meta: list[dict] = []
 calc_validity_meta: list[CalcValidityMetadata] = []
 print("Starting simulation...")
 start = time.perf_counter()
-for k in tqdm(range(int(65 / dt))):
+for k in tqdm(range(int(25 / dt))):
     # print(f"{k=}")
 
     state = plant.get_state()
