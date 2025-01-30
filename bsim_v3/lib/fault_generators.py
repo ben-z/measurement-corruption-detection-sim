@@ -43,19 +43,19 @@ def drift_fault(start_t, sensor_idx, drift_rate):
     return fault_generator
 
 
-def random_noise_fault(start_t, sensor_idx, noise_level):
+def random_noise_fault(start_t, sensor_idx, amplitude):
     def fault_generator(t, output):
         if t >= start_t:
-            output[sensor_idx] += random.uniform(-noise_level, noise_level)
+            output[sensor_idx] += random.uniform(-amplitude, amplitude)
         return output
 
     return fault_generator
 
 
-def spike_fault(start_t, sensor_idx, spike_value, duration):
+def spike_fault(start_t, sensor_idx, amplitude, duration):
     def fault_generator(t, output):
         if start_t <= t < start_t + duration:
-            output[sensor_idx] += spike_value
+            output[sensor_idx] += amplitude
         return output
 
     return fault_generator
