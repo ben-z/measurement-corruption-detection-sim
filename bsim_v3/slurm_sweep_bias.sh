@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=bias-sweep
+#SBATCH --job-name=bias-sweep-2
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2G
 
-#SBATCH --array=1-200
+#SBATCH --array=1-1000
 
 #SBATCH --output=logs/slurm-%A_%a_%N_%x.out 	  # Filename pattern: https://slurm.schedmd.com/sbatch.html#lbAH
 #SBATCH --time=0-03:00:00

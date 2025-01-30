@@ -43,17 +43,17 @@ os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
 FAULT_RANGES = {
     "bias": {
         "heading": (-np.pi / 4, np.pi / 4),
-        "velocity": (-5, 5),
+        "velocity": (-10, 10),
         "steering": (-np.pi / 8, np.pi / 8),
     },
     "spike": {
         "heading": (-np.pi / 4, np.pi / 4),
-        "velocity": (-5, 5),
+        "velocity": (-10, 10),
         "steering": (-np.pi / 8, np.pi / 8),
     },
     "noise": {
         "heading": (0, np.pi / 4),  # amplitude
-        "velocity": (0, 5),  # amplitude
+        "velocity": (0, 10),  # amplitude
         "steering": (0, np.pi / 8),  # amplitude
     },
     "drift": {
@@ -374,6 +374,7 @@ def _post_process(df_runs):
     fault_start_times = grouped["fault_start_time"].first()
 
     num_faulty_sensors = grouped["num_faulty_sensors"].first()
+    faulty_sensor_0 = grouped["faulty_sensor_0"].first()
     fault_params_0 = grouped["fault_params_0"].first()
 
     # fault_types = []
