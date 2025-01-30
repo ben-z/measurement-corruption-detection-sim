@@ -137,7 +137,7 @@ controller_meta: list[dict] = []
 calc_validity_meta: list[CalcValidityMetadata] = []
 print("Starting simulation...")
 start = time.perf_counter()
-for k in tqdm(range(int(20 / dt))):
+for k in tqdm(range(int(65 / dt))):
     # print(f"{k=}")
 
     state = plant.get_state()
