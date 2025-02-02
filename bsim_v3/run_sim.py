@@ -277,7 +277,7 @@ def run_multiple(
     and save all results in a single Parquet file.
     """
 
-    for sim_id in tqdm(range(num_simulations), desc="Simulations"):
+    for sim_idx in tqdm(range(num_simulations), desc="Simulations"):
         # Decide how many sensors to fault (1 or 2 for demonstration)
         num_faulty_sensors = random.choice([1, 2])
 
@@ -311,11 +311,15 @@ def run_multiple(
         df_timeseries = run_single_simulation(dt, fault_functions, detector_eps, sim_time=time_per_sim)
 
         # Tag metadata
-        df_timeseries["sim_id"] = sim_id
+        df_timeseries["sim_idx"] = sim_idx
+
+        out_file = out_file_template.with_name(out_file_template.stem + f".{sim_idx}" + out_file_template.suffix)
+        out_file_meta = out_file.with_suffix(".meta.json")
 
         # Store simulation parameters
         sim_metadata = {
-            "sim_id": sim_id,
+            "sim_file": out_file.name,
+            "sim_idx": sim_idx,
             "eps_scaler": eps_scaler,
             "fault_start_time": fault_start_time,
             "num_faulty_sensors": num_faulty_sensors,
@@ -323,9 +327,6 @@ def run_multiple(
             "fault_types": fault_types,
             "fault_params": fault_params,
         }
-
-        out_file = out_file_template.with_name(out_file_template.stem + f".{sim_id}" + out_file_template.suffix)
-        out_file_meta = out_file.with_suffix(".meta.json")
 
         if out_file.suffix == ".parquet":
             df_timeseries.to_parquet(out_file)
