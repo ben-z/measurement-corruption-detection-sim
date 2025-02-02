@@ -16,7 +16,17 @@ class CalcValidityMetadata(NamedTuple):
 
 
 class Detector:
-    def __init__(self, model, sensor, N, dt, eps):
+    def __init__(self, model, sensor, N, dt, eps, S_list):
+        """
+        Initialize the detector.
+        Parameters:
+            model: The plant model
+            sensor: The sensor
+            N: The window size
+            dt: The time step
+            eps: The noise tolerance
+            S_list: The list of sensor combinations to try to check if the combination is valid. If a sensor is protected, all sets containing the sensor should exist in S_list.
+        """
         assert len(eps) == sensor.num_outputs, f"{len(eps)} != {sensor.num_outputs=}"
 
         self.model = model
@@ -24,6 +34,7 @@ class Detector:
         self.N = N
         self.dt = dt
         self.eps = eps
+        self.S_list = S_list
         self.optimizer = Optimizer(N, sensor.num_outputs, model.num_states)
         self.Cs = []
         self.us = []
@@ -124,7 +135,7 @@ class Detector:
         Phi, Y = self.get_optimizer_params()
 
         optimizer_res = self.optimizer.optimize_l0_v4(
-            Phi, Y, self.eps, solver_args={"solver": cp.CLARABEL}
+            Phi, Y, self.eps, solver_args={"solver": cp.CLARABEL}, S_list=self.S_list,
         )
 
         end = time.perf_counter()

@@ -18,6 +18,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+from more_itertools import powerset
 from tqdm import tqdm
 from lib.controllers.pure_pursuit import KinematicBicycle5StatePurePursuitController
 from lib.detectors.detector import Detector, EveryEstimateDetector, LookAheadDetector, CalcValidityMetadata
@@ -124,7 +125,8 @@ N = plant.model.num_states
 # detector_class = Detector
 detector_class = LookAheadDetector
 # detector_class = EveryEstimateDetector
-detector = detector_class(plant.model, sensor, N, dt, noise_std * 3)
+# Sensors 0 and 1 are protected
+detector = detector_class(plant.model, sensor, N, dt, noise_std * 3, set(powerset(range(6))) - set(powerset([2,3,4,5])))
 
 # Simulate the plant
 x_list: list[np.ndarray] = []

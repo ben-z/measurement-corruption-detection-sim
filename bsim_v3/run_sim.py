@@ -9,6 +9,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 import typer
+from more_itertools import powerset
 # ----- Local imports (your existing modules) -----
 from lib.controllers.pure_pursuit import \
     KinematicBicycle5StatePurePursuitController
@@ -127,7 +128,7 @@ def create_fault_fn(fault_type, sensor_idx):
 # -----------------------------------------------------------------------------
 # Single simulation run
 # -----------------------------------------------------------------------------
-def run_single_simulation(dt, fault_generators, detector_eps, sim_time=65.0):
+def run_single_simulation(dt, fault_generators, detector_eps, S_list, sim_time=65.0):
     """
     Run a single simulation with the given list of fault generator functions.
     Return a pandas DataFrame with the time-series data.
@@ -176,7 +177,9 @@ def run_single_simulation(dt, fault_generators, detector_eps, sim_time=65.0):
 
     # Detector
     N = plant.model.num_states
-    detector = LookAheadDetector(plant.model, sensor, N, dt, detector_eps)
+    detector = LookAheadDetector(
+        plant.model, sensor, N, dt, detector_eps, S_list
+    )
 
     # Data storage
     x_list = []
@@ -282,8 +285,10 @@ def run_multiple(
         num_faulty_sensors = random.choice([1, 2])
 
         # Randomly pick sensors to fault
-        possible_sensors = [2, 3, 4, 5]  # heading, velocity1, velocity2, steering
-        faulty_sensors = random.sample(possible_sensors, k=num_faulty_sensors)
+        # Implicit here is that sensors 0 and 1 are protected.
+        all_possible_sensors = [0, 1, 2, 3, 4, 5]
+        possible_faulty_sensors = [2, 3, 4, 5]  # heading, velocity1, velocity2, steering
+        faulty_sensors = random.sample(possible_faulty_sensors, k=num_faulty_sensors)
 
         # Build fault generator functions
         fault_start_time = random.randint(1, int(time_per_sim / dt))  # same random start time for all sensors
@@ -308,7 +313,7 @@ def run_multiple(
         detector_eps = np.array([1.5,1.5,0.3,1.5,1.5,0.3]) * eps_scaler
 
         # Run simulation
-        df_timeseries = run_single_simulation(dt, fault_functions, detector_eps, sim_time=time_per_sim)
+        df_timeseries = run_single_simulation(dt, fault_functions, detector_eps, S_list=set(powerset(all_possible_sensors)) - set(powerset(possible_faulty_sensors)), sim_time=time_per_sim)
 
 
         out_file = out_file_template.with_name(out_file_template.stem + f".{sim_idx}" + out_file_template.suffix)
