@@ -365,7 +365,7 @@ def _post_process(df_runs):
 
     grouped = df_runs.groupby("sim_id")
 
-    detected_faults = grouped[validity_columns].any().apply(lambda x: not x.all(), axis=1)
+    detected_faults = grouped[validity_columns].all().apply(lambda x: not x.all(), axis=1)
 
     assert (grouped["eps_scaler"].nunique() == 1).all(), f"Multiple eps_scalers detected: {grouped['eps_scaler'].unique()}"
     eps_scalers = grouped["eps_scaler"].first()
