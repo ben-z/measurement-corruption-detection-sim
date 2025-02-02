@@ -261,8 +261,8 @@ def run_single_simulation(dt, fault_generators, detector_eps, sim_time=65.0):
 # -----------------------------------------------------------------------------
 @app.command()
 def run_multiple(
-    out_file: Path = typer.Option(
-        "results.csv", help="Path to output file."
+    out_file_template: Path = typer.Option(
+        "results.csv", help="Template for the output file name."
     ),
     num_simulations: int = typer.Option(5, help="Number of simulations to run."),
     fault_type: str = typer.Option(
@@ -277,10 +277,7 @@ def run_multiple(
     and save all results in a single Parquet file.
     """
 
-    # We will store each experiment's DataFrame in a list
-    all_dfs = []
-
-    for exp_id in tqdm(range(num_simulations), desc="Simulations"):
+    for sim_id in tqdm(range(num_simulations), desc="Simulations"):
         # Decide how many sensors to fault (1 or 2 for demonstration)
         num_faulty_sensors = random.choice([1, 2])
 
@@ -311,36 +308,37 @@ def run_multiple(
         detector_eps = np.array([1.5,1.5,0.3,1.5,1.5,0.3]) * eps_scaler
 
         # Run simulation
-        df_run = run_single_simulation(dt, fault_functions, detector_eps, sim_time=time_per_sim)
+        df_timeseries = run_single_simulation(dt, fault_functions, detector_eps, sim_time=time_per_sim)
 
         # Tag metadata
-        df_run["sim_id"] = exp_id
-        df_run["eps_scaler"] = eps_scaler
-        df_run["fault_start_time"] = fault_start_time
+        df_timeseries["sim_id"] = sim_id
+
+        # Store simulation parameters
+        sim_metadata = {
+            "sim_id": sim_id,
+            "eps_scaler": eps_scaler,
+            "fault_start_time": fault_start_time,
+            "num_faulty_sensors": num_faulty_sensors,
+            "faulty_sensors": faulty_sensors,
+            "fault_types": fault_types,
+            "fault_params": fault_params,
+        }
+
+        out_file = out_file_template.with_name(out_file_template.stem + f".{sim_id}" + out_file_template.suffix)
+        out_file_meta = out_file.with_suffix(".meta.json")
+
+        if out_file.suffix == ".parquet":
+            df_timeseries.to_parquet(out_file)
+        elif out_file.suffix == ".csv":
+            df_timeseries.to_csv(out_file, index=False)
+        else:
+            print(f"WARNING: Unknown file extension: {out_file.suffix}. Defaulting to CSV.")
+            df_timeseries.to_csv(out_file.with_suffix(".csv"), index=False)
         
-        df_run["num_faulty_sensors"] = num_faulty_sensors
-        for i, sensor_idx in enumerate(faulty_sensors):
-            df_run[f"faulty_sensor_{i}"] = sensor_idx
-        
-        for i, (t, p) in enumerate(zip(fault_types, fault_params)):
-            df_run[f"fault_type_{i}"] = t
-            df_run[f"fault_params_{i}"] = json.dumps(p)
+        with open(out_file_meta, "w") as f:
+            json.dump(sim_metadata, f)
 
-        all_dfs.append(df_run)
-
-    # Combine all simulations into a single DataFrame
-    df_all = pd.concat(all_dfs, ignore_index=True)
-
-    # Save to Parquet
-    if out_file.suffix == ".parquet":
-        df_all.to_parquet(out_file)
-    elif out_file.suffix == ".csv":
-        df_all.to_csv(out_file, index=False)
-    else:
-        print(f"WARNING: Unknown file extension: {out_file.suffix}. Saving as CSV instead.")
-        df_all.to_csv(out_file.with_suffix(".csv"), index=False)
-
-    typer.echo(f"Saved {num_simulations} simulations to {out_file}")
+    typer.echo(f"Saved {num_simulations} simulations with template {str(out_file_template)}.")
 
 @app.command()
 def post_process(results_files: List[Path] = typer.Argument(..., callback=expand_glob, help="Path to results file(s).")):
