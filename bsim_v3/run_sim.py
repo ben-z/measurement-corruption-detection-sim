@@ -310,16 +310,16 @@ def run_multiple(
         # Run simulation
         df_timeseries = run_single_simulation(dt, fault_functions, detector_eps, sim_time=time_per_sim)
 
-        # Tag metadata
-        df_timeseries["sim_idx"] = sim_idx
 
         out_file = out_file_template.with_name(out_file_template.stem + f".{sim_idx}" + out_file_template.suffix)
         out_file_meta = out_file.with_suffix(".meta.json")
 
+        # Tag metadata
+        df_timeseries["sim_file"] = out_file.name
+
         # Store simulation parameters
         sim_metadata = {
             "sim_file": out_file.name,
-            "sim_idx": sim_idx,
             "eps_scaler": eps_scaler,
             "fault_start_time": fault_start_time,
             "num_faulty_sensors": num_faulty_sensors,
