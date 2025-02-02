@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=bias-sweep-2
+#SBATCH --job-name=bias-sweep-3
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2G
 
