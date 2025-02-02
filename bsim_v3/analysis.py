@@ -32,12 +32,6 @@ def _(Path):
 
 
 @app.cell
-def _():
-    NUM_SENSORS = 6
-    return (NUM_SENSORS,)
-
-
-@app.cell
 def _(BASE_PATH, json, tqdm):
     meta_files = list(BASE_PATH.glob("*.meta.json"))
     raw_metas = [json.load(open(meta_file)) for meta_file in tqdm(meta_files, desc="Loading meta files", total=len(meta_files))]
@@ -76,14 +70,8 @@ def _(deepcopy, raw_metas):
 @app.cell
 def _(pd, processed_metas):
     metas_df = pd.DataFrame(processed_metas).set_index("sim_file")
-    metas_df[:100]
+    metas_df
     return (metas_df,)
-
-
-@app.cell
-def _(metas_df):
-    list(metas_df.index)
-    return
 
 
 @app.cell
@@ -126,7 +114,7 @@ def _(sims_df):
 @app.cell
 def _(grouped, validity_columns):
     is_fault_detected = grouped[validity_columns].all().apply(lambda x: not x.all(), axis=1)
-    is_fault_detected[:10]
+    is_fault_detected
     return (is_fault_detected,)
 
 
