@@ -345,7 +345,7 @@ def run_multiple(
 @app.command()
 def post_process(results_files: List[Path] = typer.Argument(..., callback=expand_glob, help="Path to results file(s).")):
     dfs = []
-    for results_file in results_files:
+    for results_file in tqdm(results_files, total=len(results_files), desc="Reading result files"):
         if results_file.suffix == ".parquet":
             df = pd.read_parquet(results_file)
         elif results_file.suffix == ".csv":
