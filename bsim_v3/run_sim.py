@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import random
 import time
@@ -323,7 +324,7 @@ def run_multiple(
         
         for i, (t, p) in enumerate(zip(fault_types, fault_params)):
             df_run[f"fault_type_{i}"] = t
-            df_run[f"fault_params_{i}"] = str(p)
+            df_run[f"fault_params_{i}"] = json.dumps(p)
 
         all_dfs.append(df_run)
 
