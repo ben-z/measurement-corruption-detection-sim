@@ -64,6 +64,10 @@ def _(deepcopy, raw_metas):
         del meta["fault_params"]
 
         processed_metas.append(meta)
+
+        # # TODO: remove this after debugging
+        # if len(processed_metas) >= 100:
+        #     break
     return i, meta, param, processed_metas, raw_meta, value
 
 
@@ -94,7 +98,23 @@ def _(sims_df):
 
 @app.cell
 def _(mo):
-    mo.md("""## Fault detection performance""")
+    mo.md(
+        """
+        ## Fault detection performance
+
+        For each simulation, we gather the following data:
+
+        - fault metadata (sensor set, time)
+        - detection data
+            - First detected fault (sensor set and time)
+
+        Then look at set-based precision and recall (compare the actual faulty set to the detected faulty set).
+
+        References:
+
+        - https://chatgpt.com/share/679f7571-cfa0-8010-8e16-77b116482e7f
+        """
+    )
     return
 
 
@@ -113,26 +133,46 @@ def _(sims_df):
 
 @app.cell
 def _(grouped, validity_columns):
-    is_fault_detected = grouped[validity_columns].all().apply(lambda x: not x.all(), axis=1)
-    is_fault_detected
-    return (is_fault_detected,)
+    # Whether each sensor is valid during the entire simulation
+    grouped[validity_columns].all()
+    return
 
 
 @app.cell
-def _(metas_df):
-    eps_scalers = metas_df["eps_scaler"]
-    eps_scalers
-    return (eps_scalers,)
+def _(pd, validity_columns):
+    def process_sim(group):
+        exists_invalid_sensors = (group[validity_columns] == False).any(axis=1) # whether each time step (row) has invalid sensors
+        if exists_invalid_sensors.any():
+            first_invalid_index = exists_invalid_sensors.idxmax()  # Get index of first invalid occurrence
+            first_invalid_row = group.loc[first_invalid_index]
+
+            ret = pd.Series({
+                "time_of_detection": first_invalid_row["t"],
+                "is_fault_detected": True,
+                **first_invalid_row[validity_columns].to_dict(),
+            })
+        else:
+            ret = pd.Series({
+                "time_of_detection": None,
+                "is_fault_detected": False,
+                **{col: None for col in validity_columns},
+            })
+        return ret
+    return (process_sim,)
 
 
 @app.cell
-def _(eps_scalers, is_fault_detected, pd):
-    # combine derived results
-    results = pd.DataFrame({
-        "eps_scaler": eps_scalers,
-        "is_fault_detected": is_fault_detected,
-    })
-    results[:100]
+def _(grouped, process_sim):
+    processed = grouped.apply(process_sim)
+    processed
+    return (processed,)
+
+
+@app.cell
+def _(metas_df, pd, processed):
+    # Evaluate metrics
+    results = pd.concat([processed, metas_df], axis="columns")
+    results
     return (results,)
 
 
@@ -152,29 +192,38 @@ def _(results):
 
 
 @app.cell
-def _(is_fault_detected, metas_df, pd, plt, sims_df, sns):
+def _(mo):
+    mo.md(r"""When `eps_scaler` is too large, some faults don't get detected. The faults may be tolerated by the loose threshold.""")
+    return
+
+
+@app.cell
+def _(mo):
+    fault_sensor_dropdown = mo.ui.dropdown(
+        options={str(sensor): sensor for sensor in range(6)},
+        value="2",
+        label="Pick a sensor",
+    )
+    fault_sensor_dropdown
+    return (fault_sensor_dropdown,)
+
+
+@app.cell
+def _(fault_sensor_dropdown, plt, results, sns):
+    # Plot the effects of fault bias on detection
     def _():
-        filtered_metas = metas_df[(metas_df["num_faulty_sensors"] == 1) & (metas_df["fault_0_type"] == "bias")]
-        filtered_sims = sims_df.loc[sims_df.index.isin(filtered_metas.index)]
+        filtered_results = results[(results["num_faulty_sensors"] == 1) & (results["fault_0_type"] == "bias") & (results['fault_0_sensor'] == fault_sensor_dropdown.value)]
 
-        results = pd.DataFrame({
-            "eps_scaler": filtered_metas["eps_scaler"],
-            "is_fault_detected": is_fault_detected,
-            "fault_0_bias": filtered_metas["fault_0_bias"]
-        })
-
-        # import matplotlib.pyplot as plt
-        # import seaborn as sns
         sns.set_theme(style="whitegrid")
         plt.figure(figsize=(10, 6))
-        sns.histplot(data=results, x="fault_0_bias", hue="is_fault_detected", multiple="stack", bins=50)
+        sns.histplot(data=filtered_results, x="fault_0_bias", hue="is_fault_detected", multiple="stack", bins=50)
         plt.xlabel("Fault Bias")
         plt.ylabel("Count")
         plt.title("Effect of Fault Bias on Detection")
         return plt.gca()
-
-
     _()
+
+    # TODO: normalize the fault bias by sensor
     return
 
 
