@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=sweep-1
+#SBATCH --job-name=sweep-2
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2G
 
