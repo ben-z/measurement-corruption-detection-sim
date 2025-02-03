@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=bias-sweep-7
+#SBATCH --job-name=sweep-1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2G
 
-#SBATCH --array=1-1000
+#SBATCH --array=1-5000
 
 #SBATCH --output=logs/slurm-%A_%a_%N_%x.out 	  # Filename pattern: https://slurm.schedmd.com/sbatch.html#lbAH
 #SBATCH --time=0-03:00:00
@@ -35,4 +35,4 @@ if [ -f $HOME/miniconda3/etc/profile.d/conda.sh ]; then source $HOME/miniconda3/
 conda activate research
 set -o nounset -o errexit
 
-python bsim_v3/run_sim.py run-multiple --fault-type bias --out-file-template "$__expdir"/results-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-0}-$(hostname).parquet
+python bsim_v3/run_sim.py run-multiple --out-file-template "$__expdir"/results-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-0}-$(hostname).parquet
