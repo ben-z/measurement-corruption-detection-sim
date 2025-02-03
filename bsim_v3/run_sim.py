@@ -313,7 +313,13 @@ def run_multiple(
         detector_eps = np.array([1.5,1.5,0.3,1.5,1.5,0.3]) * eps_scaler
 
         # Run simulation
-        df_timeseries = run_single_simulation(dt, fault_functions, detector_eps, S_list=set(powerset(all_possible_sensors)) - set(powerset(possible_faulty_sensors)), sim_time=time_per_sim)
+        df_timeseries = run_single_simulation(
+            dt,
+            fault_functions,
+            detector_eps,
+            S_list=[s for s in powerset(all_possible_sensors) if (set(all_possible_sensors)-set(possible_faulty_sensors)).issubset(s)],
+            sim_time=time_per_sim,
+        )
 
 
         out_file = out_file_template.with_name(out_file_template.stem + f".{sim_idx}" + out_file_template.suffix)

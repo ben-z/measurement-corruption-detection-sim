@@ -126,7 +126,17 @@ N = plant.model.num_states
 detector_class = LookAheadDetector
 # detector_class = EveryEstimateDetector
 # Sensors 0 and 1 are protected
-detector = detector_class(plant.model, sensor, N, dt, noise_std * 3, set(powerset(range(6))) - set(powerset([2,3,4,5])))
+detector = detector_class(
+    plant.model,
+    sensor,
+    N,
+    dt,
+    noise_std * 3,
+    # np.array([1.5, 1.5, 0.3, 1.5, 1.5, 0.3]) * 0.01675478978252254,
+    # Only consider cases where sensors 0 and 1 are valid
+    # This is done because we know that sensors 0 and 1 are protected
+    [s for s in powerset(range(6)) if {0, 1}.issubset(s)],
+)
 
 # Simulate the plant
 x_list: list[np.ndarray] = []
