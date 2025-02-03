@@ -274,6 +274,7 @@ def run_multiple(
     ),
     dt: float = typer.Option(0.01, help="Time step (s)."),
     time_per_sim: float = typer.Option(65.0, help="Simulation time (s)."),
+    eps_scaler: float = typer.Option(None, help="The scaler for eps. Randomly samples from U(1,10) if not specified"),
 ):
     """
     Run multiple simulations, each injecting faults of a specified or random type,
@@ -309,7 +310,8 @@ def run_multiple(
             fault_functions.append(fault_func)
 
         # Determine detector eps
-        eps_scaler = random.uniform(0, 10)
+        if not eps_scaler:
+            eps_scaler = random.uniform(0, 10)
         detector_eps = np.array([1.5,1.5,0.3,1.5,1.5,0.3]) * eps_scaler
 
         # Run simulation
