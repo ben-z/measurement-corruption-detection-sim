@@ -27,7 +27,7 @@ def _():
 
 @app.cell
 def _(Path):
-    BASE_PATH = Path("exp/bsim_v3/sweep-1")
+    BASE_PATH = Path("exp/bsim_v3/sweep-2")
     return (BASE_PATH,)
 
 
@@ -39,6 +39,9 @@ def _():
 
 @app.cell
 def _(BASE_PATH, json, tqdm):
+    # [::4] is for thinning out the meta files
+    # meta_files = list(BASE_PATH.glob("*.meta.json"))[::4]
+
     meta_files = list(BASE_PATH.glob("*.meta.json"))
     raw_metas = [json.load(open(meta_file)) for meta_file in tqdm(meta_files, desc="Loading meta files", total=len(meta_files))]
     return meta_files, raw_metas
@@ -149,7 +152,7 @@ def _(grouped, validity_columns):
 def _(metas_df, pd, validity_columns):
     def process_sim(group):
         sim_file = group.iloc[0]["sim_file"]
-        fault_start_idx = metas_df.loc[sim_file, "fault_start_time"]
+        fault_start_idx = metas_df.loc[sim_file, "fault_start_time"]-1
         fault_start_x = group.iloc[fault_start_idx]["x_true"]
         fault_start_y = group.iloc[fault_start_idx]["y_true"]
         fault_start_v = group.iloc[fault_start_idx]["v_true"]
@@ -231,7 +234,7 @@ def _(results_with_metrics):
         import seaborn as sns
         sns.set_theme(style="whitegrid")
         plt.figure(figsize=(10, 6))
-        sns.histplot(data=results_with_metrics[results_with_metrics["is_fault_detected"] == False], x="eps_scaler", hue="precision", multiple="stack", bins=50)
+        sns.histplot(data=results_with_metrics, x="eps_scaler", hue="precision", multiple="stack", bins=50)
         plt.xlabel("eps_scaler")
         plt.ylabel("Count")
         plt.title("Effect of eps_scaler on precision")
@@ -248,7 +251,7 @@ def _(results_with_metrics):
         import seaborn as sns
         sns.set_theme(style="whitegrid")
         plt.figure(figsize=(10, 6))
-        sns.histplot(data=results_with_metrics[results_with_metrics["is_fault_detected"] == False], x="eps_scaler", hue="recall", multiple="stack", bins=50)
+        sns.histplot(data=results_with_metrics, x="eps_scaler", hue="recall", multiple="stack", bins=50)
         plt.xlabel("eps_scaler")
         plt.ylabel("Count")
         plt.title("Effect of eps_scaler on recall")
