@@ -27,8 +27,14 @@ def _():
 
 @app.cell
 def _(Path):
-    BASE_PATH = Path("exp/bsim_v3/bias-sweep-5")
+    BASE_PATH = Path("exp/bsim_v3/sweep-1")
     return (BASE_PATH,)
+
+
+@app.cell
+def _():
+    dt = 0.01 # Must be consistent with the sim.
+    return (dt,)
 
 
 @app.cell
@@ -72,8 +78,9 @@ def _(deepcopy, raw_metas):
 
 
 @app.cell
-def _(pd, processed_metas):
+def _(dt, pd, processed_metas):
     metas_df = pd.DataFrame(processed_metas).set_index("sim_file")
+    metas_df["fault_start_time_s"] = metas_df["fault_start_time"] * dt
     metas_df
     return (metas_df,)
 
@@ -139,8 +146,14 @@ def _(grouped, validity_columns):
 
 
 @app.cell
-def _(pd, validity_columns):
+def _(metas_df, pd, validity_columns):
     def process_sim(group):
+        sim_file = group.iloc[0]["sim_file"]
+        fault_start_idx = metas_df.loc[sim_file, "fault_start_time"]
+        fault_start_x = group.iloc[fault_start_idx]["x_true"]
+        fault_start_y = group.iloc[fault_start_idx]["y_true"]
+        fault_start_v = group.iloc[fault_start_idx]["v_true"]
+
         exists_invalid_sensors = (group[validity_columns] == False).any(axis=1) # whether each time step (row) has invalid sensors
         if exists_invalid_sensors.any():
             first_invalid_index = exists_invalid_sensors.idxmax()  # Get index of first invalid occurrence
@@ -149,12 +162,18 @@ def _(pd, validity_columns):
             ret = pd.Series({
                 "time_of_detection": first_invalid_row["t"],
                 "is_fault_detected": True,
+                "fault_start_x": fault_start_x,
+                "fault_start_y": fault_start_y,
+                "fault_start_v": fault_start_v,
                 **first_invalid_row[validity_columns].to_dict(),
             })
         else:
             ret = pd.Series({
                 "time_of_detection": None,
                 "is_fault_detected": False,
+                "fault_start_x": fault_start_x,
+                "fault_start_y": fault_start_y,
+                "fault_start_v": fault_start_v,
                 **{col: None for col in validity_columns},
             })
         return ret
@@ -178,17 +197,64 @@ def _(metas_df, pd, processed):
 
 @app.cell
 def _(results):
+    # Save results to file
+    results.to_csv("results.csv")
+    return
+
+
+@app.cell
+def _(results_with_metrics):
     # Plot the effect of eps_scaler on fault detection
     import matplotlib.pyplot as plt
     import seaborn as sns
     sns.set_theme(style="whitegrid")
     plt.figure(figsize=(10, 6))
-    sns.histplot(data=results, x="eps_scaler", hue="is_fault_detected", multiple="stack", bins=50)
+    sns.histplot(data=results_with_metrics, x="eps_scaler", hue="is_fault_detected", multiple="stack", bins=50)
     plt.xlabel("eps_scaler")
     plt.ylabel("Count")
     plt.title("Effect of eps_scaler on fault detection")
     plt.show()
     return plt, sns
+
+
+@app.cell
+def _(results_with_metrics):
+    results_with_metrics["is_fault_detected"]==False
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    def _():
+        # Plot the effect of eps_scaler on fault detection
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        sns.set_theme(style="whitegrid")
+        plt.figure(figsize=(10, 6))
+        sns.histplot(data=results_with_metrics[results_with_metrics["is_fault_detected"] == False], x="eps_scaler", hue="precision", multiple="stack", bins=50)
+        plt.xlabel("eps_scaler")
+        plt.ylabel("Count")
+        plt.title("Effect of eps_scaler on precision")
+        return plt.show()
+    _()
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    def _():
+        # Plot the effect of eps_scaler on fault detection
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        sns.set_theme(style="whitegrid")
+        plt.figure(figsize=(10, 6))
+        sns.histplot(data=results_with_metrics[results_with_metrics["is_fault_detected"] == False], x="eps_scaler", hue="recall", multiple="stack", bins=50)
+        plt.xlabel("eps_scaler")
+        plt.ylabel("Count")
+        plt.title("Effect of eps_scaler on recall")
+        return plt.show()
+    _()
+    return
 
 
 @app.cell
@@ -224,6 +290,146 @@ def _(fault_sensor_dropdown, plt, results, sns):
     _()
 
     # TODO: normalize the fault bias by sensor
+    return
+
+
+@app.cell
+def _(pd, results, validity_columns):
+    def calculate_metrics(sim_row, num_sensors):
+        # Get ground truth faulty sensors from metadata
+        num_faulty_sensors = sim_row['num_faulty_sensors']
+        faulty_sensors = set(sim_row[[f'fault_{i}_sensor' for i in range(num_faulty_sensors)]])
+
+        # Get detected sensors (where validity is False)
+        detected_sensors = set()
+        for col in validity_columns:
+            if sim_row[col] is False:
+                detected_sensors.add(int(col.split('_')[-1]))
+
+        # Calculate true positives, false positives, false negatives, and true negatives
+        tp = len(faulty_sensors.intersection(detected_sensors))
+        fp = len(detected_sensors - faulty_sensors)
+        fn = len(faulty_sensors - detected_sensors)
+        tn = num_sensors - (tp + fp + fn)
+
+        # Calculate metrics
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        jaccard = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0 # aka "IoU"
+
+        return pd.Series({
+            'precision': precision,
+            'recall': recall,
+            'jaccard': jaccard,
+            'tp': tp,
+            'fp': fp,
+            'fn': fn,
+            'tn': tn,
+            'detected_sensors': detected_sensors,
+            'faulty_sensors': faulty_sensors,
+        })
+
+    # Apply metrics calculation to each simulation
+    metrics_df = results.apply(calculate_metrics, num_sensors=6, axis=1)
+    results_with_metrics = pd.concat([results, metrics_df], axis=1)
+    return calculate_metrics, metrics_df, results_with_metrics
+
+
+@app.cell
+def _(results_with_metrics):
+    # save results_with_metrics to a file
+    results_with_metrics.to_csv("results_with_metrics.csv")
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    results_with_metrics
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    results_with_metrics["detection_delay"] = results_with_metrics["fault_start_time_s"] - results_with_metrics["time_of_detection"]
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    results_with_metrics
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    results_with_metrics.groupby(["fault_0_type","fault_1_type"],dropna=False)["precision"].describe()
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    results_with_metrics[results_with_metrics["eps_scaler"]<0.5].groupby(["fault_0_type","fault_1_type"],dropna=False)["precision"].describe()
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    results_with_metrics.groupby(["fault_0_sensor","fault_1_sensor"],dropna=False)["recall"].describe()
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    results_with_metrics.groupby(["fault_0_sensor","fault_1_sensor"],dropna=False)["jaccard"].describe()
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _(plt, results_with_metrics, sns):
+    def _():
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        sns.set_style("whitegrid")
+
+        for sensor in range(6):
+            # Filter data for current sensor
+            sensor_data = results_with_metrics[
+                (results_with_metrics[f'fault_0_sensor'] == sensor) |
+                (results_with_metrics[f'fault_1_sensor'] == sensor)
+            ]
+
+            # Calculate metrics
+            avg_precision = sensor_data['precision'].mean()
+            avg_recall = sensor_data['recall'].mean()
+            avg_jaccard = sensor_data['jaccard'].mean()
+            count = len(sensor_data)
+
+            # Plot metrics
+            axes[0].bar(sensor, avg_precision)
+            axes[1].bar(sensor, avg_recall)
+            axes[2].bar(sensor, avg_jaccard)
+
+            # Add count to bars
+            axes[0].text(sensor, avg_precision + 0.01, f'n={count}', ha='center')
+            axes[1].text(sensor, avg_recall + 0.01, f'n={count}', ha='center')
+            axes[2].text(sensor, avg_jaccard + 0.01, f'n={count}', ha='center')
+
+        axes[0].set_title('Precision')
+        axes[1].set_title('Recall')
+        axes[2].set_title('Jaccard Index')
+
+        axes[0].set_xlabel('Sensor')
+        axes[1].set_xlabel('Sensor')
+        axes[2].set_xlabel('Sensor')
+
+        plt.tight_layout()
+        return plt.gca()
+
+    _()
     return
 
 
