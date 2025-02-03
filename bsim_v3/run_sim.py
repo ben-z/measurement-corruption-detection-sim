@@ -309,7 +309,7 @@ def run_multiple(
             fault_functions.append(fault_func)
 
         # Determine detector eps
-        eps_scaler = random.uniform(0, 1)
+        eps_scaler = random.uniform(0, 10)
         detector_eps = np.array([1.5,1.5,0.3,1.5,1.5,0.3]) * eps_scaler
 
         # Run simulation
