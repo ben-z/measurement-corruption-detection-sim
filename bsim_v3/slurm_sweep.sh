@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=sweep-5-fixed-eps
+#SBATCH --job-name=sweep-6-higher-fault-range
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2G
 
