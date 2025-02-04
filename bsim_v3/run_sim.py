@@ -44,24 +44,24 @@ os.environ["NUMEXPR_NUM_THREADS"] = NUM_THREADS
 # -----------------------------------------------------------------------------
 FAULT_RANGES = {
     "bias": {
-        "heading": (-np.pi / 4, np.pi / 4),
+        "heading": (-np.pi / 2, np.pi / 2),
         "velocity": (-10, 10),
-        "steering": (-np.pi / 8, np.pi / 8),
+        "steering": (-np.pi / 4, np.pi / 4),
     },
     "spike": {
-        "heading": (-np.pi / 4, np.pi / 4),
+        "heading": (-np.pi / 2, np.pi / 2),
         "velocity": (-10, 10),
-        "steering": (-np.pi / 8, np.pi / 8),
+        "steering": (-np.pi / 4, np.pi / 4),
     },
     "noise": {
-        "heading": (0, np.pi / 4),  # amplitude
+        "heading": (0, np.pi / 2),  # amplitude
         "velocity": (0, 10),  # amplitude
-        "steering": (0, np.pi / 8),  # amplitude
+        "steering": (0, np.pi / 4),  # amplitude
     },
     "drift": {
         "heading": (-np.pi / 2, np.pi / 2),  # rad/s
-        "velocity": (-15, 15),  # m/s^2
-        "steering": (-np.pi / 16, np.pi / 16),  # rad/s
+        "velocity": (-10, 10),  # m/s^2
+        "steering": (-np.pi / 4, np.pi / 4),  # rad/s
     },
 }
 FAULT_TYPES = list(FAULT_RANGES.keys())
