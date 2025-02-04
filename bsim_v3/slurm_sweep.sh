@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=sweep-4-fixed-eps
+#SBATCH --job-name=sweep-5-fixed-eps
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=2G
 
@@ -35,4 +35,4 @@ if [ -f $HOME/miniconda3/etc/profile.d/conda.sh ]; then source $HOME/miniconda3/
 conda activate research
 set -o nounset -o errexit
 
-python bsim_v3/run_sim.py run-multiple --num-simulations 10 --out-file-template "$__expdir"/results-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-0}-$(hostname).parqueta --eps-scaler 1.0
+python bsim_v3/run_sim.py run-multiple --num-simulations 5 --out-file-template "$__expdir"/results-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-0}-$(hostname).parqueta --eps-scaler 1.0
