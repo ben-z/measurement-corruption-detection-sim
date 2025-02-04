@@ -346,8 +346,8 @@ def run_multiple(
         elif out_file.suffix == ".csv":
             df_timeseries.to_csv(out_file, index=False)
         else:
-            print(f"WARNING: Unknown file extension: {out_file.suffix}. Defaulting to CSV.")
-            df_timeseries.to_csv(out_file.with_suffix(".csv"), index=False)
+            print(f"WARNING: Unknown file extension: {out_file.suffix}. Defaulting to Parquet.")
+            df_timeseries.to_parquet(out_file.with_suffix(".parquet"))
         
         with open(out_file_meta, "w") as f:
             json.dump(sim_metadata, f)
