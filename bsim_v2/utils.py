@@ -581,7 +581,10 @@ class Optimizer:
 
         # sort the list of sensor combinations by size, largest to smallest
         # this is because the optimization algorithm needs to minimize the number of corrupt sensors
-        S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
+        # S_list = sorted(S_list or powerset(range(q)), key=lambda S: len(list(S)), reverse=True)
+        # FIXME: This is janky logic to get deterministic S_list where we prioritize smaller
+        # sets of faulty sensors and prioritize faulty sensors with smaller indices.
+        S_list = sorted(S_list or powerset(range(q)), key=lambda S: (-len(list(S)), -sum(S)))
 
         # Support scalar or vector eps
         self.eps_param.value = np.broadcast_to(eps, (q,))
@@ -1284,7 +1287,8 @@ def find_corruption(output_hist, input_hist, closest_idx_hist, path_points, path
 
             x0_hat, prob, soln_metadata = soln
             if len(soln_metadata['K']) > 0:
-                return {
+                # There is a corruption
+                yield {
                     'k': k,
                     't': k*model_params['dt'],
                     'K': soln_metadata['K'],
@@ -1353,7 +1357,7 @@ def run_experiment(
         simulation['duration'] = time.perf_counter() - start
 
     # Post-analysis
-    corruption = find_corruption(
+    corruption = next(find_corruption(
         output_hist,
         u_hist,
         closest_idx_hist,
@@ -1369,7 +1373,7 @@ def run_experiment(
         model_at_idx=lambda idx: kinematic_bicycle_model_linearize(path_headings[idx], velocity_profile[idx], 0, model_params['dt'], model_params['l']),
         desired_output_fn=lambda i, idx: C @ kinematic_bicycle_model_desired_state_at_idx(idx, path_points, path_headings, velocity_profile),
         normalize_output=kinematic_bicycle_model_normalize_output,
-    )
+    ))
 
     return simulation, corruption
 

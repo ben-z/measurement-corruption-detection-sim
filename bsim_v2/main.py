@@ -228,7 +228,7 @@ for attack_start_t in [10]:
 
     # Post-analysis
     print("Finding corruption")
-    corruption = find_corruption(
+    corruption = next(find_corruption(
         output_hist,
         u_hist,
         closest_idx_hist,
@@ -244,7 +244,7 @@ for attack_start_t in [10]:
         model_at_idx=lambda idx: kinematic_bicycle_model_linearize(path_headings[idx], velocity_profile[idx], 0, model_params['dt'], model_params['l']),
         desired_output_fn=lambda i, idx: C @ kinematic_bicycle_model_desired_state_at_idx(idx, path_points, path_headings, velocity_profile),
         normalize_output=kinematic_bicycle_model_normalize_output,
-    )
+    ))
     if corruption is None:
         print("No corruption found")
     else:
