@@ -597,14 +597,15 @@ def _(results_with_metrics):
         # Combine mean and std into a single string
         for metric in ["precision", "recall"]:
             formatted_table[(metric, "combined")] = formatted_table.apply(
-                lambda row: f"{row[(metric, 'mean')]:.2f} ± {row[(metric, 'std')]:.2f}", axis=1
+                # lambda row: f"{row[(metric, 'mean')]:.2f} ± {row[(metric, 'std')]:.2f}", axis=1
+                lambda row: row[(metric, 'mean')], axis=1
             )
 
         # Keep only the combined column
         formatted_table = formatted_table[[("precision", "combined"), ("recall", "combined")]]
 
         # Rename columns for clarity
-        formatted_table.columns = ["Det. Rate", "Recall"]
+        formatted_table.columns = ["Precision", "Recall"]
 
         # Compute mean and std for detection delay per fault type and sensor
         detection_delay_stats = single_sensor_faults.groupby(["fault_0_type", "fault_0_sensor"])\
@@ -612,7 +613,8 @@ def _(results_with_metrics):
 
         # Format detection delay as "mean ± std"
         detection_delay_stats["Detection Delay (s)"] = detection_delay_stats.apply(
-            lambda row: f"{row['mean']:.2f} ± {row['std']:.2f}", axis=1
+            # lambda row: f"{row['mean']:.2f} ± {row['std']:.2f}", axis=1
+            lambda row: row['mean'], axis=1
         )
 
         # Keep only the formatted column
@@ -621,14 +623,14 @@ def _(results_with_metrics):
         # Merge with the existing table
         formatted_table = formatted_table.join(detection_delay_stats)
 
-        # Compute the sample count for each fault type and sensor combination
-        sample_counts = single_sensor_faults.groupby(["fault_0_type", "fault_0_sensor"]).size()
+        # # Compute the sample count for each fault type and sensor combination
+        # sample_counts = single_sensor_faults.groupby(["fault_0_type", "fault_0_sensor"]).size()
 
-        # Convert to DataFrame and rename column
-        sample_counts = sample_counts.to_frame(name="Sample Count")
+        # # Convert to DataFrame and rename column
+        # sample_counts = sample_counts.to_frame(name="Sample Count")
 
-        # Merge with the formatted table
-        formatted_table = formatted_table.join(sample_counts)
+        # # Merge with the formatted table
+        # formatted_table = formatted_table.join(sample_counts)
 
         # rename index for readability
         formatted_table.index.names = ["Type", "Sensor"]
@@ -636,7 +638,76 @@ def _(results_with_metrics):
         # Use 1-indexed sensors instead of 0-indexed sensors
         formatted_table.index = formatted_table.index.set_levels(formatted_table.index.levels[1] + 1, level=1)
 
-        print(formatted_table.to_latex(column_format="c" * (len(formatted_table.columns) + len(formatted_table.index.names))))
+        print(formatted_table.to_latex(
+            column_format="c" * (len(formatted_table.columns) + len(formatted_table.index.names)),
+            multicolumn_format="c",
+            float_format="{:0.2f}".format,
+        ))
+
+        return formatted_table
+    _()
+    return
+
+
+@app.cell
+def _(results_with_metrics):
+    # Single sensor precision recall table (det rate)
+    def _():
+        single_sensor_faults = results_with_metrics[results_with_metrics["num_faulty_sensors"] == 1]
+
+        # Format the table to combine mean and std into a single column with "mean ± std" format
+        formatted_table = single_sensor_faults.groupby(["fault_0_type", "fault_0_sensor"])\
+            [["precision"]].agg(["mean", "std"])
+
+        # Combine mean and std into a single string
+        for metric in ["precision"]:
+            formatted_table[(metric, "combined")] = formatted_table.apply(
+                lambda row: f"{row[(metric, 'mean')]:.2f} ± {row[(metric, 'std')]:.2f}", axis=1
+                # lambda row: row[(metric, 'mean')], axis=1
+            )
+
+        # Keep only the combined column
+        formatted_table = formatted_table[[("precision", "combined")]]
+
+        # Rename columns for clarity
+        formatted_table.columns = ["Det. Rate"]
+
+        # Compute mean and std for detection delay per fault type and sensor
+        detection_delay_stats = single_sensor_faults.groupby(["fault_0_type", "fault_0_sensor"])\
+            ["detection_delay"].agg(["mean", "std"])
+
+        # Format detection delay as "mean ± std"
+        detection_delay_stats["Det. Delay (s)"] = detection_delay_stats.apply(
+            lambda row: f"{row['mean']:.2f} ± {row['std']:.2f}", axis=1
+            # lambda row: row['mean'], axis=1
+        )
+
+        # Keep only the formatted column
+        detection_delay_stats = detection_delay_stats[["Det. Delay (s)"]]
+
+        # Merge with the existing table
+        formatted_table = formatted_table.join(detection_delay_stats)
+
+        # # Compute the sample count for each fault type and sensor combination
+        # sample_counts = single_sensor_faults.groupby(["fault_0_type", "fault_0_sensor"]).size()
+
+        # # Convert to DataFrame and rename column
+        # sample_counts = sample_counts.to_frame(name="Sample Count")
+
+        # # Merge with the formatted table
+        # formatted_table = formatted_table.join(sample_counts)
+
+        # rename index for readability
+        formatted_table.index.names = ["Type", "Sensor"]
+
+        # Use 1-indexed sensors instead of 0-indexed sensors
+        formatted_table.index = formatted_table.index.set_levels(formatted_table.index.levels[1] + 1, level=1)
+
+        print(formatted_table.to_latex(
+            column_format="c" * (len(formatted_table.columns) + len(formatted_table.index.names)),
+            multicolumn_format="c",
+            float_format="{:0.2f}".format,
+        ))
 
         return formatted_table
     _()
@@ -682,6 +753,78 @@ def _(pd, results_with_metrics):
                 else:
                     stats[(label, "Det. Rate")] = "N/A"
                     stats[(label, "Det. Delay")] = "N/A"
+
+            return pd.Series(stats)
+
+        threshold_based_stats = single_sensor_faults.groupby(["fault_0_type", "fault_0_sensor"]).apply(
+            lambda group: compute_threshold_stats(
+                group,
+                THRESHOLDS[group["fault_0_type"].iloc[0]][group["fault_0_sensor"].iloc[0]],
+                THRESHOLD_COLUMN_NAMES[group["fault_0_type"].iloc[0]],
+            )
+        )
+
+        # Ensure column names are tuples
+        threshold_based_stats.columns = pd.MultiIndex.from_tuples(threshold_based_stats.columns)
+
+        # Rename index for readability
+        threshold_based_stats.index.names = ["Type", "Sensor"]
+
+        # Use 1-indexed sensors instead of 0-indexed sensors
+        threshold_based_stats.index = threshold_based_stats.index.set_levels(threshold_based_stats.index.levels[1] + 1, level=1)
+
+        # Print as LaTeX table for reference
+        print(threshold_based_stats.to_latex(
+            column_format="c" * (len(threshold_based_stats.columns) + len(threshold_based_stats.index.names)),
+            multicolumn_format="c",
+            float_format="{:0.2f}".format,
+        ))
+
+        return threshold_based_stats
+
+    _()
+    return
+
+
+@app.cell
+def _(pd, results_with_metrics):
+    # Threshold-based metrics (condensed)
+    def _():
+        single_sensor_faults = results_with_metrics[results_with_metrics["num_faulty_sensors"] == 1]
+
+        THRESHOLD_COLUMN_NAMES = {
+            'bias': 'fault_0_bias',
+            'drift': 'fault_0_drift_rate',
+            'noise': 'fault_0_amplitude',
+            'spike': 'fault_0_amplitude',
+        }
+        THRESHOLDS = {
+            'bias': [0,0,0.9,3.5,3,0.7],
+            'drift': [0,0,0.8,0.8,0,0.15],
+            'noise': [0,0,0.35,1.5,1,0.31],
+            'spike': [0,0,0.8,3,3,0.65],
+        }
+
+        def compute_threshold_stats(group, threshold, threshold_column):
+            below_thresh = group[group[threshold_column].abs() < threshold]
+            above_thresh = group[group[threshold_column].abs() >= threshold]
+
+            stats = {}
+            stats[("Threshold", "")] = threshold  # Keep this separate from Below/Above sections
+            
+            for subset, label in zip([below_thresh, above_thresh], ["Below Threshold", "Above Threshold"]):
+                # stats[(label, "Samples")] = len(subset)
+                if not subset.empty:
+                    stats[(label, "Rate")] = subset['precision'].mean()
+                    # stats[(label, "Rate")] = f"{subset['precision'].mean():.2f} ± {subset['precision'].std():.2f}"
+                    if len(subset[subset['precision'] > 0]) > 0:
+                        stats[(label, "Delay")] = subset[subset['precision'] > 0]['detection_delay'].mean()
+                        # stats[(label, "Delay")] = f"{subset[subset['precision'] > 0]['detection_delay'].mean():.2f} ± {subset[subset['precision'] > 0]['detection_delay'].std(ddof=0):.2f}"
+                    else:
+                        stats[(label, "Delay")] = "N/A"
+                else:
+                    stats[(label, "Rate")] = "N/A"
+                    stats[(label, "Delay")] = "N/A"
 
             return pd.Series(stats)
 
