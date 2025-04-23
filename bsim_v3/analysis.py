@@ -29,8 +29,9 @@ def _():
 def _(Path):
     # BASE_PATH = Path("exp/bsim_v3/sweep-2")
     # BASE_PATH = Path("exp/bsim_v3/sweep-3")
+    BASE_PATH = Path("exp/bsim_v3/bias-sweep-7")
     # BASE_PATH = Path("exp/bsim_v3/sweep-5-fixed-eps")
-    BASE_PATH = Path("exp/bsim_v3/sweep-6-higher-fault-range")
+    # BASE_PATH = Path("exp/bsim_v3/sweep-6-higher-fault-range")
     return (BASE_PATH,)
 
 
@@ -739,7 +740,7 @@ def _(pd, results_with_metrics):
 
             stats = {}
             stats[("Threshold", "")] = threshold  # Keep this separate from Below/Above sections
-            
+
             for subset, label in zip([below_thresh, above_thresh], ["Below Threshold", "Above Threshold"]):
                 # stats[(label, "Samples")] = len(subset)
                 if not subset.empty:
@@ -811,7 +812,7 @@ def _(pd, results_with_metrics):
 
             stats = {}
             stats[("Threshold", "")] = threshold  # Keep this separate from Below/Above sections
-            
+
             for subset, label in zip([below_thresh, above_thresh], ["Below Threshold", "Above Threshold"]):
                 # stats[(label, "Samples")] = len(subset)
                 if not subset.empty:
