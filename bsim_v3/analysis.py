@@ -40,11 +40,10 @@ def _():
 
 @app.cell
 def _(Path):
-    EXP_NAME = "8-holistic-sweep"
+    # EXP_NAME = "8-holistic-sweep"
     # EXP_NAME = "9-holistic-sweep"
-    # BASE_PATH = Path("exp/bsim_v3/sweep-2")
-    # BASE_PATH = Path("exp/bsim_v3/sweep-3")
     # BASE_PATH = Path("exp/bsim_v3/bias-sweep-7")
+    EXP_NAME = "sweep-6-higher-fault-range"
     BASE_PATH = Path("exp/bsim_v3") / EXP_NAME
     # BASE_PATH = Path("exp/bsim_v3/sweep-5-fixed-eps")
     # BASE_PATH = Path("exp/bsim_v3/sweep-6-higher-fault-range")
@@ -153,19 +152,19 @@ def _(sims_df):
 @app.cell
 def _(mo):
     mo.md(
-        """
+        r"""
         ## Fault detection performance
-
+        
         For each simulation, we gather the following data:
-
+        
         - fault metadata (sensor set, time)
         - detection data
             - First detected fault (sensor set and time)
-
+        
         Then look at set-based precision and recall (compare the actual faulty set to the detected faulty set).
-
+        
         References:
-
+        
         - https://chatgpt.com/share/679f7571-cfa0-8010-8e16-77b116482e7f
         """
     )
@@ -260,7 +259,7 @@ def _(mo):
     return
 
 
-@app.cell(disabled=True)
+@app.cell
 def _(plt, results_with_metrics, sns):
     sns.set_theme(style="whitegrid")
     plt.figure(figsize=(10, 6))
@@ -272,7 +271,7 @@ def _(plt, results_with_metrics, sns):
     return
 
 
-@app.cell(disabled=True)
+@app.cell
 def _(np, plt, results_with_metrics, sns):
     def _():
         # Assume results_with_metrics DataFrame with 'eps_scaler' and 'precision'
@@ -327,11 +326,20 @@ def avg_precision_and_recall(np, pd, plt, results_with_metrics):
     # Graph of average precision and recall
 
     def _():
+        overall_avg_precision = results_with_metrics['precision'].mean()
+        overall_avg_recall = results_with_metrics['recall'].mean()
+
+        print(f"Overall average precision: {overall_avg_precision}")
+        print(f"Overall average recall: {overall_avg_recall}")
+
+        if results_with_metrics['eps_scaler'].min() == results_with_metrics['eps_scaler'].max():
+            print(f"There's only 1 unique eps_scaler value: {results_with_metrics['eps_scaler'].min()}. Skipping graph.")
+
+            return
         num_bins = 50
         bins = np.linspace(results_with_metrics['eps_scaler'].min(),
                            results_with_metrics['eps_scaler'].max(),
                            num_bins + 1)
-        # bin_centers = (bins[:-1] + bins[1:]) / 2
         counts, bin_edges = np.histogram(results_with_metrics['eps_scaler'], bins=bins)
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
@@ -347,7 +355,7 @@ def avg_precision_and_recall(np, pd, plt, results_with_metrics):
         ax1.set_title("Average Precision and Recall vs eps_scaler")
         ax1.grid()
         ax1.set_ylim([0,1])
-        
+
         ax2 = ax1.twinx()
         plot_num_sims = ax2.bar(bin_centers, counts, width=(bin_edges[1] - bin_edges[0]), 
                 alpha=0.2, color='gray', label='# of simulations', zorder=0)
@@ -366,7 +374,7 @@ def avg_precision_and_recall(np, pd, plt, results_with_metrics):
     return
 
 
-@app.cell(disabled=True)
+@app.cell
 def _(np, plt, results_with_metrics, sns):
     def _():
         # Your data: results_with_metrics (should be a DataFrame)
@@ -414,7 +422,7 @@ def _(np, plt, results_with_metrics, sns):
     return
 
 
-@app.cell(disabled=True)
+@app.cell
 def _(results_with_metrics):
     def _():
         # Plot the effect of eps_scaler on fault detection
@@ -431,7 +439,7 @@ def _(results_with_metrics):
     return
 
 
-@app.cell(disabled=True)
+@app.cell
 def _(results_with_metrics):
     def _():
         # Plot the effect of eps_scaler on fault detection
@@ -449,22 +457,8 @@ def _(results_with_metrics):
 
 
 @app.cell
-def _():
-    # sns.set_theme(style="whitegrid")
-    # plt.figure(figsize=(10, 6))
-
-    # sns.boxplot(data=results_with_metrics, x="eps_scaler", y="recall")
-
-    # plt.xlabel("eps_scaler")
-    # plt.ylabel("Recall")
-    # plt.title("Effect of eps_scaler on recall")
-    # plt.show()
-    return
-
-
-@app.cell
 def _(mo):
-    mo.md(r"""When `eps_scaler` is too large, some faults don't get detected. The faults may be tolerated by the loose threshold.""")
+    mo.md(r"When `eps_scaler` is too large, some faults don't get detected. The faults may be tolerated by the loose threshold.")
     return
 
 
@@ -893,7 +887,7 @@ def _(pd, results_with_metrics):
         THRESHOLDS = {
             'bias': [0,0,0.9,3.5,3,0.7],
             'drift': [0,0,0.8,0.8,0,0.15],
-            'noise': [0,0,0.35,1.5,1,0.31],
+            'noise': [0,0,1.5,1.5,1,0.31],
             'spike': [0,0,0.8,3,3,0.65],
         }
 
@@ -902,21 +896,23 @@ def _(pd, results_with_metrics):
             above_thresh = group[group[threshold_column].abs() >= threshold]
 
             stats = {}
-            stats[("Threshold", "")] = threshold  # Keep this separate from Below/Above sections
+            stats[("Thresh", "")] = threshold  # Keep this separate from Below/Above sections
 
             for subset, label in zip([below_thresh, above_thresh], ["Below Threshold", "Above Threshold"]):
                 # stats[(label, "Samples")] = len(subset)
                 if not subset.empty:
-                    # stats[(label, "Det. Rate")] = subset['precision'].mean()
-                    stats[(label, "Det. Rate")] = f"{subset['precision'].mean():.2f} ± {subset['precision'].std():.2f}"
+                    # stats[(label, "Det Rate")] = subset['precision'].mean()
+                    stats[(label, r"\#")] = len(subset)
+                    stats[(label, "Det Rate")] = f"{subset['precision'].mean():.2f} ± {subset['precision'].std():.2f}"
                     if len(subset[subset['precision'] > 0]) > 0:
-                        # stats[(label, "Det. Delay")] = subset[subset['precision'] > 0]['detection_delay'].mean()
-                        stats[(label, "Det. Delay")] = f"{subset[subset['precision'] > 0]['detection_delay'].mean():.2f} ± {subset[subset['precision'] > 0]['detection_delay'].std(ddof=0):.2f}"
+                        # stats[(label, "Det Delay")] = subset[subset['precision'] > 0]['detection_delay'].mean()
+                        stats[(label, "Det Delay")] = f"{subset[subset['precision'] > 0]['detection_delay'].mean():.2f} ± {subset[subset['precision'] > 0]['detection_delay'].std(ddof=0):.2f}"
                     else:
-                        stats[(label, "Det. Delay")] = "N/A"
+                        stats[(label, "Det Delay")] = "N/A"
                 else:
-                    stats[(label, "Det. Rate")] = "N/A"
-                    stats[(label, "Det. Delay")] = "N/A"
+                    stats[(label, r"\#")] = 0
+                    stats[(label, "Det Rate")] = "N/A"
+                    stats[(label, "Det Delay")] = "N/A"
 
             return pd.Series(stats)
 
@@ -932,7 +928,7 @@ def _(pd, results_with_metrics):
         threshold_based_stats.columns = pd.MultiIndex.from_tuples(threshold_based_stats.columns)
 
         # Rename index for readability
-        threshold_based_stats.index.names = ["Type", "Sensor"]
+        threshold_based_stats.index.names = ["Type", "Sen"]
 
         # Use 1-indexed sensors instead of 0-indexed sensors
         threshold_based_stats.index = threshold_based_stats.index.set_levels(threshold_based_stats.index.levels[1] + 1, level=1)
@@ -965,7 +961,7 @@ def _(pd, results_with_metrics):
         THRESHOLDS = {
             'bias': [0,0,0.9,3.5,3,0.7],
             'drift': [0,0,0.8,0.8,0,0.15],
-            'noise': [0,0,0.35,1.5,1,0.31],
+            'noise': [0,0,1.5,1.5,1,0.31],
             'spike': [0,0,0.8,3,3,0.65],
         }
 
