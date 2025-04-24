@@ -40,7 +40,8 @@ def _():
 
 @app.cell
 def _(Path):
-    EXP_NAME = "9-holistic-sweep"
+    EXP_NAME = "8-holistic-sweep"
+    # EXP_NAME = "9-holistic-sweep"
     # BASE_PATH = Path("exp/bsim_v3/sweep-2")
     # BASE_PATH = Path("exp/bsim_v3/sweep-3")
     # BASE_PATH = Path("exp/bsim_v3/bias-sweep-7")
@@ -345,7 +346,8 @@ def avg_precision_and_recall(np, pd, plt, results_with_metrics):
         ax1.set_ylabel("Precision / Recall")
         ax1.set_title("Average Precision and Recall vs eps_scaler")
         ax1.grid()
-
+        ax1.set_ylim([0,1])
+        
         ax2 = ax1.twinx()
         plot_num_sims = ax2.bar(bin_centers, counts, width=(bin_edges[1] - bin_edges[0]), 
                 alpha=0.2, color='gray', label='# of simulations', zorder=0)
