@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.10.19"
-app = marimo.App(width="medium")
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -26,13 +26,35 @@ def _():
 
 
 @app.cell
+def _():
+    import numpy as np
+    return (np,)
+
+
+@app.cell
+def _():
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    return plt, sns
+
+
+@app.cell
 def _(Path):
+    EXP_NAME = "9-holistic-sweep"
     # BASE_PATH = Path("exp/bsim_v3/sweep-2")
     # BASE_PATH = Path("exp/bsim_v3/sweep-3")
-    BASE_PATH = Path("exp/bsim_v3/bias-sweep-7")
+    # BASE_PATH = Path("exp/bsim_v3/bias-sweep-7")
+    BASE_PATH = Path("exp/bsim_v3") / EXP_NAME
     # BASE_PATH = Path("exp/bsim_v3/sweep-5-fixed-eps")
     # BASE_PATH = Path("exp/bsim_v3/sweep-6-higher-fault-range")
-    return (BASE_PATH,)
+    return BASE_PATH, EXP_NAME
+
+
+@app.cell
+def _(Path):
+    OUTPUT_DIR = Path("visualizations/data/bsim_v3")
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    return (OUTPUT_DIR,)
 
 
 @app.cell
@@ -237,10 +259,8 @@ def _(mo):
     return
 
 
-@app.cell
-def _(results_with_metrics):
-    import matplotlib.pyplot as plt
-    import seaborn as sns
+@app.cell(disabled=True)
+def _(plt, results_with_metrics, sns):
     sns.set_theme(style="whitegrid")
     plt.figure(figsize=(10, 6))
     sns.histplot(data=results_with_metrics, x="eps_scaler", hue="is_fault_detected", multiple="stack", bins=50)
@@ -248,10 +268,151 @@ def _(results_with_metrics):
     plt.ylabel("Count")
     plt.title("Effect of eps_scaler on fault detection")
     plt.show()
-    return plt, sns
+    return
+
+
+@app.cell(disabled=True)
+def _(np, plt, results_with_metrics, sns):
+    def _():
+        # Assume results_with_metrics DataFrame with 'eps_scaler' and 'precision'
+        num_bins = 50
+        bins = np.linspace(results_with_metrics['eps_scaler'].min(),
+                           results_with_metrics['eps_scaler'].max(),
+                           num_bins + 1)
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+
+        # Compute absolute counts per bin
+        counts, _ = np.histogram(results_with_metrics['eps_scaler'], bins=bins)
+
+        # Create stacked subplots with shared x-axis
+        fig, (ax_top, ax_bottom) = plt.subplots(
+            2, 1, 
+            figsize=(10, 7), 
+            sharex=True, 
+            gridspec_kw={'height_ratios': [1, 4], 'hspace': 0.05}
+        )
+
+        # Top: Absolute count bar plot
+        ax_top.bar(bin_centers, counts, width=(bins[1] - bins[0]), color='gray')
+        ax_top.set_ylabel("Count")
+        ax_top.set_yticks([0, max(counts)])  # Show just 0 and max for minimalism
+        ax_top.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+        sns.despine(ax=ax_top, bottom=True)
+
+        # Bottom: Normalized proportion histogram (your main plot)
+        sns.histplot(
+            data=results_with_metrics,
+            x="eps_scaler",
+            hue="precision",
+            multiple="fill",
+            bins=bins,
+            ax=ax_bottom
+        )
+        ax_bottom.set_ylabel("Proportion")
+        ax_bottom.set_xlabel("eps_scaler")
+        ax_bottom.set_title("Effect of eps_scaler on precision")
+        sns.despine(ax=ax_bottom)
+
+        plt.tight_layout()
+        return plt.show()
+
+
+    _()
+    return
 
 
 @app.cell
+def avg_precision_and_recall(np, pd, plt, results_with_metrics):
+    # Graph of average precision and recall
+
+    def _():
+        num_bins = 50
+        bins = np.linspace(results_with_metrics['eps_scaler'].min(),
+                           results_with_metrics['eps_scaler'].max(),
+                           num_bins + 1)
+        # bin_centers = (bins[:-1] + bins[1:]) / 2
+        counts, bin_edges = np.histogram(results_with_metrics['eps_scaler'], bins=bins)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        # Calculate average precision
+        avg_precision = results_with_metrics.groupby(pd.cut(results_with_metrics['eps_scaler'], bins), observed=True)['precision'].mean()
+        avg_recall = results_with_metrics.groupby(pd.cut(results_with_metrics['eps_scaler'], bins), observed=True)['recall'].mean()
+
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        plot_avg_precision = ax1.plot(bin_centers, avg_precision, marker='o', label='Average Precision')
+        plot_avg_recall = ax1.plot(bin_centers, avg_recall, marker='o', label='Average Recall')
+        ax1.set_xlabel("eps_scaler")
+        ax1.set_ylabel("Precision / Recall")
+        ax1.set_title("Average Precision and Recall vs eps_scaler")
+        ax1.grid()
+
+        ax2 = ax1.twinx()
+        plot_num_sims = ax2.bar(bin_centers, counts, width=(bin_edges[1] - bin_edges[0]), 
+                alpha=0.2, color='gray', label='# of simulations', zorder=0)
+        ax2.set_ylabel("# of simulations")
+        ax2.set_ylim(bottom=0)  # always start count axis at 0
+
+        # Step 5: Optional: adjust legends for clarity
+        plots = plot_avg_precision + plot_avg_recall + [plot_num_sims]
+        labels = [l.get_label() for l in plots]
+        ax2.legend(plots, labels, loc="upper right")
+
+        plt.tight_layout()
+
+        plt.show()
+    _()
+    return
+
+
+@app.cell(disabled=True)
+def _(np, plt, results_with_metrics, sns):
+    def _():
+        # Your data: results_with_metrics (should be a DataFrame)
+        # Assume 'eps_scaler' is continuous, 'precision' is categorical/discrete
+
+        # Step 1: Prepare bins
+        num_bins = 50
+        bins = np.linspace(results_with_metrics['eps_scaler'].min(),
+                           results_with_metrics['eps_scaler'].max(),
+                           num_bins + 1)
+
+        # Step 2: Calculate bin centers and absolute counts
+        counts, bin_edges = np.histogram(results_with_metrics['eps_scaler'], bins=bins)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        # Step 3: Plot the proportion histogram
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        sns.histplot(
+            data=results_with_metrics,
+            x="eps_scaler",
+            hue="precision",
+            multiple="fill",
+            bins=bins,
+            ax=ax1,
+            legend=True
+        )
+        ax1.set_ylabel("Proportion")
+        ax1.set_xlabel("eps_scaler")
+        ax1.set_title("Effect of eps_scaler on precision (with absolute counts)")
+
+        # Step 4: Plot absolute counts using a secondary y-axis
+        ax2 = ax1.twinx()
+        ax2.bar(bin_centers, counts, width=(bin_edges[1] - bin_edges[0]), 
+                alpha=0.2, color='gray', label='Absolute count', zorder=0)
+        ax2.set_ylabel("Absolute Count")
+        ax2.set_ylim(bottom=0)  # always start count axis at 0
+
+        # Step 5: Optional: adjust legends for clarity
+        ax2.legend(loc="upper right")
+
+        plt.tight_layout()
+        plt.show()
+
+    _()
+    return
+
+
+@app.cell(disabled=True)
 def _(results_with_metrics):
     def _():
         # Plot the effect of eps_scaler on fault detection
@@ -268,7 +429,7 @@ def _(results_with_metrics):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(results_with_metrics):
     def _():
         # Plot the effect of eps_scaler on fault detection
@@ -492,9 +653,9 @@ def _(pd, results, validity_columns):
 
 
 @app.cell
-def _(results_with_metrics):
+def _(EXP_NAME, OUTPUT_DIR, results_with_metrics):
     # save results_with_metrics to a file
-    results_with_metrics.to_csv("results_with_metrics.csv")
+    results_with_metrics.to_parquet(OUTPUT_DIR / f"results_with_metrics_{EXP_NAME}.parquet")
     return
 
 
