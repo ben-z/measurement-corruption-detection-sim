@@ -248,6 +248,9 @@ def run_single_simulation(dt, fault_generators, detector_eps, S_list, sim_time=6
             "z3_meas": z_arr[:, 3],
             "z4_meas": z_arr[:, 4],
             "z5_meas": z_arr[:, 5],
+            "detector_total_time_s": [m.total_time for m in calc_validity_meta],
+            "detector_setup_time_s": [m.optimizer_metadata.setup_time if m.optimizer_metadata else np.nan for m in calc_validity_meta],
+            "detector_solve_time_s": [m.optimizer_metadata.solve_time if m.optimizer_metadata else np.nan for m in calc_validity_meta],
         }
     )
 
@@ -272,27 +275,48 @@ def run_multiple(
         "random",
         help="Choose fault type: " + ", ".join(FAULT_TYPES) + ", or random.",
     ),
+    num_faulty_sensors: int | None = typer.Option(None, help="Number of sensors to fault. If not specified, randomly selects 1 or 2."),
+    possible_faulty_sensors_str: str = typer.Option(
+        "2,3,4,5", help="Comma-separated list of possible faulty sensors. Default is 2,3,4,5 (heading, velocity1, velocity2, steering) (position sensors 0 and 1 are protected.)"
+    ),  
+    fault_start_time: int | None = typer.Option(None, help="Fault start time in simulation steps. If not specified, randomly selects a start time."),
     dt: float = typer.Option(0.01, help="Time step (s)."),
     time_per_sim: float = typer.Option(65.0, help="Simulation time (s)."),
     eps_scaler: float = typer.Option(None, help="The scaler for eps. Randomly samples from U(1,10) if not specified"),
+    random_seed: int = typer.Option(
+        None,
+        help="Random seed for reproducibility. If not specified, uses the current time.",
+    ),
 ):
     """
     Run multiple simulations, each injecting faults of a specified or random type,
     and save all results in a single Parquet file.
     """
+    all_possible_sensors = [0, 1, 2, 3, 4, 5]
+    possible_faulty_sensors = [int(s) for s in possible_faulty_sensors_str.split(",")]
+    # Ensure the sensors are valid
+    if not set(possible_faulty_sensors).issubset(set(all_possible_sensors)):
+        raise ValueError(
+            f"Invalid sensors specified. Possible sensors are: {all_possible_sensors}. Provided: {possible_faulty_sensors}"
+        )
+
+    # Set random seed
+    if random_seed is None:
+        random_seed = int(time.time())
+    random.seed(random_seed)
+    print("Using random seed:", random_seed)
 
     for sim_idx in tqdm(range(num_simulations), desc="Simulations"):
         # Decide how many sensors to fault (1 or 2 for demonstration)
-        num_faulty_sensors = random.choice([1, 2])
+        if num_faulty_sensors is None:
+            num_faulty_sensors = random.choice([1, 2])
 
         # Randomly pick sensors to fault
-        # Implicit here is that sensors 0 and 1 are protected.
-        all_possible_sensors = [0, 1, 2, 3, 4, 5]
-        possible_faulty_sensors = [2, 3, 4, 5]  # heading, velocity1, velocity2, steering
         faulty_sensors = random.sample(possible_faulty_sensors, k=num_faulty_sensors)
 
         # Build fault generator functions
-        fault_start_time = random.randint(1, int(time_per_sim / dt))  # same random start time for all sensors
+        if fault_start_time is None:
+            fault_start_time = random.randint(1, int(time_per_sim / dt))  # same random start time for all sensors
         fault_functions = []
         fault_types = []
         fault_params = []
