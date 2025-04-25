@@ -39,14 +39,20 @@ def _():
 
 
 @app.cell
+def _():
+    from IPython.display import display, HTML
+    return HTML, display
+
+
+@app.cell
 def _(Path):
+    # EXP_NAME = "sweep-5-fixed-eps"
+    EXP_NAME = "sweep-6-higher-fault-range"
+    # EXP_NAME = "bias-sweep-7"
     # EXP_NAME = "8-holistic-sweep"
     # EXP_NAME = "9-holistic-sweep"
-    # BASE_PATH = Path("exp/bsim_v3/bias-sweep-7")
-    EXP_NAME = "sweep-6-higher-fault-range"
+    # EXP_NAME = "10-holistic-sweep-loose-heading-fault-range"
     BASE_PATH = Path("exp/bsim_v3") / EXP_NAME
-    # BASE_PATH = Path("exp/bsim_v3/sweep-5-fixed-eps")
-    # BASE_PATH = Path("exp/bsim_v3/sweep-6-higher-fault-range")
     return BASE_PATH, EXP_NAME
 
 
@@ -154,17 +160,17 @@ def _(mo):
     mo.md(
         r"""
         ## Fault detection performance
-        
+
         For each simulation, we gather the following data:
-        
+
         - fault metadata (sensor set, time)
         - detection data
             - First detected fault (sensor set and time)
-        
+
         Then look at set-based precision and recall (compare the actual faulty set to the detected faulty set).
-        
+
         References:
-        
+
         - https://chatgpt.com/share/679f7571-cfa0-8010-8e16-77b116482e7f
         """
     )
@@ -458,7 +464,7 @@ def _(results_with_metrics):
 
 @app.cell
 def _(mo):
-    mo.md(r"When `eps_scaler` is too large, some faults don't get detected. The faults may be tolerated by the loose threshold.")
+    mo.md(r"""When `eps_scaler` is too large, some faults don't get detected. The faults may be tolerated by the loose threshold.""")
     return
 
 
@@ -873,7 +879,7 @@ def _(results_with_metrics):
 
 
 @app.cell
-def _(pd, results_with_metrics):
+def _(HTML, display, pd, results_with_metrics):
     # Threshold-based metrics
     def _():
         single_sensor_faults = results_with_metrics[results_with_metrics["num_faulty_sensors"] == 1]
@@ -886,7 +892,7 @@ def _(pd, results_with_metrics):
         }
         THRESHOLDS = {
             'bias': [0,0,0.9,3.5,3,0.7],
-            'drift': [0,0,0.8,0.8,0,0.15],
+            'drift': [0,0,0.8,0.8,0,0.1],
             'noise': [0,0,1.5,1.5,1,0.31],
             'spike': [0,0,0.8,3,3,0.65],
         }
@@ -940,14 +946,14 @@ def _(pd, results_with_metrics):
             float_format="{:0.2f}".format,
         ))
 
-        return threshold_based_stats
+        display(HTML(threshold_based_stats.to_html()))
 
     _()
     return
 
 
 @app.cell
-def _(pd, results_with_metrics):
+def _(HTML, display, pd, results_with_metrics):
     # Threshold-based metrics (condensed)
     def _():
         single_sensor_faults = results_with_metrics[results_with_metrics["num_faulty_sensors"] == 1]
@@ -1012,7 +1018,7 @@ def _(pd, results_with_metrics):
             float_format="{:0.2f}".format,
         ))
 
-        return threshold_based_stats
+        display(HTML(threshold_based_stats.to_html()))
 
     _()
     return
