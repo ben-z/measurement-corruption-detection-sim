@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=10-holistic-sweep-loose-heading-fault-range
+#SBATCH --job-name=11-bias-sweep
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=1G
 
@@ -35,5 +35,11 @@ if [ -f $HOME/miniconda3/etc/profile.d/conda.sh ]; then source $HOME/miniconda3/
 conda activate research
 set -o nounset -o errexit
 
-python bsim_v3/run_sim.py run-multiple --num-simulations 10 --out-file-template "$__expdir"/results-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-0}-$(hostname).parquet --eps-scaler 1.0
+# Generic, random settings
 # python bsim_v3/run_sim.py run-multiple --num-simulations 10 --out-file-template "$__expdir"/results-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-0}-$(hostname).parquet
+
+# Specific eps_scaler
+# python bsim_v3/run_sim.py run-multiple --num-simulations 10 --out-file-template "$__expdir"/results-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-0}-$(hostname).parquet --eps-scaler 1.0
+
+# Specific eps_scaler and fault type
+python bsim_v3/run_sim.py run-multiple --num-simulations 10 --out-file-template "$__expdir"/results-${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}-${SLURM_ARRAY_TASK_ID:-0}-$(hostname).parquet --eps-scaler 1.0 --fault-type bias
