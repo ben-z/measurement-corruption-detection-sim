@@ -892,7 +892,7 @@ def _(HTML, display, pd, results_with_metrics):
         }
         THRESHOLDS = {
             'bias': [0,0,0.9,3.5,3,0.7],
-            'drift': [0,0,0.8,0.8,0,0.1],
+            'drift': [0,0,0.8,0.8,0,0.01],
             'noise': [0,0,1.5,1.5,1,0.31],
             'spike': [0,0,0.8,3,3,0.65],
         }
