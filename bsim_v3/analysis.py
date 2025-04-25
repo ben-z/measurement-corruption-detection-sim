@@ -47,11 +47,12 @@ def _():
 @app.cell
 def _(Path):
     # EXP_NAME = "sweep-5-fixed-eps"
-    EXP_NAME = "sweep-6-higher-fault-range"
+    # EXP_NAME = "sweep-6-higher-fault-range"
     # EXP_NAME = "bias-sweep-7"
     # EXP_NAME = "8-holistic-sweep"
     # EXP_NAME = "9-holistic-sweep"
     # EXP_NAME = "10-holistic-sweep-loose-heading-fault-range"
+    EXP_NAME = "11-bias-sweep"
     BASE_PATH = Path("exp/bsim_v3") / EXP_NAME
     return BASE_PATH, EXP_NAME
 
