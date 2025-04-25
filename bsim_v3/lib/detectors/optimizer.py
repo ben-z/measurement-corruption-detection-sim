@@ -115,7 +115,8 @@ class Optimizer:
 
         self.x0_hat = cp.Variable(self.n)
         optimizer = cp.reshape(
-            self.cvx_Y_param - self.cvx_Phi_param @ self.x0_hat, (self.q, self.N)
+            self.cvx_Y_param - self.cvx_Phi_param @ self.x0_hat, (self.q, self.N),
+            order="F",
         )
         optimizer_final = cp.mixed_norm(optimizer, p=2, q=1)
 
