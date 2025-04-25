@@ -66,6 +66,31 @@ FAULT_RANGES = {
 }
 FAULT_TYPES = list(FAULT_RANGES.keys())
 
+# These configs force detection.
+# Used to evaluate the running time of the detector
+FAULT_RANGES_HIGH = {
+    "bias": {
+        "heading": (1, np.pi),
+        "velocity": (5, 10),
+        "steering": (1, np.pi / 2),
+    },
+    "spike": {
+        "heading": (1, np.pi),
+        "velocity": (5, 10),
+        "steering": (1, np.pi / 2),
+    },
+    "noise": {
+        "heading": (1, np.pi),  # amplitude
+        "velocity": (5, 10),  # amplitude
+        "steering": (1, np.pi / 2),  # amplitude
+    },
+    "drift": {
+        "heading": (1, np.pi),  # rad/s
+        "velocity": (5, 10),  # m/s^2
+        "steering": (1, np.pi / 2),  # rad/s
+    },
+}
+
 # Direct mapping from sensor_idx to the type in FAULT_RANGES
 PARAM_RANGE_KEY = {
     0: None,  # x-position
@@ -95,19 +120,21 @@ def expand_glob(
     return expanded_files
 
 
-def create_fault_fn(fault_type, sensor_idx):
+def create_fault_fn(fault_type, sensor_idx, force_detection=False):
     """
     Given a fault type (bias, spike, noise, drift) and a sensor index,
     return a function that, given tstart, produces the final fault function.
     Also returns the fault parameters.
     """
+    ranges = FAULT_RANGES_HIGH if force_detection else FAULT_RANGES
+
     # Determine the parameter-range key from the dictionary
     fkey = PARAM_RANGE_KEY.get(sensor_idx)
     # If None, fallback to "steering" or skip entirely.
     if fkey is None:
         raise ValueError(f"Sensor {sensor_idx} does not have a fault parameter.")
 
-    low, high = FAULT_RANGES[fault_type][fkey]
+    low, high = ranges[fault_type][fkey]
     param = random.uniform(low, high)
 
     if fault_type == "bias":
@@ -287,6 +314,10 @@ def run_multiple(
         None,
         help="Random seed for reproducibility. If not specified, uses the current time.",
     ),
+    force_detection: bool = typer.Option(
+        False,
+        help="Force detection by using high fault parameters. This is useful for evaluating the running time of the detector.",
+    ),
 ):
     """
     Run multiple simulations, each injecting faults of a specified or random type,
@@ -323,10 +354,10 @@ def run_multiple(
         for sensor_idx in faulty_sensors:
             # This picks the user-specified (or random) fault type for each sensor
             if fault_type == "random":
-                actual_fault_type = random.choice(list(FAULT_RANGES.keys()))
+                actual_fault_type = random.choice(FAULT_TYPES)
             else:
                 actual_fault_type = fault_type
-            fault_fn_factory, params = create_fault_fn(actual_fault_type, sensor_idx)
+            fault_fn_factory, params = create_fault_fn(actual_fault_type, sensor_idx, force_detection=force_detection)
             fault_func = fault_fn_factory(fault_start_time)
 
             fault_types.append(actual_fault_type)
