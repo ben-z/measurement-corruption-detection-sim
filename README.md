@@ -1,4 +1,4 @@
-# bsim
+# measurement-corruption-detection-sim
 
 This repository contains the simulation code for the thesis "Optimal Sensor Protection and Measurement Corruption Detection in Safety-Critical Systems". It has multiple versions of kinematic bicycle simulators with sensor fault injection and detection analysis.
 
