@@ -1,6 +1,6 @@
-# bsim (Bicycle Simulation and Fault Detection)
+# bsim
 
-This repository contains multiple versions of a kinematic bicycle simulator with sensor fault injection and detection analysis.
+This repository contains the simulation code for the thesis "Optimal Sensor Protection and Measurement Corruption Detection in Safety-Critical Systems". It has multiple versions of kinematic bicycle simulators with sensor fault injection and detection analysis.
 
 ## Repository Structure
 
@@ -122,3 +122,7 @@ Processed data and plots are saved under `visualizations/data/bsim_v3/`.
 
 ## Contributing
 Contributions, issues, and feature requests are welcome. Please open an issue or submit a pull request.
+
+
+## Related Links
+- Deployment code for a Clearpath Jackal robot: https://github.com/ben-z/measurement-corruption-detection-jackal
