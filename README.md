@@ -25,6 +25,13 @@ This repository contains multiple versions of a kinematic bicycle simulator with
 
 ## Version 1 (bsim)
 
+### Overview
+Version 1 was the initial release: a Python backend simulation engine with sensor fault injection and detection, paired with a web-based visualizer for real-time plotting.
+
+Key features:
+- Python backend: continuous and discrete kinematic bicycle models, planners, controllers, and detectors
+- Web frontend: live plots via WebSocket and uPlot
+
 ### Prerequisites
 - Docker (optional) or Conda & Node.js
 
@@ -44,6 +51,14 @@ Refer to `bsim/backend/README.md` and `bsim/frontend/README.md` for more details
 
 ## Version 2 (bsim_v2)
 
+### Overview
+Version 2 migrated to a pure-Python codebase, consolidating simulation, fault generation, detection, and analysis into a single environment. This release focused on significant performance improvements in the fault detector.
+
+Changelog / improvements:
+- Removed separate web frontend; analysis via scripts and Jupyter
+- Optimized detector algorithms with CVXPY and vectorized operations for speed
+- Added batch experiment scripts (`run_exp.py`) and table generation utilities
+
 ### Prerequisites
 - Python 3.8+ and pip
 
@@ -57,6 +72,15 @@ python run_exp.py
 ```
 
 ## Version 3 (bsim_v3)
+
+### Overview
+Version 3 refined and simplified V2, emphasizing modularity, code quality, and further speed gains. Core components were moved into a reusable `lib/` folder, and a CLI (Typer) plus Marimo notebook support were introduced. This version powered the accompanying thesis work.
+
+Changelog / improvements:
+- Modular library: controllers, detectors, estimators, planners, plants, sensors under `lib/`
+- CLI interface for batch simulations (`run_sim.py`) and SLURM sweep support
+- Performance optimizations: streamlined simulation loops, reduced dependencies
+- Improved maintainability: type annotations, clearer structure, interactive analysis via Marimo
 
 ### Prerequisites
 - Python 3.8+ and pip
